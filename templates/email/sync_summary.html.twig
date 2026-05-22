@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0f172a; color:#e2e8f0; margin:0; padding:20px; }
-  .container { max-width:600px; margin:0 auto; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0f172a !important; color:#e2e8f0; margin:0; padding:0; }
+  .container { max-width:600px; margin:0 auto; padding:20px; }
   .header { background:#1e293b; border-radius:12px; padding:24px; margin-bottom:20px; border-left:4px solid #22c55e; }
   .header h1 { margin:0 0 4px; font-size:1.2rem; color:#fff; }
   .header p { margin:0; color:#94a3b8; font-size:0.85rem; }
@@ -27,7 +27,9 @@
   .footer { text-align:center; color:#475569; font-size:0.75rem; margin-top:20px; padding-top:16px; border-top:1px solid #1e293b; }
 </style>
 </head>
-<body>
+<body bgcolor="#0f172a" style="background:#0f172a !important;margin:0;padding:0;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0f172a" style="background:#0f172a;">
+<tr><td align="center" bgcolor="#0f172a" style="background:#0f172a;">
 <div class="container">
 
   <div class="header">
@@ -87,5 +89,7 @@
 
   <div class="footer">YouTube Analyse · {{ date|date('Y') }}</div>
 </div>
+</td></tr>
+</table>
 </body>
 </html>
