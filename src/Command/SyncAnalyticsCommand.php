@@ -3,25 +3,22 @@
 namespace App\Command;
 
 use App\Repository\GoogleTokenRepository;
-use App\Service\AiAnalysisService;
 use App\Service\QuotaGuardService;
 use App\Service\YouTubeSyncService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:youtube:sync',
-    description: 'Synchronise vidéos, métriques et commentaires depuis YouTube puis lance l\'analyse IA',
+    description: 'Synchronise vidéos, métriques et commentaires depuis YouTube',
 )]
 class SyncAnalyticsCommand extends Command
 {
     public function __construct(
         private readonly YouTubeSyncService $syncService,
-        private readonly AiAnalysisService $aiService,
         private readonly GoogleTokenRepository $tokenRepo,
         private readonly QuotaGuardService $quotaGuard,
     ) {
@@ -40,8 +37,6 @@ class SyncAnalyticsCommand extends Command
             $io->warning('Aucun token OAuth trouvé. Connectez d\'abord un compte YouTube.');
             return Command::SUCCESS;
         }
-
-        $syncOk = false;
 
         foreach ($tokens as $token) {
             $user = $token->getUser();
@@ -72,8 +67,6 @@ class SyncAnalyticsCommand extends Command
                     $io->writeln('  Reporting API : jobs créés (premiers rapports disponibles dans 24-48h)');
                 }
 
-                $syncOk = true;
-
             } catch (\RuntimeException $e) {
                 if (str_contains($e->getMessage(), 'quota')) {
                     $io->error('Quota YouTube API dépassé : ' . $e->getMessage());
@@ -82,18 +75,6 @@ class SyncAnalyticsCommand extends Command
                 $io->error('Erreur sync : ' . $e->getMessage());
             } catch (\Exception $e) {
                 $io->error('Erreur inattendue : ' . $e->getMessage());
-            }
-        }
-
-        if ($syncOk) {
-            $io->section('Lancement de l\'analyse IA...');
-            try {
-                $aiCommand = $this->getApplication()->find('app:ai:analyze');
-                $aiInput   = new ArrayInput([]);
-                $aiInput->setInteractive(false);
-                $aiCommand->run($aiInput, $output);
-            } catch (\Exception $e) {
-                $io->warning('Analyse IA échouée (la sync est sauvegardée) : ' . $e->getMessage());
             }
         }
 
