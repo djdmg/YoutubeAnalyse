@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Repository\GoogleTokenRepository;
+use App\Service\EmailNotificationService;
 use App\Service\QuotaGuardService;
 use App\Service\YouTubeSyncService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -21,6 +22,7 @@ class SyncAnalyticsCommand extends Command
         private readonly YouTubeSyncService $syncService,
         private readonly GoogleTokenRepository $tokenRepo,
         private readonly QuotaGuardService $quotaGuard,
+        private readonly EmailNotificationService $emailService,
     ) {
         parent::__construct();
     }
@@ -65,6 +67,18 @@ class SyncAnalyticsCommand extends Command
                     ));
                 } else {
                     $io->writeln('  Reporting API : jobs créés (premiers rapports disponibles dans 24-48h)');
+                }
+
+                $emailError = $this->emailService->sendSyncSummary(
+                    $user,
+                    $result,
+                    $token->getChannelTitle() ?? $token->getChannelId(),
+                    $this->quotaGuard->getUsed()
+                );
+                if ($emailError) {
+                    $io->writeln('  <fg=yellow>Email non envoyé : ' . $emailError . '</>');
+                } elseif ($user->hasSmtpConfigured()) {
+                    $io->writeln('  ✉ Résumé envoyé à ' . $user->getNotifEmail());
                 }
 
             } catch (\RuntimeException $e) {

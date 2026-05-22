@@ -43,6 +43,31 @@ class EmailNotificationService
         return $this->send($user, $email);
     }
 
+    public function sendSyncSummary(User $user, array $result, string $channel, int $quotaUsed): ?string
+    {
+        if (!$user->hasSmtpConfigured()) return null;
+
+        $html = $this->twig->render('email/sync_summary.html.twig', [
+            'user'       => $user,
+            'result'     => $result,
+            'channel'    => $channel,
+            'quota_used' => $quotaUsed,
+            'date'       => new \DateTimeImmutable(),
+        ]);
+
+        $email = (new Email())
+            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->to($user->getNotifEmail())
+            ->subject(sprintf('🔄 Sync YouTube — %d vidéos, %d commentaires — %s',
+                $result['videos_synced'],
+                $result['comments_synced'],
+                (new \DateTimeImmutable())->format('d/m/Y H:i')
+            ))
+            ->html($html);
+
+        return $this->send($user, $email);
+    }
+
     public function sendTestEmail(User $user): ?string
     {
         $fakeReports = $this->buildFakeReports();

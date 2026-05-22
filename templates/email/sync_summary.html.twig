@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0f172a; color:#e2e8f0; margin:0; padding:20px; }
+  .container { max-width:600px; margin:0 auto; }
+  .header { background:#1e293b; border-radius:12px; padding:24px; margin-bottom:20px; border-left:4px solid #22c55e; }
+  .header h1 { margin:0 0 4px; font-size:1.2rem; color:#fff; }
+  .header p { margin:0; color:#94a3b8; font-size:0.85rem; }
+  .kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  .kpi { background:#1e293b; border-radius:10px; padding:16px 20px; }
+  .kpi-value { font-size:1.8rem; font-weight:700; color:#22c55e; line-height:1; margin-bottom:4px; }
+  .kpi-value.zero { color:#475569; }
+  .kpi-label { font-size:0.75rem; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+  .section { background:#1e293b; border-radius:10px; padding:16px 20px; margin-bottom:12px; }
+  .section-title { font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #0f172a; font-size:0.88rem; }
+  .row:last-child { border-bottom:none; }
+  .row-label { color:#94a3b8; }
+  .row-value { color:#e2e8f0; font-weight:600; }
+  .row-value.positive { color:#86efac; }
+  .row-value.zero { color:#475569; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:600; }
+  .badge-green { background:rgba(34,197,94,.15); color:#86efac; }
+  .badge-yellow { background:rgba(234,179,8,.15); color:#fcd34d; }
+  .footer { text-align:center; color:#475569; font-size:0.75rem; margin-top:20px; padding-top:16px; border-top:1px solid #1e293b; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>🔄 Synchronisation YouTube terminée</h1>
+    <p>{{ date|date('d/m/Y à H:i') }} · {{ channel }}</p>
+  </div>
+
+  {# KPIs principaux #}
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-value {{ result.videos_synced == 0 ? 'zero' : '' }}">{{ result.videos_synced }}</div>
+      <div class="kpi-label">Vidéos synchronisées</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-value {{ result.comments_synced == 0 ? 'zero' : '' }}">{{ result.comments_synced }}</div>
+      <div class="kpi-label">Nouveaux commentaires</div>
+    </div>
+  </div>
+
+  {# Reporting API #}
+  <div class="section">
+    <div class="section-title">📊 Reporting API (CTR & démographies)</div>
+    <div class="row">
+      <span class="row-label">Impressions / CTR mis à jour</span>
+      <span class="row-value {{ result.impressions_ctr_updated > 0 ? 'positive' : 'zero' }}">
+        {{ result.impressions_ctr_updated > 0 ? result.impressions_ctr_updated ~ ' lignes' : 'En attente (24-48h)' }}
+      </span>
+    </div>
+    <div class="row">
+      <span class="row-label">Données démographiques</span>
+      <span class="row-value {{ result.demographics_updated > 0 ? 'positive' : 'zero' }}">
+        {{ result.demographics_updated > 0 ? result.demographics_updated ~ ' lignes' : 'En attente (24-48h)' }}
+      </span>
+    </div>
+    <div class="row">
+      <span class="row-label">Sources de trafic (historique)</span>
+      <span class="row-value {{ result.traffic_sources_updated > 0 ? 'positive' : 'zero' }}">
+        {{ result.traffic_sources_updated > 0 ? result.traffic_sources_updated ~ ' lignes' : '—' }}
+      </span>
+    </div>
+  </div>
+
+  {# Quota #}
+  <div class="section">
+    <div class="section-title">⚡ Quota YouTube API</div>
+    <div class="row">
+      <span class="row-label">Quota consommé aujourd'hui</span>
+      <span class="row-value">{{ quota_used }} / 9 000 units</span>
+    </div>
+    <div class="row">
+      <span class="row-label">Statut</span>
+      <span class="badge {{ quota_used < 7000 ? 'badge-green' : 'badge-yellow' }}">
+        {{ quota_used < 7000 ? 'OK' : 'Proche de la limite' }}
+      </span>
+    </div>
+  </div>
+
+  <div class="footer">YouTube Analyse · {{ date|date('Y') }}</div>
+</div>
+</body>
+</html>
