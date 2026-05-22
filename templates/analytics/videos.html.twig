@@ -1,0 +1,126 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Vidéos Analytics — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-video"></i> Vidéos Analytics</h1>
+        <span class="last-sync">{{ videos_data|length }} vidéo(s)</span>
+    </div>
+    <div class="header-actions">
+        <a href="{{ path('videos') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-list"></i> Vue classique
+        </a>
+    </div>
+</div>
+
+<div class="section-card">
+    <div class="sort-bar">
+        <span>Trier par :</span>
+        <a href="?sort=views" class="sort-btn {{ sort_by == 'views' ? 'active' : '' }}"><i class="fas fa-eye"></i> Vues</a>
+        <a href="?sort=ctr" class="sort-btn {{ sort_by == 'ctr' ? 'active' : '' }}"><i class="fas fa-percentage"></i> CTR</a>
+        <a href="?sort=watch_time" class="sort-btn {{ sort_by == 'watch_time' ? 'active' : '' }}"><i class="fas fa-clock"></i> Watch Time</a>
+        <a href="?sort=date" class="sort-btn {{ sort_by == 'date' ? 'active' : '' }}"><i class="fas fa-calendar"></i> Date</a>
+    </div>
+
+    {% if videos_data|length == 0 %}
+    <div class="empty-state">
+        <i class="fas fa-video fa-3x"></i>
+        <h3>Aucune vidéo</h3>
+        <p>Lance <strong>app:youtube:sync</strong> pour synchroniser tes vidéos.</p>
+    </div>
+    {% else %}
+    <div class="videos-table-wrapper">
+        <table class="videos-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Vidéo</th>
+                    <th><i class="fas fa-eye"></i> Vues</th>
+                    <th><i class="fas fa-percentage"></i> CTR</th>
+                    <th><i class="fas fa-clock"></i> Watch Time</th>
+                    <th><i class="fas fa-comment"></i> Sentiment</th>
+                    <th><i class="fas fa-exclamation-triangle"></i> Anomalie</th>
+                    <th><i class="fas fa-chart-line"></i> Projection J+30</th>
+                    <th><i class="fas fa-calendar"></i> Publication</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in videos_data %}
+                {% set video = item.video %}
+                {% set metric = item.metric %}
+                {% set anomaly = item.anomaly %}
+                {% set sentiment = item.sentiment %}
+                {% set prediction = item.prediction %}
+                <tr class="{{ anomaly ? 'row-anomaly' : '' }}">
+                    <td class="rank">{{ loop.index }}</td>
+                    <td class="video-cell">
+                        <div class="video-cell-inner">
+                            {% if video.thumbnailUrl %}
+                            <img src="{{ video.thumbnailUrl }}" alt="{{ video.title }}" class="video-thumb-sm" loading="lazy">
+                            {% else %}
+                            <div class="video-thumb-sm-placeholder"><i class="fas fa-video"></i></div>
+                            {% endif %}
+                            <div class="video-cell-info">
+                                <div class="video-cell-title">{{ video.title }}</div>
+                                {% if video.durationSeconds %}
+                                <div class="video-cell-duration">{{ (video.durationSeconds // 3600) > 0 ? (video.durationSeconds // 3600) ~ 'h ' : '' }}{{ ((video.durationSeconds % 3600) // 60) }}m {{ (video.durationSeconds % 60) }}s</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="num">{{ metric ? metric.views|number_format(0, ',', ' ') : '—' }}</td>
+                    <td class="num">
+                        {% if metric and metric.ctr is not null %}
+                            <span class="badge {{ metric.ctr >= 4 ? 'badge-green' : (metric.ctr >= 2 ? 'badge-yellow' : 'badge-red') }}">
+                                {{ metric.ctr|number_format(2) }}%
+                            </span>
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if metric and metric.watchTimeMinutes %}
+                            {{ (metric.watchTimeMinutes / 60)|number_format(1, ',', ' ') }}h
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if sentiment and sentiment.payload %}
+                            {% set score = sentiment.payload.score_sentiment ?? 0 %}
+                            {% set sentimentGlobal = sentiment.payload.sentiment_global ?? 'neutre' %}
+                            <span class="badge {{ sentimentGlobal == 'positif' ? 'badge-green' : (sentimentGlobal == 'négatif' ? 'badge-red' : 'badge-yellow') }}" title="{{ sentimentGlobal }}">
+                                {{ sentimentGlobal == 'positif' ? '😊' : (sentimentGlobal == 'négatif' ? '😞' : '😐') }} {{ (score * 100)|round }}%
+                            </span>
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if anomaly and anomaly.payload %}
+                            <span class="badge {{ anomaly.payload.type == 'surperformance' ? 'badge-green' : 'badge-red' }}">
+                                <i class="fas fa-{{ anomaly.payload.type == 'surperformance' ? 'arrow-up' : 'arrow-down' }}"></i>
+                                {{ anomaly.payload.type == 'surperformance' ? 'Surperf.' : 'Sous-perf.' }}
+                            </span>
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if prediction and prediction.payload %}
+                            <span class="badge badge-blue" title="Confiance : {{ prediction.payload.confiance ?? '?' }}">
+                                ~{{ prediction.payload.vues_estimees_j30|number_format(0, ',', ' ') }} vues
+                            </span>
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if video.publishedAt %}{{ video.publishedAt|date('d/m/Y') }}{% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ path('analytics_video_detail', {youtubeId: video.youtubeId}) }}" class="btn btn-outline btn-xs">
+                            <i class="fas fa-chart-line"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

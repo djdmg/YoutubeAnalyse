@@ -1,0 +1,226 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ video.title }} — Détail{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1>
+            {% if video.thumbnailUrl %}
+            <img src="{{ video.thumbnailUrl }}" alt="" class="video-thumb-header">
+            {% endif %}
+            {{ video.title|length > 60 ? video.title|slice(0,60) ~ '…' : video.title }}
+        </h1>
+        {% if video.publishedAt %}
+        <span class="last-sync"><i class="fas fa-calendar"></i> {{ video.publishedAt|date('d/m/Y H:i') }}</span>
+        {% endif %}
+    </div>
+    <div class="header-actions">
+        <a href="{{ path('analytics_videos') }}" class="btn btn-outline">
+            <i class="fas fa-arrow-left"></i> Retour
+        </a>
+        <a href="https://youtube.com/watch?v={{ video.youtubeId }}" target="_blank" class="btn btn-outline">
+            <i class="fab fa-youtube"></i> Voir sur YouTube
+        </a>
+    </div>
+</div>
+
+{# KPI Cards #}
+{% if latest_metric %}
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-icon views"><i class="fas fa-eye"></i></div>
+        <div class="kpi-content">
+            <div class="kpi-value">{{ latest_metric.views|number_format(0, ',', ' ') }}</div>
+            <div class="kpi-label">Vues (J)</div>
+        </div>
+    </div>
+    {% if latest_metric.ctr is not null %}
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(234,179,8,0.15);color:#eab308"><i class="fas fa-percentage"></i></div>
+        <div class="kpi-content">
+            <div class="kpi-value">{{ latest_metric.ctr|number_format(2) }}%</div>
+            <div class="kpi-label">CTR</div>
+        </div>
+    </div>
+    {% endif %}
+    {% if latest_metric.watchTimeMinutes %}
+    <div class="kpi-card">
+        <div class="kpi-icon watchtime"><i class="fas fa-clock"></i></div>
+        <div class="kpi-content">
+            <div class="kpi-value">{{ (latest_metric.watchTimeMinutes / 60)|number_format(1, ',', ' ') }}h</div>
+            <div class="kpi-label">Watch Time</div>
+        </div>
+    </div>
+    {% endif %}
+    {% if latest_metric.avgRetentionPercent is not null %}
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(168,85,247,0.15);color:#a855f7"><i class="fas fa-film"></i></div>
+        <div class="kpi-content">
+            <div class="kpi-value">{{ latest_metric.avgRetentionPercent|number_format(1) }}%</div>
+            <div class="kpi-label">Rétention moy.</div>
+        </div>
+    </div>
+    {% endif %}
+    {% if latest_metric.subscribersGained is not null %}
+    <div class="kpi-card">
+        <div class="kpi-icon subscribers"><i class="fas fa-user-plus"></i></div>
+        <div class="kpi-content">
+            <div class="kpi-value">+{{ latest_metric.subscribersGained }}</div>
+            <div class="kpi-label">Abonnés gagnés</div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Anomaly Banner #}
+{% if anomaly_report and anomaly_report.payload %}
+<div class="alert-banner alert-{{ anomaly_report.payload.type == 'surperformance' ? 'success' : 'danger' }}">
+    <i class="fas fa-{{ anomaly_report.payload.type == 'surperformance' ? 'rocket' : 'exclamation-triangle' }}"></i>
+    <div>
+        <strong>{{ anomaly_report.payload.type == 'surperformance' ? 'Surperformance détectée !' : 'Sous-performance détectée' }}</strong>
+        <p>{{ anomaly_report.payload.cause_probable }}</p>
+        <p class="alert-action"><i class="fas fa-lightbulb"></i> {{ anomaly_report.payload.action_recommandee }}</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="detail-grid">
+    {# Views Chart #}
+    {% if chart_data.labels|length > 0 %}
+    <div class="chart-card span-2">
+        <div class="chart-header"><h3><i class="fas fa-eye"></i> Vues journalières</h3></div>
+        <canvas id="viewsChart" height="80"></canvas>
+    </div>
+    {% endif %}
+
+    {# Retention Curve #}
+    {% if retention_data.labels|length > 0 %}
+    <div class="chart-card">
+        <div class="chart-header"><h3><i class="fas fa-film"></i> Courbe de rétention</h3></div>
+        <canvas id="retentionChart" height="120"></canvas>
+    </div>
+    {% endif %}
+
+    {# CTR Chart #}
+    {% if chart_data.ctr|filter(v => v > 0)|length > 0 %}
+    <div class="chart-card">
+        <div class="chart-header"><h3><i class="fas fa-percentage"></i> CTR</h3></div>
+        <canvas id="ctrChart" height="120"></canvas>
+    </div>
+    {% endif %}
+</div>
+
+{# AI Blocks #}
+<div class="ai-blocks-grid">
+
+    {# Projection J+30 #}
+    {% if prediction and prediction.payload %}
+    <div class="ai-block ai-block-prediction">
+        <div class="ai-block-header">
+            <i class="fas fa-chart-line"></i>
+            <h3>Projection J+30</h3>
+            <span class="ai-model">{{ prediction.modelVersion }}</span>
+        </div>
+        <div class="prediction-main">
+            <div class="prediction-value">{{ prediction.payload.vues_estimees_j30|number_format(0, ',', ' ') }}</div>
+            <div class="prediction-label">vues estimées</div>
+            <div class="prediction-range">
+                {{ prediction.payload.fourchette.min|number_format(0, ',', ' ') }} – {{ prediction.payload.fourchette.max|number_format(0, ',', ' ') }} vues
+            </div>
+        </div>
+        <div class="confidence-gauge confidence-{{ prediction.payload.confiance }}">
+            <span>Confiance : <strong>{{ prediction.payload.confiance }}</strong></span>
+        </div>
+        {% if prediction.payload.facteurs %}
+        <ul class="ai-list">
+            {% for f in prediction.payload.facteurs %}<li>{{ f }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Recommandations IA (title) #}
+    {% if title_report and title_report.payload %}
+    <div class="ai-block ai-block-title">
+        <div class="ai-block-header">
+            <i class="fas fa-magic"></i>
+            <h3>Recommandations IA</h3>
+            <span class="ai-model">{{ title_report.modelVersion }}</span>
+        </div>
+        <p class="ai-diagnostic"><i class="fas fa-search"></i> {{ title_report.payload.diagnostic }}</p>
+        <div class="ai-suggestions">
+            <strong>Titres suggérés :</strong>
+            {% for t in title_report.payload.suggestions_titres ?? [] %}
+            <div class="suggestion-item">{{ t }}</div>
+            {% endfor %}
+        </div>
+        {% if title_report.payload.mots_cles_manquants %}
+        <div class="ai-keywords">
+            {% for kw in title_report.payload.mots_cles_manquants %}
+            <span class="keyword-tag">{{ kw }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Feedback audience #}
+    {% if comment_report and comment_report.payload %}
+    <div class="ai-block ai-block-comments">
+        <div class="ai-block-header">
+            <i class="fas fa-comments"></i>
+            <h3>Feedback audience</h3>
+            <span class="ai-model">{{ comment_report.modelVersion }}</span>
+        </div>
+        {% set score = comment_report.payload.score_sentiment ?? 0 %}
+        {% set sg = comment_report.payload.sentiment_global ?? 'neutre' %}
+        <div class="sentiment-widget">
+            <div class="sentiment-score sentiment-{{ sg }}">
+                <span class="sentiment-emoji">{{ sg == 'positif' ? '😊' : (sg == 'négatif' ? '😞' : '😐') }}</span>
+                <span class="sentiment-label">{{ sg|capitalize }}</span>
+                <span class="sentiment-pct">{{ (score * 100)|round }}%</span>
+            </div>
+        </div>
+        <p class="ai-resume">{{ comment_report.payload.resume }}</p>
+        {% if comment_report.payload.themes_recurrents %}
+        <div class="themes-list">
+            {% for t in comment_report.payload.themes_recurrents %}
+            <span class="theme-tag">{{ t }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if comment_report.payload.demandes_tracklist %}
+        <div class="tracklist-notice"><i class="fas fa-music"></i> Tracklist demandée en commentaires</div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+{# Traffic Sources #}
+{% if latest_metric and latest_metric.trafficSources %}
+<div class="section-card">
+    <div class="section-header"><h3><i class="fas fa-traffic-light"></i> Sources de trafic</h3></div>
+    <div class="traffic-sources">
+        {% for source, views in latest_metric.trafficSources %}
+        <div class="traffic-row">
+            <span class="traffic-source">{{ source|replace({'_': ' '}) }}</span>
+            <span class="traffic-views">{{ views|number_format(0, ',', ' ') }} vues</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        const chartData = {{ chart_data|json_encode|raw }};
+        const retentionData = {{ retention_data|json_encode|raw }};
+    </script>
+    {{ encore_entry_script_tags('video_detail') }}
+{% endblock %}

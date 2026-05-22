@@ -1,0 +1,35 @@
+{% extends 'base.html.twig' %}
+{% block title %}Accès en attente — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="connect-card">
+    <div class="connect-icon" style="background:rgba(234,179,8,0.12);color:#eab308">
+        <i class="fas fa-hourglass-half"></i>
+    </div>
+    <h1>Accès en attente</h1>
+    <p>Ton compte a bien été créé. Un administrateur doit approuver ton accès avant que tu puisses utiliser l'application.</p>
+
+    <div style="background:var(--bg-secondary);border-radius:var(--radius-sm);padding:16px;margin:20px 0;text-align:left">
+        <div style="display:flex;align-items:center;gap:12px">
+            {% if app.user.avatarUrl %}
+            <img src="{{ app.user.avatarUrl }}" style="width:40px;height:40px;border-radius:50%;object-fit:cover">
+            {% endif %}
+            <div>
+                <div style="font-weight:600">{{ app.user.displayName }}</div>
+                <div style="font-size:12px;color:var(--text-secondary)">{{ app.user.email }}</div>
+            </div>
+        </div>
+    </div>
+
+    <p style="font-size:13px;color:var(--text-muted)">
+        <i class="fas fa-info-circle"></i>
+        Inscrit le {{ app.user.createdAt|date('d/m/Y à H:i') }}
+    </p>
+
+    <form method="post" action="{{ path('logout') }}" style="margin-top:24px">
+        <button type="submit" class="btn btn-outline" style="width:100%;justify-content:center">
+            <i class="fas fa-sign-out-alt"></i> Se déconnecter
+        </button>
+    </form>
+</div>
+{% endblock %}

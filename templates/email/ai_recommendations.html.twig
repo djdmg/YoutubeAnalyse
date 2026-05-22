@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0f172a; color:#e2e8f0; margin:0; padding:20px; }
+  .container { max-width:680px; margin:0 auto; }
+  .header { background:#1e293b; border-radius:12px; padding:24px; margin-bottom:20px; border-left:4px solid #6366f1; }
+  .header h1 { margin:0 0 4px; font-size:1.3rem; color:#fff; }
+  .header p { margin:0; color:#94a3b8; font-size:0.85rem; }
+  .report-card { background:#1e293b; border-radius:10px; padding:20px; margin-bottom:16px; }
+  .report-type { display:inline-block; background:#6366f1; color:#fff; font-size:0.7rem; font-weight:600; padding:2px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+  .report-video { font-size:0.8rem; color:#94a3b8; margin-bottom:12px; }
+  .report-video strong { color:#cbd5e1; }
+  .field-label { font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+  .field-value { color:#e2e8f0; font-size:0.9rem; margin-bottom:12px; line-height:1.5; }
+  .tag { display:inline-block; background:#1e3a5f; color:#93c5fd; border-radius:4px; padding:2px 8px; font-size:0.78rem; margin:2px 2px 2px 0; }
+  .tag-green { background:#14532d; color:#86efac; }
+  .tag-yellow { background:#451a03; color:#fcd34d; }
+  .tag-red { background:#450a0a; color:#fca5a5; }
+  .score { font-size:1.4rem; font-weight:700; color:#6366f1; }
+  .footer { text-align:center; color:#475569; font-size:0.75rem; margin-top:24px; padding-top:16px; border-top:1px solid #1e293b; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  {% if is_test is defined and is_test %}
+  <div style="background:#451a03;border-radius:10px;padding:12px 20px;margin-bottom:16px;color:#fcd34d;font-size:0.85rem;text-align:center;font-weight:600">
+    🧪 Email de test — données fictives pour vérifier le rendu
+  </div>
+  {% endif %}
+
+  <div class="header">
+    <h1>🎬 Recommandations IA — YouTube Analyse</h1>
+    <p>{{ date|date('d/m/Y à H:i') }} · {{ reports|length }} rapport(s) généré(s)</p>
+  </div>
+
+  {% for report in reports %}
+  <div class="report-card">
+    <div class="report-type">{{ report.type.label }}</div>
+
+    {% set videoTitle = report.video.title is defined ? report.video.title : null %}
+    {% if videoTitle %}
+    <div class="report-video">Vidéo : <strong>{{ videoTitle|length > 60 ? videoTitle|slice(0,60) ~ '…' : videoTitle }}</strong></div>
+    {% endif %}
+
+    {% set p = report.payload %}
+    {% set typeValue = report.type.value is defined ? report.type.value : report.type %}
+    {% if p %}
+
+      {# ── Title Optimization ───────────────────────── #}
+      {% if typeValue == 'title_optimization' %}
+        {% if p.diagnostic is defined %}
+          <div class="field-label">Diagnostic</div>
+          <div class="field-value">{{ p.diagnostic }}</div>
+        {% endif %}
+        {% if p.suggestions_titres is defined %}
+          <div class="field-label">Titres suggérés</div>
+          <div class="field-value">
+            {% for t in p.suggestions_titres %}<div>{{ loop.index }}. {{ t }}</div>{% endfor %}
+          </div>
+        {% endif %}
+        {% if p.mots_cles_manquants is defined and p.mots_cles_manquants|length > 0 %}
+          <div class="field-label">Mots-clés manquants</div>
+          <div class="field-value">{% for k in p.mots_cles_manquants %}<span class="tag">{{ k }}</span>{% endfor %}</div>
+        {% endif %}
+
+      {# ── Comment Analysis ─────────────────────────── #}
+      {% elseif typeValue == 'comment_analysis' %}
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
+          <div>
+            <div class="field-label">Sentiment global</div>
+            <span class="tag {{ p.sentiment_global == 'positif' ? 'tag-green' : (p.sentiment_global == 'négatif' ? 'tag-red' : 'tag-yellow') }}">
+              {{ p.sentiment_global ?? '—' }}
+            </span>
+          </div>
+          {% if p.score_sentiment is defined %}
+          <div>
+            <div class="field-label">Score</div>
+            <span class="score">{{ (p.score_sentiment * 100)|round }}%</span>
+          </div>
+          {% endif %}
+        </div>
+        {% if p.resume is defined %}
+          <div class="field-label">Résumé</div>
+          <div class="field-value">{{ p.resume }}</div>
+        {% endif %}
+        {% if p.themes_recurrents is defined and p.themes_recurrents|length > 0 %}
+          <div class="field-label">Thèmes récurrents</div>
+          <div class="field-value">{% for t in p.themes_recurrents %}<span class="tag">{{ t }}</span>{% endfor %}</div>
+        {% endif %}
+
+      {# ── Anomaly ──────────────────────────────────── #}
+      {% elseif typeValue == 'anomaly' %}
+        {% if p.type is defined %}
+          <div class="field-label">Type</div>
+          <span class="tag {{ p.type == 'surperformance' ? 'tag-green' : 'tag-red' }}">{{ p.type }}</span>
+          <div style="margin-bottom:12px"></div>
+        {% endif %}
+        {% if p.cause_probable is defined %}
+          <div class="field-label">Cause probable</div>
+          <div class="field-value">{{ p.cause_probable }}</div>
+        {% endif %}
+        {% if p.action_recommandee is defined %}
+          <div class="field-label">Action recommandée</div>
+          <div class="field-value" style="color:#86efac">{{ p.action_recommandee }}</div>
+        {% endif %}
+
+      {# ── Prediction ───────────────────────────────── #}
+      {% elseif typeValue == 'prediction' %}
+        {% if p.vues_estimees_j30 is defined %}
+          <div class="field-label">Vues estimées J+30</div>
+          <div class="field-value">
+            <span class="score">{{ p.vues_estimees_j30|number_format(0, ',', ' ') }}</span>
+            {% if p.fourchette is defined %}
+              <span style="color:#64748b;font-size:0.8rem"> ({{ p.fourchette.min|number_format(0,',',' ') }} – {{ p.fourchette.max|number_format(0,',',' ') }})</span>
+            {% endif %}
+          </div>
+        {% endif %}
+        {% if p.confiance is defined %}
+          <div class="field-label">Confiance</div>
+          <span class="tag {{ p.confiance == 'élevée' ? 'tag-green' : (p.confiance == 'faible' ? 'tag-red' : 'tag-yellow') }}">{{ p.confiance }}</span>
+          <div style="margin-bottom:12px"></div>
+        {% endif %}
+        {% if p.facteurs is defined and p.facteurs|length > 0 %}
+          <div class="field-label">Facteurs</div>
+          <div class="field-value">{% for f in p.facteurs %}<div>· {{ f }}</div>{% endfor %}</div>
+        {% endif %}
+
+      {# ── Upload Schedule ──────────────────────────── #}
+      {% elseif typeValue == 'upload_schedule' %}
+        {% if p.meilleur_jour is defined %}
+          <div class="field-label">Meilleur créneau</div>
+          <div class="field-value"><strong>{{ p.meilleur_jour|capitalize }}</strong> à <strong>{{ p.meilleure_heure }}</strong></div>
+        {% endif %}
+        {% if p.analyse is defined %}
+          <div class="field-label">Analyse</div>
+          <div class="field-value">{{ p.analyse }}</div>
+        {% endif %}
+        {% if p.jours_a_eviter is defined and p.jours_a_eviter|length > 0 %}
+          <div class="field-label">Jours à éviter</div>
+          <div class="field-value">{% for j in p.jours_a_eviter %}<span class="tag tag-red">{{ j }}</span>{% endfor %}</div>
+        {% endif %}
+
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="footer">YouTube Analyse · {{ date|date('Y') }}</div>
+</div>
+</body>
+</html>

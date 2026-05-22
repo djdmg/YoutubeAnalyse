@@ -1,0 +1,105 @@
+<?php
+
+namespace App\Service;
+
+use App\Entity\AiReport;
+use App\Enum\AiReportStatus;
+use App\Enum\AiReportType;
+use Anthropic\Client;
+use Psr\Log\LoggerInterface;
+
+class AnthropicService
+{
+    // Modèles par usage — du plus léger au plus puissant
+    public const MODEL_FAST     = 'claude-haiku-4-5-20251001';   // Rapide, économique (prédictions)
+    public const MODEL_BALANCED = 'claude-sonnet-4-6';            // Équilibré (optimisation titres)
+    public const MODEL_FULL     = 'claude-sonnet-4-20250514';     // Défaut (analyses complexes)
+
+    private const MAX_TOKENS = 2048;
+
+    public function __construct(
+        private readonly string $apiKey,
+        private readonly LoggerInterface $logger,
+    ) {}
+
+    /**
+     * Loads a prompt template from config/prompts/ and replaces {{placeholders}}.
+     */
+    public function loadPrompt(string $name, array $variables = []): string
+    {
+        $path = __DIR__ . '/../../config/prompts/' . $name . '.txt';
+        if (!file_exists($path)) {
+            throw new \RuntimeException("Prompt file not found: {$name}.txt");
+        }
+
+        $template = file_get_contents($path);
+        foreach ($variables as $key => $value) {
+            $template = str_replace('{{' . $key . '}}', (string) $value, $template);
+        }
+        return $template;
+    }
+
+    /**
+     * Calls Claude with the given prompt, fills the AiReport entity, and returns parsed payload.
+     * Returns null if Claude returns invalid JSON.
+     */
+    public function call(AiReport $report, string $prompt, string $model = self::MODEL_FULL): ?array
+    {
+        $client    = new Client(apiKey: $this->apiKey);
+        $startTime = microtime(true);
+
+        try {
+            $response = $client->messages->create(
+                maxTokens: self::MAX_TOKENS,
+                messages:  [['role' => 'user', 'content' => $prompt]],
+                model:     $model,
+            );
+
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+            $text = $response->content[0]->text ?? '';
+
+            $report->setModelVersion($model);
+            $report->setTokensInput($response->usage->inputTokens ?? 0);
+            $report->setTokensOutput($response->usage->outputTokens ?? 0);
+            $report->setDurationMs($durationMs);
+
+            $parsed = json_decode($text, true);
+            if (!is_array($parsed)) {
+                $this->logger->error('Claude returned invalid JSON', [
+                    'type'     => $report->getType()->value,
+                    'response' => substr($text, 0, 500),
+                ]);
+                $report->setStatus(AiReportStatus::Failed);
+                return null;
+            }
+
+            $report->setPayload($parsed);
+            $report->setStatus(AiReportStatus::Done);
+
+            $this->logger->info('Claude call successful', [
+                'type'           => $report->getType()->value,
+                'tokens_input'   => $response->usage->inputTokens ?? 0,
+                'tokens_output'  => $response->usage->outputTokens ?? 0,
+                'duration_ms'    => $durationMs,
+                'status'         => 'done',
+            ]);
+
+            return $parsed;
+
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+            $report->setStatus(AiReportStatus::Failed);
+            $report->setDurationMs($durationMs);
+            $report->setModelVersion($model);
+
+            $this->logger->error('Claude call failed', [
+                'type'        => $report->getType()->value,
+                'model'       => $model,
+                'error'       => $e->getMessage(),
+                'duration_ms' => $durationMs,
+                'status'      => 'failed',
+            ]);
+            return null;
+        }
+    }
+}

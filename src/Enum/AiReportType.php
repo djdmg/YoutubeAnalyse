@@ -1,0 +1,22 @@
+<?php
+namespace App\Enum;
+
+enum AiReportType: string
+{
+    case TitleOptimization = 'title_optimization';
+    case CommentAnalysis   = 'comment_analysis';
+    case Anomaly           = 'anomaly';
+    case Prediction        = 'prediction';
+    case UploadSchedule    = 'upload_schedule';
+
+    public function label(): string
+    {
+        return match($this) {
+            self::TitleOptimization => 'Optimisation titre',
+            self::CommentAnalysis   => 'Analyse commentaires',
+            self::Anomaly           => 'Anomalie détectée',
+            self::Prediction        => 'Prédiction J+30',
+            self::UploadSchedule    => 'Stratégie publication',
+        };
+    }
+}

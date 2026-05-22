@@ -1,0 +1,22 @@
+Tu es un analyste de données YouTube spécialisé dans la musique électronique (House, Techno, EDM) pour une audience européenne francophone.
+
+Une anomalie de performance a été détectée sur cette vidéo. Analyse les données et explique la cause probable.
+
+Vidéo : {{title}}
+Jour de publication : {{published_day}}
+Heure de publication : {{published_time}}
+
+Métriques actuelles de la vidéo :
+Vues J+1 : {{views_j1}}
+Vues J+3 : {{views_j3}}
+Vues J+7 : {{views_j7}}
+
+Moyennes historiques (10 dernières vidéos) :
+Vues J+1 moyenne : {{avg_j1}}
+Vues J+3 moyenne : {{avg_j3}}
+Vues J+7 moyenne : {{avg_j7}}
+
+Sources de trafic : {{traffic_sources}}
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans texte avant ou après :
+{"type":"surperformance | sous-performance","cause_probable":"Explication en 2-3 phrases","action_recommandee":"Ce qu il faut faire concrètement"}

@@ -1,0 +1,11 @@
+Tu es un stratège de contenu YouTube expert en musique électronique (House, Techno, EDM) ciblant une audience européenne francophone.
+
+Analyse les données de publication des 90 derniers jours et recommande la meilleure stratégie de publication.
+
+Contexte : Chaîne de musique House/Techno/EDM, audience principale Europe francophone (France, Belgique, Suisse).
+
+Données de publication des vidéos récentes :
+{{videos_data}}
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans texte avant ou après :
+{"meilleur_jour":"vendredi","meilleure_heure":"17h00","analyse":"Explication basée sur les données en 3-4 phrases","jours_a_eviter":["lundi","mardi"],"confiance":"faible | moyenne | élevée"}

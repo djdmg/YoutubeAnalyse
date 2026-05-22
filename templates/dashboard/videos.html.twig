@@ -1,0 +1,118 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Vidéos — YouTube Analyse{% endblock %}
+
+{% block body %}
+
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-video"></i> Mes vidéos</h1>
+        <span class="last-sync">{{ videos|length }} vidéo(s) synchronisée(s)</span>
+    </div>
+    <div class="header-actions">
+        <form method="post" action="{{ path('sync_data') }}" style="display:inline">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-sync-alt"></i> Synchroniser
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="section-card">
+    <div class="sort-bar">
+        <span>Trier par :</span>
+        <a href="?sort=views" class="sort-btn {{ sort_by == 'views' ? 'active' : '' }}">
+            <i class="fas fa-eye"></i> Vues
+        </a>
+        <a href="?sort=likes" class="sort-btn {{ sort_by == 'likes' ? 'active' : '' }}">
+            <i class="fas fa-thumbs-up"></i> Likes
+        </a>
+        <a href="?sort=comments" class="sort-btn {{ sort_by == 'comments' ? 'active' : '' }}">
+            <i class="fas fa-comment"></i> Commentaires
+        </a>
+        <a href="?sort=subscribers" class="sort-btn {{ sort_by == 'subscribers' ? 'active' : '' }}">
+            <i class="fas fa-user-plus"></i> Abonnés gagnés
+        </a>
+        <a href="?sort=date" class="sort-btn {{ sort_by == 'date' ? 'active' : '' }}">
+            <i class="fas fa-calendar"></i> Date
+        </a>
+    </div>
+
+    {% if videos|length == 0 %}
+    <div class="empty-state">
+        <i class="fas fa-video fa-3x"></i>
+        <h3>Aucune vidéo</h3>
+        <p>Synchronise ta chaîne pour afficher les métriques de tes vidéos.</p>
+    </div>
+    {% else %}
+
+    <div class="videos-table-wrapper">
+        <table class="videos-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Vidéo</th>
+                    <th><i class="fas fa-eye"></i> Vues</th>
+                    <th><i class="fas fa-thumbs-up"></i> Likes</th>
+                    <th><i class="fas fa-comment"></i> Commentaires</th>
+                    <th><i class="fas fa-clock"></i> Watch Time</th>
+                    <th><i class="fas fa-percentage"></i> Rétention</th>
+                    <th><i class="fas fa-user-plus"></i> Abonnés gagnés</th>
+                    <th><i class="fas fa-calendar"></i> Publication</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for video in videos %}
+                <tr>
+                    <td class="rank">{{ loop.index }}</td>
+                    <td class="video-cell">
+                        <div class="video-cell-inner">
+                            {% if video.thumbnailUrl %}
+                            <img src="{{ video.thumbnailUrl }}" alt="{{ video.title }}" class="video-thumb-sm" loading="lazy">
+                            {% else %}
+                            <div class="video-thumb-sm-placeholder"><i class="fas fa-video"></i></div>
+                            {% endif %}
+                            <div class="video-cell-info">
+                                <div class="video-cell-title">{{ video.title }}</div>
+                                {% if video.duration %}
+                                <div class="video-cell-duration">{{ video.duration|replace({'PT': '', 'H': 'h ', 'M': 'm ', 'S': 's'}) }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="num">{{ video.viewCount|number_format(0, ',', ' ') }}</td>
+                    <td class="num">{{ video.likeCount|number_format(0, ',', ' ') }}</td>
+                    <td class="num">{{ video.commentCount|number_format(0, ',', ' ') }}</td>
+                    <td class="num">
+                        {% if video.watchTimeMinutes %}
+                            {{ (video.watchTimeMinutes / 60)|number_format(1, ',', ' ') }}h
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if video.averageViewPercentage %}
+                            <span class="badge {{ video.averageViewPercentage > 50 ? 'badge-green' : (video.averageViewPercentage > 30 ? 'badge-yellow' : 'badge-red') }}">
+                                {{ video.averageViewPercentage|number_format(1) }}%
+                            </span>
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if video.subscribersGained is not null %}
+                            <span class="badge {{ video.subscribersGained > 0 ? 'badge-green' : 'badge-yellow' }}">
+                                +{{ video.subscribersGained }}
+                            </span>
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                    <td class="num">
+                        {% if video.publishedAt %}
+                            {{ video.publishedAt|date('d/m/Y') }}
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

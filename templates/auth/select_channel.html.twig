@@ -1,0 +1,108 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Sélectionner une chaîne — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="connect-card" style="max-width:600px">
+    <div class="connect-icon">
+        <i class="fas fa-list-ul"></i>
+    </div>
+    <h1>Choisir une chaîne</h1>
+    <p>Plusieurs chaînes sont associées à ton compte Google. Sélectionne celle que tu veux analyser.</p>
+
+    <form method="post" action="{{ path('auth_select_channel') }}">
+        <div class="channel-list">
+            {% for channel in channels %}
+            <label class="channel-option">
+                <input type="radio" name="channel_id" value="{{ channel.id }}" data-title="{{ channel.title }}" {% if loop.first %}checked{% endif %}>
+                <div class="channel-option-inner">
+                    {% if channel.thumbnail %}
+                    <img src="{{ channel.thumbnail }}" alt="{{ channel.title }}" class="channel-avatar">
+                    {% else %}
+                    <div class="channel-avatar-placeholder"><i class="fas fa-user"></i></div>
+                    {% endif %}
+                    <div class="channel-info">
+                        <div class="channel-name">{{ channel.title }}</div>
+                        <div class="channel-meta">
+                            <span><i class="fas fa-users"></i> {{ channel.subscribers|number_format(0, ',', ' ') }} abonnés</span>
+                            <span><i class="fas fa-video"></i> {{ channel.videos }} vidéos</span>
+                        </div>
+                    </div>
+                    <div class="channel-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+
+        <input type="hidden" name="channel_title" id="channel_title_input">
+        <button type="submit" class="btn-connect" style="width:100%;justify-content:center;margin-top:24px" onclick="syncTitle()">
+            <i class="fas fa-check"></i> Analyser cette chaîne
+        </button>
+    </form>
+</div>
+
+<style>
+.channel-list { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+
+.channel-option { cursor: pointer; }
+.channel-option input[type="radio"] { display: none; }
+
+.channel-option-inner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.channel-option input:checked + .channel-option-inner {
+    border-color: var(--red);
+    background: rgba(255,0,0,0.07);
+}
+
+.channel-option:hover .channel-option-inner { border-color: #444; }
+
+.channel-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.channel-avatar-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.channel-info { flex: 1; }
+.channel-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.channel-meta { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); }
+.channel-meta i { margin-right: 4px; }
+
+.channel-check {
+    color: var(--border);
+    font-size: 20px;
+    transition: var(--transition);
+}
+.channel-option input:checked + .channel-option-inner .channel-check { color: var(--red); }
+</style>
+<script>
+function syncTitle() {
+    const checked = document.querySelector('input[name="channel_id"]:checked');
+    if (checked) document.getElementById('channel_title_input').value = checked.dataset.title;
+}
+document.addEventListener('DOMContentLoaded', syncTitle);
+document.querySelectorAll('input[name="channel_id"]').forEach(r => r.addEventListener('change', syncTitle));
+</script>
+{% endblock %}

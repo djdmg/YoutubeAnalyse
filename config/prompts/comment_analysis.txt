@@ -1,0 +1,11 @@
+Tu es un expert en analyse de communauté YouTube spécialisé dans la musique électronique (House, Techno, EDM).
+
+Analyse les commentaires de cette vidéo et fournis un résumé structuré du sentiment de l'audience.
+
+Vidéo : {{title}}
+
+Commentaires (jusqu'à 50) :
+{{comments}}
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans texte avant ou après :
+{"sentiment_global":"positif | neutre | négatif","score_sentiment":0.87,"demandes_tracklist":false,"themes_recurrents":["thème 1","thème 2"],"commentaires_prioritaires":[{"texte":"...","raison":"feedback constructif"}],"resume":"Résumé en 3 phrases de ce que dit l audience"}

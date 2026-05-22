@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}YouTube Analyse{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    {% block stylesheets %}
+        {{ encore_entry_link_tags('app') }}
+    {% endblock %}
+</head>
+<body class="bg-dark">
+
+<nav class="navbar">
+    <div class="navbar-brand">
+        <i class="fab fa-youtube" style="color:#ff0000"></i>
+        <span>YouTube Analyse</span>
+    </div>
+    <div class="navbar-links">
+        {% if app.user %}
+        <a href="{{ path('dashboard') }}" class="{{ app.request.attributes.get('_route') == 'dashboard' ? 'active' : '' }}">
+            <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+        <a href="{{ path('videos') }}" class="{{ app.request.attributes.get('_route') == 'videos' ? 'active' : '' }}">
+            <i class="fas fa-video"></i> Vidéos
+        </a>
+        <a href="{{ path('analytics_videos') }}" class="{{ app.request.attributes.get('_route') starts with 'analytics_video' ? 'active' : '' }}">
+            <i class="fas fa-chart-bar"></i> Analytics
+        </a>
+        <a href="{{ path('analytics_alerts') }}" class="{{ app.request.attributes.get('_route') == 'analytics_alerts' ? 'active' : '' }}">
+            <i class="fas fa-exclamation-triangle"></i> Alertes
+        </a>
+        <a href="{{ path('analytics_ai_costs') }}" class="{{ app.request.attributes.get('_route') == 'analytics_ai_costs' ? 'active' : '' }}">
+            <i class="fas fa-robot"></i> Coûts IA
+        </a>
+        {% if is_granted('ROLE_ADMIN') %}
+        <a href="{{ path('admin_users') }}" class="{{ app.request.attributes.get('_route') starts with 'admin' ? 'active' : '' }}" style="{{ not (app.request.attributes.get('_route') starts with 'admin') ? 'color:var(--yellow)' : '' }}">
+            <i class="fas fa-users-cog"></i> Admin
+            {% if pending_approval_count is defined and pending_approval_count > 0 %}
+            <span class="nav-badge">{{ pending_approval_count }}</span>
+            {% endif %}
+        </a>
+        {% endif %}
+        <div class="navbar-user">
+            {% if app.user.avatarUrl %}
+            <img src="{{ app.user.avatarUrl }}" alt="{{ app.user.displayName }}" class="user-avatar">
+            {% else %}
+            <div class="user-avatar-placeholder"><i class="fas fa-user"></i></div>
+            {% endif %}
+            <span class="user-name">{{ app.user.displayName }}</span>
+            <a href="{{ path('profile_index') }}" class="btn-logout {{ app.request.attributes.get('_route') starts with 'profile' ? 'active' : '' }}" title="Profil &amp; Notifications">
+                <i class="fas fa-user-cog"></i>
+            </a>
+            <a href="{{ path('auth_google') }}" class="btn-logout" title="Changer de chaîne YouTube">
+                <i class="fab fa-youtube"></i>
+            </a>
+            <form method="post" action="{{ path('logout') }}" style="display:inline">
+                <button type="submit" class="btn-logout" title="Déconnexion">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ label }}">
+                <i class="fas fa-{{ label == 'success' ? 'check-circle' : 'exclamation-circle' }}"></i>
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    {% block body %}{% endblock %}
+</div>
+
+{% block javascripts %}
+    {{ encore_entry_script_tags('app') }}
+{% endblock %}
+</body>
+</html>

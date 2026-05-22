@@ -1,0 +1,114 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Profil — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-user-cog"></i> Profil &amp; Notifications</h1>
+        <span class="last-sync">{{ user.displayName }}</span>
+    </div>
+</div>
+
+{% for type, messages in app.flashes %}
+  {% for msg in messages %}
+    <div class="alert-banner alert-{{ type == 'success' ? 'success' : 'danger' }}" style="margin-bottom:1.25rem">
+        <i class="fas fa-{{ type == 'success' ? 'check-circle' : 'exclamation-circle' }}"></i>
+        <div>{{ msg }}</div>
+    </div>
+  {% endfor %}
+{% endfor %}
+
+<div class="section-card" style="max-width:680px">
+    <div class="section-header">
+        <h3><i class="fas fa-envelope"></i> Notifications par email</h3>
+        {% if user.hasSmtpConfigured() %}
+            <span class="badge badge-green" style="background:rgba(34,197,94,.15);color:#86efac;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">
+                <i class="fas fa-circle" style="font-size:8px;vertical-align:middle;margin-right:4px"></i> Actif
+            </span>
+        {% endif %}
+    </div>
+
+    <p style="color:var(--text-secondary);font-size:13px;margin:0 0 24px">
+        Après chaque analyse IA, un email récapitulatif avec les recommandations est envoyé automatiquement.
+    </p>
+
+    {{ form_start(form, {'attr': {'novalidate': 'novalidate', 'class': 'profile-form'}}) }}
+
+    {# ── Destination ───────────────────────────── #}
+    <div class="form-section-title"><i class="fas fa-at"></i> Adresse de destination</div>
+
+    <div class="form-field" style="margin-bottom:20px">
+        {{ form_label(form.notifEmail, null, {'label_attr': {'class': ''}}) }}
+        {{ form_widget(form.notifEmail, {'attr': {'class': 'form-control', 'placeholder': 'vous@exemple.com'}}) }}
+        {% if form.notifEmail.vars.errors|length > 0 %}
+            <span class="field-error">{{ form_errors(form.notifEmail) }}</span>
+        {% endif %}
+    </div>
+
+    {# ── Serveur SMTP ──────────────────────────── #}
+    <div class="form-section-title"><i class="fas fa-server"></i> Serveur SMTP</div>
+
+    <div class="form-grid-2" style="margin-bottom:16px">
+        <div class="form-field">
+            {{ form_label(form.smtpHost) }}
+            {{ form_widget(form.smtpHost, {'attr': {'class': 'form-control', 'placeholder': 'mail.exemple.com'}}) }}
+        </div>
+        <div class="form-field">
+            {{ form_label(form.smtpPort) }}
+            {{ form_widget(form.smtpPort, {'attr': {'class': 'form-control'}}) }}
+        </div>
+    </div>
+
+    <div class="form-field" style="margin-bottom:20px">
+        {{ form_label(form.smtpEncryption) }}
+        {{ form_widget(form.smtpEncryption, {'attr': {'class': 'form-control'}}) }}
+    </div>
+
+    {# ── Authentification ──────────────────────── #}
+    <div class="form-section-title"><i class="fas fa-key"></i> Authentification</div>
+
+    <div class="form-grid-2" style="margin-bottom:24px">
+        <div class="form-field">
+            {{ form_label(form.smtpUser) }}
+            {{ form_widget(form.smtpUser, {'attr': {'class': 'form-control', 'placeholder': 'user@exemple.com'}}) }}
+        </div>
+        <div class="form-field">
+            {{ form_label(form.smtpPassword) }}
+            {{ form_widget(form.smtpPassword, {'attr': {'class': 'form-control', 'autocomplete': 'new-password', 'placeholder': user.smtpPassword ? '••••••••' : 'Mot de passe'}}) }}
+            <span class="help-text">Laisser vide pour conserver le mot de passe actuel.</span>
+        </div>
+    </div>
+
+    {# ── Actions ───────────────────────────────── #}
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Enregistrer
+        </button>
+    </div>
+
+    {{ form_end(form) }}
+
+    {# Test email — form séparé pour éviter conflit avec le form de settings #}
+    {% if user.hasSmtpConfigured() %}
+    <form method="post" action="{{ path('profile_test_email') }}" style="margin-top:12px">
+        <button type="submit" class="btn btn-outline">
+            <i class="fas fa-paper-plane"></i> Envoyer un email de test
+        </button>
+    </form>
+    {% endif %}
+
+    {# Statut #}
+    {% if user.hasSmtpConfigured() %}
+    <div class="smtp-status active" style="margin-top:16px">
+        <i class="fas fa-check-circle"></i>
+        Notifications actives — emails envoyés à <strong>{{ user.notifEmail }}</strong>
+    </div>
+    {% else %}
+    <div class="smtp-status inactive" style="margin-top:16px">
+        <i class="fas fa-info-circle"></i>
+        Remplissez tous les champs pour activer les notifications.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

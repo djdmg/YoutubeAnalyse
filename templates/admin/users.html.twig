@@ -1,0 +1,240 @@
+{% extends 'base.html.twig' %}
+{% block title %}Admin — Gestion des utilisateurs{% endblock %}
+
+{% block body %}
+
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-users-cog"></i> Gestion des utilisateurs</h1>
+        <span class="last-sync">
+            {{ pending_users|length }} en attente ·
+            {{ approved_users|length }} approuvé(s)
+        </span>
+    </div>
+</div>
+
+{# ── Utilisateurs en attente ─────────────────────────────────────── #}
+{% if pending_users|length > 0 %}
+<div class="section-card" style="border-color:rgba(234,179,8,0.3)">
+    <div class="section-header">
+        <h3 style="color:#eab308">
+            <i class="fas fa-hourglass-half"></i>
+            En attente d'approbation
+            <span class="badge badge-yellow" style="font-size:13px;margin-left:6px">{{ pending_users|length }}</span>
+        </h3>
+    </div>
+
+    <div class="user-list">
+        {% for user in pending_users %}
+        <div class="user-row pending">
+            <div class="user-identity">
+                {% if user.avatarUrl %}
+                <img src="{{ user.avatarUrl }}" alt="{{ user.displayName }}" class="user-avatar-md">
+                {% else %}
+                <div class="user-avatar-md-placeholder"><i class="fas fa-user"></i></div>
+                {% endif %}
+                <div>
+                    <div class="user-name-lg">{{ user.displayName }}</div>
+                    <div class="user-email">{{ user.email }}</div>
+                    <div class="user-date">
+                        <i class="fas fa-clock"></i>
+                        Inscrit {{ user.createdAt|date('d/m/Y à H:i') }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="user-actions">
+                <form method="post" action="{{ path('admin_approve', {id: user.id}) }}" style="display:inline">
+                    <button type="submit" class="btn btn-approve">
+                        <i class="fas fa-check"></i> Approuver
+                    </button>
+                </form>
+                <form method="post" action="{{ path('admin_reject', {id: user.id}) }}" style="display:inline"
+                      onsubmit="return confirm('Supprimer {{ user.displayName }} ?')">
+                    <button type="submit" class="btn btn-reject">
+                        <i class="fas fa-times"></i> Refuser
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="section-card" style="border-color:rgba(34,197,94,0.2)">
+    <div style="display:flex;align-items:center;gap:10px;color:var(--green)">
+        <i class="fas fa-check-circle fa-lg"></i>
+        <span>Aucun utilisateur en attente d'approbation.</span>
+    </div>
+</div>
+{% endif %}
+
+{# ── Utilisateurs approuvés ──────────────────────────────────────── #}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-users"></i> Utilisateurs approuvés</h3>
+    </div>
+
+    {% if approved_users|length == 0 %}
+    <div class="empty-state" style="padding:32px">
+        <p>Aucun utilisateur approuvé.</p>
+    </div>
+    {% else %}
+    <div class="users-table-wrapper">
+        <table class="videos-table">
+            <thead>
+                <tr>
+                    <th>Utilisateur</th>
+                    <th>Email</th>
+                    <th>Rôle</th>
+                    <th>Inscrit le</th>
+                    <th>Approuvé le</th>
+                    <th>Dernière connexion</th>
+                    <th style="text-align:right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in approved_users %}
+                <tr>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            {% if user.avatarUrl %}
+                            <img src="{{ user.avatarUrl }}" alt="{{ user.displayName }}" class="user-avatar-sm">
+                            {% else %}
+                            <div class="user-avatar-sm-placeholder"><i class="fas fa-user"></i></div>
+                            {% endif %}
+                            <span style="font-weight:500">{{ user.displayName }}</span>
+                            {% if user == app.user %}
+                            <span class="badge badge-yellow" style="font-size:10px">Moi</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="color:var(--text-secondary);font-size:13px">{{ user.email }}</td>
+                    <td>
+                        {% if user.isAdmin %}
+                        <span class="badge badge-red"><i class="fas fa-crown"></i> Admin</span>
+                        {% else %}
+                        <span class="badge" style="background:rgba(59,130,246,0.12);color:#3b82f6">
+                            <i class="fas fa-user"></i> Utilisateur
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:12px;color:var(--text-secondary)">{{ user.createdAt|date('d/m/Y') }}</td>
+                    <td style="font-size:12px;color:var(--text-secondary)">
+                        {{ user.approvedAt ? user.approvedAt|date('d/m/Y') : '—' }}
+                    </td>
+                    <td style="font-size:12px;color:var(--text-secondary)">{{ user.lastLoginAt|date('d/m/Y H:i') }}</td>
+                    <td>
+                        {% if user != app.user %}
+                        <div class="action-group">
+                            <form method="post" action="{{ path('admin_toggle_admin', {id: user.id}) }}" style="display:inline">
+                                <button type="submit" class="btn btn-outline btn-sm" title="{{ user.isAdmin ? 'Retirer admin' : 'Promouvoir admin' }}">
+                                    <i class="fas fa-{{ user.isAdmin ? 'user-minus' : 'crown' }}"></i>
+                                    {{ user.isAdmin ? 'Retirer admin' : 'Promouvoir' }}
+                                </button>
+                            </form>
+                            <form method="post" action="{{ path('admin_revoke', {id: user.id}) }}" style="display:inline">
+                                <button type="submit" class="btn btn-outline btn-sm" title="Révoquer l'accès">
+                                    <i class="fas fa-ban"></i> Révoquer
+                                </button>
+                            </form>
+                            <form method="post" action="{{ path('admin_delete', {id: user.id}) }}" style="display:inline"
+                                  onsubmit="return confirm('Supprimer définitivement {{ user.displayName }} ?')">
+                                <button type="submit" class="btn btn-reject btn-sm">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <span class="na">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.user-list { display:flex; flex-direction:column; gap:2px; }
+
+.user-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:16px 12px;
+    border-radius:var(--radius-sm);
+    gap:16px;
+    flex-wrap:wrap;
+}
+
+.user-row.pending { background:rgba(234,179,8,0.04); }
+.user-row:hover { background:var(--bg-hover); }
+
+.user-identity { display:flex; align-items:center; gap:14px; }
+
+.user-avatar-md {
+    width:48px; height:48px;
+    border-radius:50%; object-fit:cover; flex-shrink:0;
+}
+
+.user-avatar-md-placeholder {
+    width:48px; height:48px; border-radius:50%;
+    background:var(--bg-secondary);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-muted); flex-shrink:0;
+}
+
+.user-avatar-sm {
+    width:32px; height:32px;
+    border-radius:50%; object-fit:cover; flex-shrink:0;
+}
+
+.user-avatar-sm-placeholder {
+    width:32px; height:32px; border-radius:50%;
+    background:var(--bg-secondary);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-muted); font-size:12px; flex-shrink:0;
+}
+
+.user-name-lg { font-weight:600; font-size:15px; }
+.user-email   { font-size:13px; color:var(--text-secondary); }
+.user-date    { font-size:12px; color:var(--text-muted); margin-top:2px; }
+.user-date i  { margin-right:4px; }
+
+.user-actions { display:flex; gap:8px; flex-shrink:0; }
+
+.btn-approve {
+    background:rgba(34,197,94,0.12);
+    border:1px solid rgba(34,197,94,0.3);
+    color:var(--green);
+    padding:8px 18px;
+    border-radius:var(--radius-sm);
+    font-weight:600; font-size:13px;
+    cursor:pointer; transition:var(--transition);
+    font-family:inherit;
+    display:inline-flex; align-items:center; gap:6px;
+}
+.btn-approve:hover { background:rgba(34,197,94,0.2); }
+
+.btn-reject {
+    background:rgba(239,68,68,0.1);
+    border:1px solid rgba(239,68,68,0.25);
+    color:#ef4444;
+    padding:8px 18px;
+    border-radius:var(--radius-sm);
+    font-weight:600; font-size:13px;
+    cursor:pointer; transition:var(--transition);
+    font-family:inherit;
+    display:inline-flex; align-items:center; gap:6px;
+}
+.btn-reject:hover { background:rgba(239,68,68,0.18); }
+
+.action-group { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+
+.users-table-wrapper { overflow-x:auto; }
+</style>
+
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Alertes — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-exclamation-triangle" style="color:#eab308"></i> Alertes</h1>
+        <span class="last-sync">{{ anomalies|length }} anomalie(s) détectée(s)</span>
+    </div>
+</div>
+
+{% if anomalies|length == 0 %}
+<div class="section-card">
+    <div class="empty-state">
+        <i class="fas fa-check-circle fa-3x" style="color:#22c55e"></i>
+        <h3>Aucune anomalie</h3>
+        <p>Tout semble normal sur tes vidéos récentes.</p>
+    </div>
+</div>
+{% else %}
+<div class="alerts-list">
+    {% for report in anomalies %}
+    {% set payload = report.payload %}
+    <div class="alert-card alert-{{ payload.type == 'surperformance' ? 'success' : 'danger' }}">
+        <div class="alert-card-header">
+            <div class="alert-type-badge">
+                <i class="fas fa-{{ payload.type == 'surperformance' ? 'rocket' : 'arrow-down' }}"></i>
+                {{ payload.type == 'surperformance' ? 'Surperformance' : 'Sous-performance' }}
+            </div>
+            {% if report.video %}
+            <div class="alert-video-title">{{ report.video.title|length > 60 ? report.video.title|slice(0,60) ~ '…' : report.video.title }}</div>
+            {% endif %}
+            <div class="alert-date">{{ report.generatedAt|date('d/m/Y H:i') }}</div>
+        </div>
+        <div class="alert-card-body">
+            <p class="alert-cause"><strong>Cause probable :</strong> {{ payload.cause_probable }}</p>
+            <p class="alert-action"><i class="fas fa-lightbulb"></i> <strong>Action :</strong> {{ payload.action_recommandee }}</p>
+        </div>
+        {% if report.video %}
+        <div class="alert-card-footer">
+            <a href="{{ path('analytics_video_detail', {youtubeId: report.video.youtubeId}) }}" class="btn btn-outline btn-sm">
+                <i class="fas fa-chart-line"></i> Voir la vidéo
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

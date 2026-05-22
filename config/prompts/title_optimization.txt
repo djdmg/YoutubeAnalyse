@@ -1,0 +1,17 @@
+Tu es un expert en optimisation de contenu YouTube spécialisé dans la musique électronique (House, Techno, EDM) pour une audience européenne francophone.
+
+Analyse les données de performance de cette vidéo et fournis des recommandations d'optimisation.
+
+Données de la vidéo :
+Titre actuel : {{title}}
+Description actuelle : {{description}}
+CTR actuel : {{ctr}}%
+Impressions : {{impressions}}
+Watch Time : {{watch_time_minutes}} minutes
+Rétention moyenne : {{avg_retention}}%
+
+Top 5 vidéos de référence (meilleures performances) :
+{{top_videos}}
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans texte avant ou après :
+{"diagnostic":"Pourquoi le titre sous-performe en 2-3 phrases","suggestions_titres":["Titre A","Titre B","Titre C"],"suggestions_description":"Nouvelle description proposée optimisée SEO","mots_cles_manquants":["keyword1","keyword2"]}
