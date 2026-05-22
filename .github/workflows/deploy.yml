@@ -2,7 +2,11 @@ name: Deploy to NAS
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
@@ -10,33 +14,68 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy on NAS
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy to Synology NAS
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          host:     ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port:     ${{ secrets.SSH_PORT }}
+          host:     dimitrig.synology.me
+          username: adminSSH
+          password: ${{ secrets.NAS_SSH_PASSWORD }}
+          port:     22
+          envs:     GH_TOKEN
           script: |
             set -e
 
-            cd ${{ secrets.DEPLOY_PATH }}
+            export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/syno/sbin:/usr/syno/bin:/usr/local/sbin:/usr/local/bin"
 
-            echo "── Pull latest code ──"
-            git pull origin main
+            echo "→ Versions détectées :"
+            git --version
+            php84 --version | head -1
+            php84 /usr/local/bin/composer --version
 
-            echo "── Composer install ──"
-            composer install --no-dev --optimize-autoloader --no-interaction
+            DEPLOY_DIR="/volume4/web/YoutubeAnalyse"
+            REPO="https://x-access-token:${GH_TOKEN}@github.com/djdmg/YoutubeAnalyse.git"
 
-            echo "── Build assets ──"
-            npm ci --prefer-offline
-            npm run build
+            git config --global --add safe.directory "$DEPLOY_DIR"
 
-            echo "── Migrations ──"
-            php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+            # Backup persistant du .env.local — hors du repo git, survit à tous les déploiements
+            ENV_BACKUP="/volume4/web/.env.YoutubeAnalyse.bak"
 
-            echo "── Cache ──"
-            php bin/console cache:clear --env=prod
-            php bin/console cache:warmup --env=prod
+            if [ -d "$DEPLOY_DIR/.git" ]; then
+              echo "→ Mise à jour du dépôt..."
+              cd "$DEPLOY_DIR"
+              git remote set-url origin "$REPO"
+              [ -f .env.local ] && cp .env.local "$ENV_BACKUP"
+              git fetch origin main
+              git reset --hard origin/main
+              git remote set-url origin "https://github.com/djdmg/YoutubeAnalyse.git"
+              if [ -f "$ENV_BACKUP" ]; then
+                cp "$ENV_BACKUP" .env.local
+                echo "→ .env.local restauré depuis le backup persistant"
+              fi
+            else
+              echo "→ Premier déploiement — clonage du dépôt..."
+              mkdir -p "$DEPLOY_DIR"
+              git clone --branch main "$REPO" "$DEPLOY_DIR"
+              cd "$DEPLOY_DIR"
+              git remote set-url origin "https://github.com/djdmg/YoutubeAnalyse.git"
+            fi
 
-            echo "✅ Déploiement terminé"
+            export APP_ENV=prod
+            export APP_DEBUG=0
+
+            echo "→ Installation des dépendances PHP..."
+            php84 /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
+            echo "→ Migrations base de données..."
+            php84 bin/console doctrine:migrations:migrate --no-interaction --env=prod
+
+            echo "→ Cache..."
+            php84 bin/console cache:clear --env=prod
+            php84 bin/console cache:warmup --env=prod
+
+            echo "→ Assets..."
+            php84 bin/console assets:install --env=prod
+
+            echo "✓ Déploiement YoutubeAnalyse terminé."
