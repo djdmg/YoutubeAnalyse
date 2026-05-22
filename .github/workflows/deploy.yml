@@ -19,10 +19,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          host:     dimitrig.synology.me
-          username: adminSSH
-          password: ${{ secrets.NAS_SSH_PASSWORD }}
-          port:     22
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port:     ${{ secrets.SSH_PORT }}
           envs:     GH_TOKEN
           script: |
             set -e
@@ -34,13 +34,13 @@ jobs:
             php84 --version | head -1
             php84 /usr/local/bin/composer --version
 
-            DEPLOY_DIR="/volume4/web/YoutubeAnalyse"
+            DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
             REPO="https://x-access-token:${GH_TOKEN}@github.com/djdmg/YoutubeAnalyse.git"
+            ENV_BACKUP="/volume4/web/.env.YoutubeAnalyse.bak"
 
             git config --global --add safe.directory "$DEPLOY_DIR"
 
             # Backup persistant du .env.local — hors du repo git, survit à tous les déploiements
-            ENV_BACKUP="/volume4/web/.env.YoutubeAnalyse.bak"
 
             if [ -d "$DEPLOY_DIR/.git" ]; then
               echo "→ Mise à jour du dépôt..."
