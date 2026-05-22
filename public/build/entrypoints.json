@@ -1,0 +1,27 @@
+{
+  "entrypoints": {
+    "app": {
+      "js": [
+        "/build/runtime.81003d5f.js",
+        "/build/app.f18f1225.js"
+      ],
+      "css": [
+        "/build/app.217f5af1.css"
+      ]
+    },
+    "dashboard": {
+      "js": [
+        "/build/runtime.81003d5f.js",
+        "/build/177.767b089e.js",
+        "/build/dashboard.86f20679.js"
+      ]
+    },
+    "video_detail": {
+      "js": [
+        "/build/runtime.81003d5f.js",
+        "/build/177.767b089e.js",
+        "/build/video_detail.b54ef8db.js"
+      ]
+    }
+  }
+}
