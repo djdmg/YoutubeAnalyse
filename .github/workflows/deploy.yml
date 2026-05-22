@@ -55,10 +55,13 @@ jobs:
                 echo "→ .env.local restauré depuis le backup persistant"
               fi
             else
-              echo "→ Premier déploiement — clonage du dépôt..."
+              echo "→ Premier déploiement — initialisation dans le dossier existant..."
               mkdir -p "$DEPLOY_DIR"
-              git clone --branch main "$REPO" "$DEPLOY_DIR"
               cd "$DEPLOY_DIR"
+              git init
+              git remote add origin "$REPO"
+              git fetch origin main
+              git reset --hard origin/main
               git remote set-url origin "https://github.com/djdmg/YoutubeAnalyse.git"
             fi
 
