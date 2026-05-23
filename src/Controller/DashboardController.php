@@ -129,7 +129,7 @@ class DashboardController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        $days = (int) $request->query->get('days', 30);
+        $days = min(365, max(1, (int) $request->query->get('days', 30)));
         $dailyStats = $this->channelStatsRepo->findDailyStatsForUser($user, $days);
 
         $data = ['labels' => [], 'views' => [], 'subscribers' => [], 'watchTime' => []];

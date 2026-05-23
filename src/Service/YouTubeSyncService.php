@@ -159,10 +159,12 @@ class YouTubeSyncService
                     'filters'    => "video=={$video->getYoutubeId()}",
                 ]);
                 if ($trafficRows = $trafficResponse->getRows()) {
-                    $sources  = [];
+                    $sources    = [];
                     foreach ($trafficRows as $r) $sources[$r[0]] = (int)$r[1];
-                    $todayMetric = $this->dailyMetricRepo->findOneBy(['video' => $video, 'date' => $today->setTime(0, 0, 0)]);
-                    $todayMetric?->setTrafficSources($sources);
+                    // Traffic is queried for $endDate (yesterday), not today
+                    $endDateObj  = new \DateTimeImmutable($endDate);
+                    $trafficMetric = $this->dailyMetricRepo->findOneBy(['video' => $video, 'date' => $endDateObj->setTime(0, 0, 0)]);
+                    $trafficMetric?->setTrafficSources($sources);
                 }
             } catch (\Exception) {}
 
@@ -254,7 +256,7 @@ class YouTubeSyncService
         if (!$duration) return null;
         try {
             $interval = new \DateInterval($duration);
-            return $interval->h * 3600 + $interval->i * 60 + $interval->s;
+            return ($interval->d * 86400) + ($interval->h * 3600) + ($interval->i * 60) + $interval->s;
         } catch (\Exception) {
             return null;
         }

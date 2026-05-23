@@ -67,7 +67,7 @@ class PlaylistController extends AbstractController
         $data        = json_decode($request->getContent(), true);
         $title       = trim($data['title'] ?? '');
         $description = trim($data['description'] ?? '');
-        $videoIds    = $data['videoIds'] ?? [];
+        $videoIds    = array_filter((array) ($data['videoIds'] ?? []), fn($id) => is_string($id) && $id !== '');
         $privacy     = in_array($data['privacy'] ?? '', ['public', 'unlisted', 'private']) ? $data['privacy'] : 'private';
 
         if (!$title || empty($videoIds)) {
@@ -75,6 +75,13 @@ class PlaylistController extends AbstractController
         }
 
         $user = $this->getUser();
+
+        // Only allow videos owned by this user — prevent adding arbitrary YouTube IDs
+        $ownedIds = array_map(fn($v) => $v->getYoutubeId(), $this->videoRepo->findForUser($user));
+        $videoIds = array_values(array_filter($videoIds, fn($id) => in_array($id, $ownedIds, true)));
+        if (empty($videoIds)) {
+            return $this->json(['error' => 'Aucune vidéo valide sélectionnée.'], 400);
+        }
 
         try {
             $playlistId = $this->youtubePlaylistService->createPlaylist($user, $title, $description, $privacy);

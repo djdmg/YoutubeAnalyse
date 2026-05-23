@@ -49,7 +49,7 @@ class PromoteAdminCommand extends Command
             }
         }
 
-        $user->setRoles(['ROLE_ADMIN'])
+        $user->setRoles(array_unique(array_merge($user->getRoles(), ['ROLE_ADMIN'])))
              ->setIsApproved(true)
              ->setApprovedAt(new \DateTimeImmutable());
         $this->em->flush();

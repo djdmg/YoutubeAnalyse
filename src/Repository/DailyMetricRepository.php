@@ -110,7 +110,7 @@ class DailyMetricRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
 
-        return $row['latest'] ?? null;
+        return $row['latest'] ? new \DateTimeImmutable($row['latest']) : null;
     }
 
     /** Returns aggregated totals for a specific date. */

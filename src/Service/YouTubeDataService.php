@@ -29,7 +29,10 @@ class YouTubeDataService
             throw new \RuntimeException('Non authentifié avec Google. Veuillez connecter votre compte.');
         }
 
-        $token     = $this->tokenRepo->findForUser($user);
+        $token = $this->tokenRepo->findForUser($user);
+        if (!$token) {
+            throw new \RuntimeException('Token Google introuvable pour cet utilisateur.');
+        }
         $channelId = $token->getChannelId();
         $youtube   = new YouTube($client);
         $analytics = new YouTubeAnalytics($client);
