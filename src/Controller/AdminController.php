@@ -32,16 +32,21 @@ class AdminController extends AbstractController
         ]);
     }
 
-    #[Route('/approve/{id}', name: 'admin_approve', methods: ['POST'])]
-    public function approve(User $user): Response
+    private function validateCsrf(Request $request, User $user): bool
     {
+        return $this->isCsrfTokenValid('admin_action_' . $user->getId(), $request->request->get('_token'));
+    }
+
+    #[Route('/approve/{id}', name: 'admin_approve', methods: ['POST'])]
+    public function approve(User $user, Request $request): Response
+    {
+        if (!$this->validateCsrf($request, $user)) throw $this->createAccessDeniedException();
         if ($user === $this->getUser()) {
             $this->addFlash('error', 'Impossible de modifier ton propre compte.');
             return $this->redirectToRoute('admin_users');
         }
 
-        $user->setIsApproved(true)
-             ->setApprovedAt(new \DateTimeImmutable());
+        $user->setIsApproved(true)->setApprovedAt(new \DateTimeImmutable());
         $this->em->flush();
 
         $this->addFlash('success', "✓ {$user->getDisplayName()} approuvé.");
@@ -49,8 +54,9 @@ class AdminController extends AbstractController
     }
 
     #[Route('/reject/{id}', name: 'admin_reject', methods: ['POST'])]
-    public function reject(User $user): Response
+    public function reject(User $user, Request $request): Response
     {
+        if (!$this->validateCsrf($request, $user)) throw $this->createAccessDeniedException();
         if ($user === $this->getUser()) {
             $this->addFlash('error', 'Impossible de modifier ton propre compte.');
             return $this->redirectToRoute('admin_users');
@@ -64,18 +70,19 @@ class AdminController extends AbstractController
     }
 
     #[Route('/toggle-admin/{id}', name: 'admin_toggle_admin', methods: ['POST'])]
-    public function toggleAdmin(User $user): Response
+    public function toggleAdmin(User $user, Request $request): Response
     {
+        if (!$this->validateCsrf($request, $user)) throw $this->createAccessDeniedException();
         if ($user === $this->getUser()) {
             $this->addFlash('error', 'Impossible de modifier ton propre rôle.');
             return $this->redirectToRoute('admin_users');
         }
 
         if ($user->isAdmin()) {
-            $user->setRoles(['ROLE_USER']);
+            $user->setRoles(array_values(array_diff($user->getRoles(), ['ROLE_ADMIN'])));
             $this->addFlash('success', "{$user->getDisplayName()} n'est plus admin.");
         } else {
-            $user->setRoles(['ROLE_ADMIN']);
+            $user->setRoles(array_unique(array_merge($user->getRoles(), ['ROLE_ADMIN'])));
             $this->addFlash('success', "{$user->getDisplayName()} est maintenant admin.");
         }
 
@@ -84,8 +91,9 @@ class AdminController extends AbstractController
     }
 
     #[Route('/revoke/{id}', name: 'admin_revoke', methods: ['POST'])]
-    public function revoke(User $user): Response
+    public function revoke(User $user, Request $request): Response
     {
+        if (!$this->validateCsrf($request, $user)) throw $this->createAccessDeniedException();
         if ($user === $this->getUser()) {
             $this->addFlash('error', 'Impossible de modifier ton propre compte.');
             return $this->redirectToRoute('admin_users');
@@ -99,8 +107,9 @@ class AdminController extends AbstractController
     }
 
     #[Route('/delete/{id}', name: 'admin_delete', methods: ['POST'])]
-    public function delete(User $user): Response
+    public function delete(User $user, Request $request): Response
     {
+        if (!$this->validateCsrf($request, $user)) throw $this->createAccessDeniedException();
         if ($user === $this->getUser()) {
             $this->addFlash('error', 'Impossible de supprimer ton propre compte.');
             return $this->redirectToRoute('admin_users');

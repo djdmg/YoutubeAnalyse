@@ -45,12 +45,14 @@
 
             <div class="user-actions">
                 <form method="post" action="{{ path('admin_approve', {id: user.id}) }}" style="display:inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
                     <button type="submit" class="btn btn-approve">
                         <i class="fas fa-check"></i> Approuver
                     </button>
                 </form>
                 <form method="post" action="{{ path('admin_reject', {id: user.id}) }}" style="display:inline"
                       onsubmit="return confirm('Supprimer {{ user.displayName }} ?')">
+                    <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
                     <button type="submit" class="btn btn-reject">
                         <i class="fas fa-times"></i> Refuser
                     </button>
@@ -128,18 +130,21 @@
                         {% if user != app.user %}
                         <div class="action-group">
                             <form method="post" action="{{ path('admin_toggle_admin', {id: user.id}) }}" style="display:inline">
+                                <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
                                 <button type="submit" class="btn btn-outline btn-sm" title="{{ user.isAdmin ? 'Retirer admin' : 'Promouvoir admin' }}">
                                     <i class="fas fa-{{ user.isAdmin ? 'user-minus' : 'crown' }}"></i>
                                     {{ user.isAdmin ? 'Retirer admin' : 'Promouvoir' }}
                                 </button>
                             </form>
                             <form method="post" action="{{ path('admin_revoke', {id: user.id}) }}" style="display:inline">
+                                <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
                                 <button type="submit" class="btn btn-outline btn-sm" title="Révoquer l'accès">
                                     <i class="fas fa-ban"></i> Révoquer
                                 </button>
                             </form>
                             <form method="post" action="{{ path('admin_delete', {id: user.id}) }}" style="display:inline"
                                   onsubmit="return confirm('Supprimer définitivement {{ user.displayName }} ?')">
+                                <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
                                 <button type="submit" class="btn btn-reject btn-sm">
                                     <i class="fas fa-trash"></i>
                                 </button>

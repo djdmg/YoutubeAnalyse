@@ -17,10 +17,14 @@ class AnthropicService
 
     private const MAX_TOKENS = 2048;
 
+    private readonly Client $client;
+
     public function __construct(
         private readonly string $apiKey,
         private readonly LoggerInterface $logger,
-    ) {}
+    ) {
+        $this->client = new Client(apiKey: $this->apiKey);
+    }
 
     /**
      * Loads a prompt template from config/prompts/ and replaces {{placeholders}}.
@@ -44,11 +48,10 @@ class AnthropicService
      */
     public function callRaw(string $prompt, string $model = self::MODEL_BALANCED, int $maxTokens = 4096): ?array
     {
-        $client    = new Client(apiKey: $this->apiKey);
         $startTime = microtime(true);
 
         try {
-            $response = $client->messages->create(
+            $response = $this->client->messages->create(
                 maxTokens: $maxTokens,
                 messages:  [['role' => 'user', 'content' => $prompt]],
                 model:     $model,
@@ -83,11 +86,10 @@ class AnthropicService
      */
     public function call(AiReport $report, string $prompt, string $model = self::MODEL_FULL): ?array
     {
-        $client    = new Client(apiKey: $this->apiKey);
         $startTime = microtime(true);
 
         try {
-            $response = $client->messages->create(
+            $response = $this->client->messages->create(
                 maxTokens: self::MAX_TOKENS,
                 messages:  [['role' => 'user', 'content' => $prompt]],
                 model:     $model,
