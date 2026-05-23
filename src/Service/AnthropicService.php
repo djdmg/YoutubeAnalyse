@@ -40,6 +40,44 @@ class AnthropicService
     }
 
     /**
+     * Calls Claude without any AiReport entity. Returns parsed JSON or null.
+     */
+    public function callRaw(string $prompt, string $model = self::MODEL_BALANCED, int $maxTokens = 4096): ?array
+    {
+        $client    = new Client(apiKey: $this->apiKey);
+        $startTime = microtime(true);
+
+        try {
+            $response = $client->messages->create(
+                maxTokens: $maxTokens,
+                messages:  [['role' => 'user', 'content' => $prompt]],
+                model:     $model,
+            );
+
+            $text   = $response->content[0]->text ?? '';
+            $parsed = json_decode($text, true);
+
+            if (!is_array($parsed)) {
+                $this->logger->error('Claude callRaw: invalid JSON', ['response' => substr($text, 0, 500)]);
+                return null;
+            }
+
+            $this->logger->info('Claude callRaw successful', [
+                'model'          => $model,
+                'tokens_input'   => $response->usage->inputTokens ?? 0,
+                'tokens_output'  => $response->usage->outputTokens ?? 0,
+                'duration_ms'    => (int) ((microtime(true) - $startTime) * 1000),
+            ]);
+
+            return $parsed;
+
+        } catch (\Throwable $e) {
+            $this->logger->error('Claude callRaw failed', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
      * Calls Claude with the given prompt, fills the AiReport entity, and returns parsed payload.
      * Returns null if Claude returns invalid JSON.
      */
