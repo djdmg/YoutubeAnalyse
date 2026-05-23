@@ -19,7 +19,12 @@
         <i class="fab fa-youtube" style="color:#ff0000"></i>
         <span>YouTube Analyse</span>
     </div>
-    <div class="navbar-links">
+    {% if app.user %}
+    <button class="navbar-toggle" id="navToggle" aria-label="Menu">
+        <i class="fas fa-bars"></i>
+    </button>
+    {% endif %}
+    <div class="navbar-links" id="navLinks">
         {% if app.user %}
         <a href="{{ path('dashboard') }}" class="{{ app.request.attributes.get('_route') == 'dashboard' ? 'active' : '' }}">
             <i class="fas fa-chart-line"></i> Dashboard
@@ -35,6 +40,9 @@
         </a>
         <a href="{{ path('analytics_ai_costs') }}" class="{{ app.request.attributes.get('_route') == 'analytics_ai_costs' ? 'active' : '' }}">
             <i class="fas fa-robot"></i> Coûts IA
+        </a>
+        <a href="{{ path('playlists_create') }}" class="{{ app.request.attributes.get('_route') starts with 'playlists' ? 'active' : '' }}">
+            <i class="fas fa-list-ul"></i> Playlists IA
         </a>
         {% if is_granted('ROLE_ADMIN') %}
         <a href="{{ path('admin_users') }}" class="{{ app.request.attributes.get('_route') starts with 'admin' ? 'active' : '' }}" style="{{ not (app.request.attributes.get('_route') starts with 'admin') ? 'color:var(--yellow)' : '' }}">
@@ -66,6 +74,13 @@
         {% endif %}
     </div>
 </nav>
+<script>
+document.getElementById('navToggle')?.addEventListener('click', function() {
+    const links = document.getElementById('navLinks');
+    const isOpen = links.classList.toggle('open');
+    this.querySelector('i').className = isOpen ? 'fas fa-times' : 'fas fa-bars';
+});
+</script>
 
 <div class="container">
     {% for label, messages in app.flashes %}
