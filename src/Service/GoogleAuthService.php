@@ -25,21 +25,24 @@ class GoogleAuthService
         $client->setClientSecret($this->clientSecret);
         $client->setRedirectUri($this->redirectUri);
         $client->addScope('https://www.googleapis.com/auth/youtube.readonly');
-        $client->addScope('https://www.googleapis.com/auth/youtube.force-ssl'); // required for commentThreads.list
+        $client->addScope('https://www.googleapis.com/auth/youtube.force-ssl');
         $client->addScope('https://www.googleapis.com/auth/yt-analytics.readonly');
         $client->addScope('https://www.googleapis.com/auth/yt-analytics-monetary.readonly');
         $client->addScope('https://www.googleapis.com/auth/userinfo.email');
         $client->addScope('https://www.googleapis.com/auth/userinfo.profile');
         $client->setAccessType('offline');
-        // Force consent to re-issue refresh token with updated scopes
-        $client->setPrompt('consent');
 
         return $client;
     }
 
     public function getAuthUrl(): string
     {
-        return $this->createClient()->createAuthUrl();
+        $client = $this->createClient();
+        // 'consent' only on first auth — once the token is stored, renewals use the refresh token silently.
+        // If the user has no stored token yet, Google will ask for consent anyway (offline + first time).
+        // Using 'select_account' lets the user switch Google accounts without forcing re-consent.
+        $client->setPrompt('select_account');
+        return $client->createAuthUrl();
     }
 
     /**

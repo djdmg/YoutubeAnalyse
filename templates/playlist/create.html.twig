@@ -4,25 +4,18 @@
 
 {% block body %}
 <div class="page-header">
-  <h1 class="page-title"><i class="fas fa-list-ul" style="color:var(--purple)"></i> Créer une playlist assistée par l'IA</h1>
-  <p class="page-subtitle">Décris ton idée, l'IA sélectionne et organise tes {{ video_count }} vidéos</p>
+  <h1 class="page-title"><i class="fas fa-list-ul" style="color:var(--purple)"></i> Créer une playlist IA</h1>
+  <p class="page-subtitle">L'IA analyse tes {{ video_count }} vidéos et propose des regroupements pertinents</p>
 </div>
 
 {# ── Step 1 : Formulaire ──────────────────────────────────────────── #}
 <div id="step-form" class="playlist-card">
   <div class="playlist-card-header">
-    <span class="step-badge">1</span>
-    <span>Décris ta playlist</span>
-  </div>
-
-  <div class="form-field" style="margin-bottom:16px">
-    <label class="form-label">Thème ou intention <span style="color:var(--text-muted);font-weight:400">(optionnel)</span></label>
-    <textarea id="prompt-input" class="form-control" rows="3"
-      placeholder="Ex : meilleurs sets techno, mix chill pour travailler, vidéos les plus vues cette année…"></textarea>
+    <span class="step-badge"><i class="fas fa-magic" style="font-size:.8rem"></i></span>
+    <span>Visibilité sur YouTube</span>
   </div>
 
   <div class="form-field" style="margin-bottom:24px">
-    <label class="form-label">Visibilité sur YouTube</label>
     <div style="display:flex;gap:12px;flex-wrap:wrap">
       {% for val, label in {'private': '🔒 Privée', 'unlisted': '🔗 Non répertoriée', 'public': '🌍 Publique'} %}
       <label class="privacy-option">
@@ -34,7 +27,7 @@
   </div>
 
   <button id="btn-propose" class="btn btn-primary btn-lg">
-    <i class="fas fa-magic"></i> Générer les propositions
+    <i class="fas fa-magic"></i> Analyser mes vidéos et proposer des playlists
   </button>
 </div>
 
@@ -53,7 +46,7 @@
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
     <h2 style="margin:0;font-size:1.1rem">Propositions de l'IA — choisis et personnalise</h2>
     <button id="btn-back" class="btn btn-secondary btn-sm">
-      <i class="fas fa-arrow-left"></i> Nouvelle recherche
+      <i class="fas fa-redo"></i> Regénérer
     </button>
   </div>
   <div id="proposals-container" style="display:flex;flex-direction:column;gap:24px"></div>
@@ -174,14 +167,13 @@ document.getElementById('btn-back').addEventListener('click', () => {
 });
 
 async function propose() {
-  const prompt = document.getElementById('prompt-input').value.trim();
   show('step-loading'); hide('step-form'); hide('step-proposals'); hide('step-success');
 
   try {
     const res  = await fetch(PROPOSE_URL, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({prompt}),
+      body: JSON.stringify({prompt: ''}),
     });
     const data = await res.json();
 
@@ -284,7 +276,6 @@ async function confirmCreate(proposalEl) {
 
 function resetAll() {
   hide('step-success'); hide('step-proposals'); hide('step-loading');
-  document.getElementById('prompt-input').value = '';
   show('step-form');
 }
 
