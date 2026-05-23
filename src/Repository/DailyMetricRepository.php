@@ -98,4 +98,55 @@ class DailyMetricRepository extends ServiceEntityRepository
         }
         return $baseline;
     }
+
+    /** Returns the most recent date that has metrics for a user. */
+    public function getLatestDateWithData(User $user): ?\DateTimeImmutable
+    {
+        $row = $this->createQueryBuilder('dm')
+            ->select('MAX(dm.date) as latest')
+            ->join('dm.video', 'v')
+            ->where('v.user = :user')
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $row['latest'] ?? null;
+    }
+
+    /** Returns aggregated totals for a specific date. */
+    public function getTotalsForDate(User $user, \DateTimeImmutable $date): array
+    {
+        return $this->createQueryBuilder('dm')
+            ->select('
+                SUM(dm.views)              as views,
+                SUM(dm.watchTimeMinutes)   as watch_time,
+                SUM(dm.subscribersGained)  as subscribers,
+                SUM(dm.impressions)        as impressions,
+                AVG(dm.ctr)                as avg_ctr
+            ')
+            ->join('dm.video', 'v')
+            ->where('v.user = :user')
+            ->andWhere('dm.date = :date')
+            ->setParameter('user', $user)
+            ->setParameter('date', $date)
+            ->getQuery()
+            ->getOneOrNullResult() ?? [];
+    }
+
+    /** Returns top N videos by views for a specific date. */
+    public function getTopVideosForDate(User $user, \DateTimeImmutable $date, int $limit = 8): array
+    {
+        return $this->createQueryBuilder('dm')
+            ->select('dm, v')
+            ->join('dm.video', 'v')
+            ->where('v.user = :user')
+            ->andWhere('dm.date = :date')
+            ->andWhere('dm.views > 0')
+            ->setParameter('user', $user)
+            ->setParameter('date', $date)
+            ->orderBy('dm.views', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
 }
