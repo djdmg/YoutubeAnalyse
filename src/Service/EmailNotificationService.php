@@ -68,6 +68,29 @@ class EmailNotificationService
         return $this->send($user, $email);
     }
 
+    public function sendDailyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $date): ?string
+    {
+        if (!$user->hasSmtpConfigured()) return null;
+
+        $html = $this->twig->render('email/daily_report.html.twig', [
+            'user'       => $user,
+            'stats'      => $stats,
+            'top_videos' => $topVideos,
+            'date'       => $date,
+        ]);
+
+        $email = (new Email())
+            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->to($user->getNotifEmail())
+            ->subject(sprintf('📊 Rapport du %s — %s vues',
+                $date->format('d/m/Y'),
+                number_format((int) ($stats['views'] ?? 0), 0, ',', ' ')
+            ))
+            ->html($html);
+
+        return $this->send($user, $email);
+    }
+
     public function sendTestEmail(User $user): ?string
     {
         $fakeReports = $this->buildFakeReports();
