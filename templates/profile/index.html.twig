@@ -111,13 +111,13 @@
         </form>
         {% endif %}
 
-        {% if user.hasTelegramConfigured() %}
-        <form method="post" action="{{ path('profile_test_telegram') }}">
+        <form method="post" action="{{ path('profile_test_telegram') }}" id="telegram-test-form">
+            {# Pass current input value so Chat ID is saved even if user hasn't clicked Save yet #}
+            <input type="hidden" name="telegram_chat_id" id="telegram-test-chat-id" value="{{ user.telegramChatId ?? '' }}">
             <button type="submit" class="btn btn-outline" style="border-color:#2ca5e0;color:#2ca5e0">
                 <i class="fab fa-telegram"></i> Test Telegram
             </button>
         </form>
-        {% endif %}
     </div>
 
     {# Statuts #}
@@ -147,4 +147,15 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+// Keep the hidden test-form field in sync with the visible Chat ID input
+(function () {
+    var input  = document.querySelector('input[name="profile_email_settings[telegramChatId]"]');
+    var hidden = document.getElementById('telegram-test-chat-id');
+    if (input && hidden) {
+        input.addEventListener('input', function () { hidden.value = this.value; });
+    }
+}());
+</script>
 {% endblock %}
