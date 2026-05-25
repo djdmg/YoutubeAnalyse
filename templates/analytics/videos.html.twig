@@ -50,7 +50,7 @@
             <tbody>
                 {% for item in videos_data %}
                 {% set video = item.video %}
-                {% set metric = item.metric %}
+                {% set stats = item.stats %}
                 {% set anomaly = item.anomaly %}
                 {% set sentiment = item.sentiment %}
                 {% set prediction = item.prediction %}
@@ -71,17 +71,17 @@
                             </div>
                         </div>
                     </td>
-                    <td class="num">{{ metric ? metric.views|number_format(0, ',', ' ') : '—' }}</td>
+                    <td class="num">{{ stats.total_views > 0 ? stats.total_views|number_format(0, ',', ' ') : '—' }}</td>
                     <td class="num">
-                        {% if metric and metric.ctr is not null %}
-                            <span class="badge {{ metric.ctr >= 4 ? 'badge-green' : (metric.ctr >= 2 ? 'badge-yellow' : 'badge-red') }}">
-                                {{ metric.ctr|number_format(2) }}%
+                        {% if stats.avg_ctr is not null %}
+                            <span class="badge {{ stats.avg_ctr >= 4 ? 'badge-green' : (stats.avg_ctr >= 2 ? 'badge-yellow' : 'badge-red') }}">
+                                {{ stats.avg_ctr|number_format(2) }}%
                             </span>
                         {% else %}<span class="na">—</span>{% endif %}
                     </td>
                     <td class="num">
-                        {% if metric and metric.watchTimeMinutes %}
-                            {{ (metric.watchTimeMinutes / 60)|number_format(1, ',', ' ') }}h
+                        {% if stats.total_watch_time > 0 %}
+                            {{ (stats.total_watch_time / 60)|number_format(1, ',', ' ') }}h
                         {% else %}<span class="na">—</span>{% endif %}
                     </td>
                     <td class="num">
