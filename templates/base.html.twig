@@ -77,12 +77,6 @@
         {% endif %}
     </div>
 </nav>
-<script>
-$('#navToggle').on('click', function() {
-    const open = $('#navLinks').toggleClass('open').hasClass('open');
-    $(this).find('i').attr('class', open ? 'fas fa-times' : 'fas fa-bars');
-});
-</script>
 
 <div class="container">
     {% for label, messages in app.flashes %}
@@ -101,48 +95,56 @@ $('#navToggle').on('click', function() {
     {{ encore_entry_script_tags('app') }}
 {% endblock %}
 
+{# All scripts below run after the webpack bundle — jQuery is available here #}
 <script>
-// ── Global AJAX utility ──────────────────────────────────────────────────────
-window.ajaxPost = function(url, data, onSuccess, onError) {
-    $.ajax({
-        url: url,
-        method: 'POST',
-        data: data instanceof FormData ? data : data,
-        processData: !(data instanceof FormData),
-        contentType: data instanceof FormData ? false : 'application/x-www-form-urlencoded; charset=UTF-8',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        success: function(res) {
-            if (res.success) { onSuccess(res); }
-            else { (onError || showToast)(res.message || 'Erreur', 'error'); }
-        },
-        error: function(xhr) {
-            const msg = xhr.responseJSON?.message || 'Erreur réseau';
-            (onError || showToast)(msg, 'error');
-        }
-    });
-};
-
-window.showToast = function(message, type) {
-    type = type || 'success';
-    const icon = type === 'success' ? 'check-circle' : 'exclamation-circle';
-    const $el = $('<div class="alert alert-' + type + '">')
-        .css({ position:'fixed', top:'20px', right:'20px', zIndex:9999, minWidth:'280px', maxWidth:'420px', display:'none' })
-        .html('<i class="fas fa-' + icon + '"></i> ' + message);
-    $('body').append($el);
-    $el.fadeIn(200);
-    setTimeout(function() { $el.fadeOut(300, function() { $el.remove(); }); }, 4000);
-};
-
-// ── Sync button (dashboard + /videos) ───────────────────────────────────────
 $(function() {
+
+    // ── Nav hamburger ────────────────────────────────────────────────────────
+    $('#navToggle').on('click', function() {
+        var open = $('#navLinks').toggleClass('open').hasClass('open');
+        $(this).find('i').attr('class', open ? 'fas fa-times' : 'fas fa-bars');
+    });
+
+    // ── Global AJAX helper ───────────────────────────────────────────────────
+    window.ajaxPost = function(url, data, onSuccess, onError) {
+        $.ajax({
+            url: url,
+            method: 'POST',
+            data: data,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            success: function(res) {
+                if (res && res.success) { onSuccess(res); }
+                else { (onError || showToast)((res && res.message) || 'Erreur', 'error'); }
+            },
+            error: function(xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Erreur réseau';
+                (onError || showToast)(msg, 'error');
+            }
+        });
+    };
+
+    // ── Toast notification ───────────────────────────────────────────────────
+    window.showToast = function(message, type) {
+        type = type || 'success';
+        var icon = type === 'success' ? 'check-circle' : 'exclamation-circle';
+        var $el = $('<div class="alert alert-' + type + '">')
+            .css({ position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
+                   minWidth: '280px', maxWidth: '420px', display: 'none' })
+            .html('<i class="fas fa-' + icon + '"></i> ' + message);
+        $('body').append($el);
+        $el.fadeIn(200);
+        setTimeout(function() { $el.fadeOut(300, function() { $el.remove(); }); }, 4000);
+    };
+
+    // ── Sync button (dashboard + /videos) ────────────────────────────────────
     $('.js-sync-form').on('submit', function(e) {
         e.preventDefault();
-        const $form = $(this);
-        const $btn  = $form.find('button[type=submit]');
-        const orig  = $btn.html();
+        var $form = $(this);
+        var $btn  = $form.find('button[type=submit]');
+        var orig  = $btn.html();
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Synchronisation…');
 
-        ajaxPost($form.attr('action'), new FormData(this),
+        ajaxPost($form.attr('action'), $form.serialize(),
             function(data) {
                 $btn.prop('disabled', false).html(orig);
                 showToast(data.message, 'success');
@@ -153,10 +155,8 @@ $(function() {
             }
         );
     });
+
 });
 </script>
-<style>
-/* toast uses jQuery fadeIn/fadeOut — no keyframe needed */
-</style>
 </body>
 </html>
