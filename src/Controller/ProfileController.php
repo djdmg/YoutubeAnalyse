@@ -73,23 +73,30 @@ class ProfileController extends AbstractController
     }
 
     #[Route('/test-telegram', name: 'test_telegram', methods: ['POST'])]
-    public function testTelegram(): Response
+    public function testTelegram(Request $request): Response
     {
         /** @var User $user */
         $user = $this->getUser();
 
+        // Save the chat ID submitted in the form before testing so it's not lost
+        $chatId = trim((string) $request->request->get('telegram_chat_id', ''));
+        if ($chatId !== '') {
+            $user->setTelegramChatId($chatId);
+            $this->em->flush();
+        }
+
         if (!$user->hasTelegramConfigured()) {
-            $this->addFlash('error', 'Configurez d\'abord votre Telegram Chat ID.');
+            $this->addFlash('error', 'Renseignez un Chat ID avant de tester.');
             return $this->redirectToRoute('profile_index');
         }
 
-        $this->telegramService->sendSyncSummary($user, [
-            'videos_synced'       => 12,
-            'comments_synced'     => 34,
-            'search_terms_synced' => 56,
-        ], 'Test — YouTube Analyse');
+        $error = $this->telegramService->sendTest($user);
+        if ($error) {
+            $this->addFlash('error', 'Telegram : ' . $error);
+        } else {
+            $this->addFlash('success', 'Message Telegram envoyé au chat ' . $user->getTelegramChatId() . ' ✓');
+        }
 
-        $this->addFlash('success', 'Message Telegram de test envoyé au chat ' . $user->getTelegramChatId());
         return $this->redirectToRoute('profile_index');
     }
 }

@@ -73,6 +73,21 @@ class TelegramNotificationService
         $this->send($user->getTelegramChatId(), implode("\n", $lines));
     }
 
+    /** Sends a test message and returns null on success or an error string on failure. */
+    public function sendTest(User $user): ?string
+    {
+        if ($this->botToken === '') {
+            return 'TELEGRAM_BOT_TOKEN non configuré sur le serveur.';
+        }
+        if (!$user->hasTelegramConfigured()) {
+            return 'Chat ID non renseigné.';
+        }
+
+        return $this->sendRaw($user->getTelegramChatId(),
+            "✅ *YouTube Analyse* — test de notification Telegram réussi\\!"
+        );
+    }
+
     public function sendSyncSummary(User $user, array $result, string $channel): void
     {
         if (!$user->hasTelegramConfigured()) return;
@@ -88,24 +103,38 @@ class TelegramNotificationService
         $this->send($user->getTelegramChatId(), implode("\n", $lines));
     }
 
-    private function send(string $chatId, string $text): void
+    /** Returns null on success, error string on failure. */
+    private function sendRaw(string $chatId, string $text): ?string
     {
         if ($this->botToken === '') {
             $this->logger->warning('Telegram bot token not configured — skipping notification');
-            return;
+            return 'TELEGRAM_BOT_TOKEN non configuré.';
         }
 
         try {
-            $this->httpClient->request('POST', self::API_BASE . $this->botToken . '/sendMessage', [
+            $response = $this->httpClient->request('POST', self::API_BASE . $this->botToken . '/sendMessage', [
                 'json' => [
                     'chat_id'    => $chatId,
                     'text'       => $text,
                     'parse_mode' => 'MarkdownV2',
                 ],
-            ])->getContent();
+            ]);
+            $body = $response->toArray(false);
+            if (!($body['ok'] ?? false)) {
+                $err = $body['description'] ?? 'Erreur inconnue';
+                $this->logger->warning('Telegram API error', ['chat_id' => $chatId, 'error' => $err]);
+                return $err;
+            }
+            return null;
         } catch (\Throwable $e) {
             $this->logger->warning('Telegram send failed', ['chat_id' => $chatId, 'error' => $e->getMessage()]);
+            return $e->getMessage();
         }
+    }
+
+    private function send(string $chatId, string $text): void
+    {
+        $this->sendRaw($chatId, $text);
     }
 
     private function escape(string $text): string
