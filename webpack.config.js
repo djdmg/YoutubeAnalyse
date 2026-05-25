@@ -71,8 +71,8 @@ Encore
     // requires WebpackEncoreBundle 1.4 or higher
     //.enableIntegrityHashes(Encore.isProduction())
 
-    // uncomment if you're having problems with a jQuery plugin
-    //.autoProvidejQuery()
+    // Make $ and jQuery available globally without explicit import in every file
+    .autoProvidejQuery()
 ;
 
 module.exports = Encore.getWebpackConfig();

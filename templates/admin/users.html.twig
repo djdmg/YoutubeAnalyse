@@ -246,55 +246,45 @@
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.js-admin-action').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            if (btn.dataset.confirm && !confirm(btn.dataset.confirm)) return;
+$(function() {
+    $(document).on('click', '.js-admin-action', function() {
+        const $btn = $(this);
+        const confirmMsg = $btn.data('confirm');
+        if (confirmMsg && !confirm(confirmMsg)) return;
 
-            btn.disabled = true;
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        const orig = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
 
-            ajaxPost(btn.dataset.url, { _token: btn.dataset.token },
-                function(data) {
-                    const action = data.action;
-                    const row = btn.closest('tr') || btn.closest('.user-row');
-                    if (!row) { location.reload(); return; }
+        ajaxPost($btn.data('url'), { _token: $btn.data('token') },
+            function(data) {
+                const $row = $btn.closest('tr, .user-row');
+                if (!$row.length) { location.reload(); return; }
 
-                    if (action === 'removed') {
-                        row.style.transition = 'opacity .3s,transform .3s';
-                        row.style.opacity = '0';
-                        row.style.transform = 'translateX(30px)';
-                        setTimeout(() => row.remove(), 300);
-                    } else if (action === 'approved') {
-                        row.style.transition = 'opacity .3s';
-                        row.style.opacity = '0';
-                        setTimeout(() => { row.remove(); location.reload(); }, 400);
-                    } else if (action === 'toggle_admin') {
-                        // Update role badge and button label in-place
-                        const roleCell = row.querySelector('td:nth-child(3)');
-                        if (roleCell) {
-                            roleCell.innerHTML = data.is_admin
-                                ? '<span class="badge badge-red"><i class="fas fa-crown"></i> Admin</span>'
-                                : '<span class="badge" style="background:rgba(59,130,246,0.12);color:#3b82f6"><i class="fas fa-user"></i> Utilisateur</span>';
-                        }
-                        btn.innerHTML = data.is_admin
-                            ? '<i class="fas fa-user-minus"></i> Retirer admin'
-                            : '<i class="fas fa-crown"></i> Promouvoir';
-                        btn.disabled = false;
-                    } else {
-                        btn.disabled = false;
-                        btn.innerHTML = originalHtml;
-                    }
-                    showToast(data.message, 'success');
-                },
-                function(msg) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    showToast(msg, 'error');
+                if (data.action === 'removed') {
+                    $row.animate({ opacity: 0 }, 200, function() {
+                        $(this).slideUp(200, function() { $(this).remove(); });
+                    });
+                } else if (data.action === 'approved') {
+                    $row.fadeOut(300, function() { $(this).remove(); location.reload(); });
+                } else if (data.action === 'toggle_admin') {
+                    const badge = data.is_admin
+                        ? '<span class="badge badge-red"><i class="fas fa-crown"></i> Admin</span>'
+                        : '<span class="badge" style="background:rgba(59,130,246,0.12);color:#3b82f6"><i class="fas fa-user"></i> Utilisateur</span>';
+                    $row.find('td:nth-child(3)').html(badge);
+                    $btn.html(data.is_admin
+                        ? '<i class="fas fa-user-minus"></i> Retirer admin'
+                        : '<i class="fas fa-crown"></i> Promouvoir'
+                    ).prop('disabled', false);
+                } else {
+                    $btn.prop('disabled', false).html(orig);
                 }
-            );
-        });
+                showToast(data.message, 'success');
+            },
+            function(msg) {
+                $btn.prop('disabled', false).html(orig);
+                showToast(msg, 'error');
+            }
+        );
     });
 });
 </script>
