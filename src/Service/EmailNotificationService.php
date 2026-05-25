@@ -68,7 +68,7 @@ class EmailNotificationService
         return $this->send($user, $email);
     }
 
-    public function sendDailyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $date): ?string
+    public function sendDailyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $date, bool $isDelayed = false): ?string
     {
         if (!$user->hasSmtpConfigured()) return null;
 
@@ -77,15 +77,17 @@ class EmailNotificationService
             'stats'      => $stats,
             'top_videos' => $topVideos,
             'date'       => $date,
+            'is_delayed' => $isDelayed,
         ]);
+
+        $subject = $isDelayed
+            ? sprintf('📊 Rapport du %s (retard sync) — %s vues', $date->format('d/m/Y'), number_format((int) ($stats['views'] ?? 0), 0, ',', ' '))
+            : sprintf('📊 Rapport du %s — %s vues', $date->format('d/m/Y'), number_format((int) ($stats['views'] ?? 0), 0, ',', ' '));
 
         $email = (new Email())
             ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
             ->to($user->getNotifEmail())
-            ->subject(sprintf('📊 Rapport du %s — %s vues',
-                $date->format('d/m/Y'),
-                number_format((int) ($stats['views'] ?? 0), 0, ',', ' ')
-            ))
+            ->subject($subject)
             ->html($html);
 
         return $this->send($user, $email);

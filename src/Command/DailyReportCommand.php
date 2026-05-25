@@ -45,8 +45,15 @@ class DailyReportCommand extends Command
                 continue;
             }
 
-            // Use the most recent date that has data (YouTube Analytics has 1-2 day lag)
-            $date = $this->metricRepo->getLatestDateWithData($user);
+            // Prefer yesterday's data; fall back to most recent available date (YouTube Analytics 1-2 day lag)
+            $yesterday = new \DateTimeImmutable('yesterday midnight');
+            $stats = $this->metricRepo->getTotalsForDate($user, $yesterday);
+            if (!empty($stats) && ($stats['views'] ?? 0) > 0) {
+                $date = $yesterday;
+            } else {
+                $date = $this->metricRepo->getLatestDateWithData($user);
+            }
+
             if (!$date) {
                 $io->writeln('  Aucune donnée disponible.');
                 continue;
@@ -54,14 +61,16 @@ class DailyReportCommand extends Command
 
             $stats     = $this->metricRepo->getTotalsForDate($user, $date);
             $topVideos = $this->metricRepo->getTopVideosForDate($user, $date, 8);
+            $isDelayed = $date->format('Y-m-d') !== $yesterday->format('Y-m-d');
 
-            $io->writeln(sprintf('  Date des données : %s · %s vues · %d vidéos actives',
+            $io->writeln(sprintf('  Date des données : %s%s · %s vues · %d vidéos actives',
                 $date->format('d/m/Y'),
+                $isDelayed ? ' ⚠ retard sync' : '',
                 number_format((int) ($stats['views'] ?? 0), 0, ',', ' '),
                 count($topVideos),
             ));
 
-            $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date);
+            $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
             if ($error) {
                 $io->error('Email non envoyé : ' . $error);
             } else {
