@@ -65,6 +65,9 @@ class User implements UserInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $smtpPassword = null;
 
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $telegramChatId = null;
+
     #[ORM\OneToMany(targetEntity: GoogleToken::class, mappedBy: 'user', cascade: ['remove'], orphanRemoval: true)]
     private Collection $googleTokens;
 
@@ -104,6 +107,9 @@ class User implements UserInterface
     public function getSmtpPassword(): ?string { return $this->smtpPassword; }
     public function setSmtpPassword(?string $v): static { $this->smtpPassword = $v; return $this; }
     public function hasSmtpConfigured(): bool { return $this->smtpHost && $this->smtpUser && $this->smtpPassword && $this->notifEmail; }
+    public function getTelegramChatId(): ?string { return $this->telegramChatId; }
+    public function setTelegramChatId(?string $v): static { $this->telegramChatId = $v; return $this; }
+    public function hasTelegramConfigured(): bool { return $this->telegramChatId !== null && $this->telegramChatId !== ''; }
 
     public function getGoogleTokens(): Collection { return $this->googleTokens; }
     public function isAdmin(): bool { return in_array('ROLE_ADMIN', $this->roles, true); }

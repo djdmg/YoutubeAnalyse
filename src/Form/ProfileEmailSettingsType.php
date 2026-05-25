@@ -55,6 +55,11 @@ class ProfileEmailSettingsType extends AbstractType
                 'required' => false,
                 'mapped'   => false, // handled manually to avoid overwriting with empty
                 'attr'     => ['placeholder' => $options['has_password'] ? '••••••••' : ''],
+            ])
+            ->add('telegramChatId', TextType::class, [
+                'label'    => 'Telegram Chat ID',
+                'required' => false,
+                'attr'     => ['placeholder' => 'ex: 123456789 — obtenez-le via @userinfobot'],
             ]);
     }
 
