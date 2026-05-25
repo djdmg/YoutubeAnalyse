@@ -37,6 +37,12 @@
     <p>{{ date|date('l d/m/Y') }} · {{ user.displayName }}</p>
   </div>
 
+  {% if is_delayed|default(false) %}
+  <div style="background:#451a03;border:1px solid #92400e;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.82rem;color:#fbbf24;">
+    ⚠ Données du {{ date|date('d/m/Y') }} — la synchronisation YouTube accuse du retard (délai Analytics habituel : 1-2 jours).
+  </div>
+  {% endif %}
+
   {% set views = stats.views|default(0)|number_format(0, ',', ' ') %}
   {% set watch = stats.watch_time|default(0) %}
   {% set subs  = stats.subscribers|default(0) %}
