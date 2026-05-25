@@ -71,6 +71,32 @@ class DailyMetricRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Returns per-video aggregated stats for the video list page in a single query.
+     * Result: [videoId => ['total_views' => int, 'avg_ctr' => float|null, 'total_watch_time' => int]]
+     */
+    public function getListStatsForUser(User $user): array
+    {
+        $rows = $this->createQueryBuilder('dm')
+            ->select('IDENTITY(dm.video) as video_id, SUM(dm.views) as total_views, AVG(dm.ctr) as avg_ctr, SUM(dm.watchTimeMinutes) as total_watch_time')
+            ->join('dm.video', 'v')
+            ->where('v.user = :user')
+            ->setParameter('user', $user)
+            ->groupBy('dm.video')
+            ->getQuery()
+            ->getArrayResult();
+
+        $index = [];
+        foreach ($rows as $row) {
+            $index[(int) $row['video_id']] = [
+                'total_views'      => (int) $row['total_views'],
+                'avg_ctr'          => $row['avg_ctr'] !== null ? (float) $row['avg_ctr'] : null,
+                'total_watch_time' => (int) $row['total_watch_time'],
+            ];
+        }
+        return $index;
+    }
+
     /** Get J+1, J+3, J+7 views for last N videos to compute anomaly baseline */
     public function getEarlyViewsBaseline(User $user, int $lastNVideos = 10): array
     {

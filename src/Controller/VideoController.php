@@ -39,16 +39,18 @@ class VideoController extends AbstractController
         $sortBy = $request->query->get('sort', 'views');
         $videos = $this->videoRepo->findForUser($user);
 
+        $listStats = $this->metricRepo->getListStatsForUser($user);
+
         $videosData = [];
         foreach ($videos as $video) {
-            $metric    = $this->metricRepo->findLatestForVideo($video);
-            $anomaly   = $this->aiReportRepo->findRecentDone($video, AiReportType::Anomaly, 168); // 7 days
+            $stats     = $listStats[$video->getId()] ?? ['total_views' => 0, 'avg_ctr' => null, 'total_watch_time' => 0];
+            $anomaly   = $this->aiReportRepo->findRecentDone($video, AiReportType::Anomaly, 168);
             $sentiment = $this->aiReportRepo->findRecentDone($video, AiReportType::CommentAnalysis, 168);
             $prediction= $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
 
             $videosData[] = [
                 'video'      => $video,
-                'metric'     => $metric,
+                'stats'      => $stats,
                 'anomaly'    => $anomaly,
                 'sentiment'  => $sentiment,
                 'prediction' => $prediction,
@@ -56,13 +58,13 @@ class VideoController extends AbstractController
         }
 
         usort($videosData, function ($a, $b) use ($sortBy) {
-            $ma = $a['metric'];
-            $mb = $b['metric'];
+            $sa = $a['stats'];
+            $sb = $b['stats'];
             return match($sortBy) {
-                'ctr'         => ($mb?->getCtr() ?? 0) <=> ($ma?->getCtr() ?? 0),
-                'watch_time'  => ($mb?->getWatchTimeMinutes() ?? 0) <=> ($ma?->getWatchTimeMinutes() ?? 0),
-                'date'        => ($b['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')) <=> ($a['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')),
-                default       => ($mb?->getViews() ?? 0) <=> ($ma?->getViews() ?? 0),
+                'ctr'        => ($sb['avg_ctr'] ?? 0) <=> ($sa['avg_ctr'] ?? 0),
+                'watch_time' => ($sb['total_watch_time'] ?? 0) <=> ($sa['total_watch_time'] ?? 0),
+                'date'       => ($b['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')) <=> ($a['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')),
+                default      => ($sb['total_views'] ?? 0) <=> ($sa['total_views'] ?? 0),
             };
         });
 
