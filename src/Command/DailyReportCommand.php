@@ -5,6 +5,7 @@ namespace App\Command;
 use App\Repository\DailyMetricRepository;
 use App\Repository\GoogleTokenRepository;
 use App\Service\EmailNotificationService;
+use App\Service\TelegramNotificationService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,9 +19,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class DailyReportCommand extends Command
 {
     public function __construct(
-        private readonly GoogleTokenRepository  $tokenRepo,
-        private readonly DailyMetricRepository  $metricRepo,
-        private readonly EmailNotificationService $emailService,
+        private readonly GoogleTokenRepository      $tokenRepo,
+        private readonly DailyMetricRepository      $metricRepo,
+        private readonly EmailNotificationService    $emailService,
+        private readonly TelegramNotificationService $telegramService,
     ) {
         parent::__construct();
     }
@@ -70,11 +72,18 @@ class DailyReportCommand extends Command
                 count($topVideos),
             ));
 
-            $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
-            if ($error) {
-                $io->error('Email non envoyé : ' . $error);
-            } else {
-                $io->writeln('  ✉ Rapport envoyé à ' . $user->getNotifEmail());
+            if ($user->hasSmtpConfigured()) {
+                $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
+                if ($error) {
+                    $io->error('Email non envoyé : ' . $error);
+                } else {
+                    $io->writeln('  ✉ Email envoyé à ' . $user->getNotifEmail());
+                }
+            }
+
+            $this->telegramService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
+            if ($user->hasTelegramConfigured()) {
+                $io->writeln('  ✈ Telegram envoyé (chat ' . $user->getTelegramChatId() . ')');
             }
         }
 

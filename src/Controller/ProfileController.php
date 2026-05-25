@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Form\ProfileEmailSettingsType;
 use App\Service\EmailNotificationService;
+use App\Service\TelegramNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,8 +18,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class ProfileController extends AbstractController
 {
     public function __construct(
-        private readonly EntityManagerInterface $em,
-        private readonly EmailNotificationService $emailService,
+        private readonly EntityManagerInterface      $em,
+        private readonly EmailNotificationService    $emailService,
+        private readonly TelegramNotificationService $telegramService,
     ) {}
 
     #[Route('', name: 'index')]
@@ -67,6 +69,27 @@ class ProfileController extends AbstractController
             $this->addFlash('success', 'Email de test envoyé à ' . $user->getNotifEmail());
         }
 
+        return $this->redirectToRoute('profile_index');
+    }
+
+    #[Route('/test-telegram', name: 'test_telegram', methods: ['POST'])]
+    public function testTelegram(): Response
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        if (!$user->hasTelegramConfigured()) {
+            $this->addFlash('error', 'Configurez d\'abord votre Telegram Chat ID.');
+            return $this->redirectToRoute('profile_index');
+        }
+
+        $this->telegramService->sendSyncSummary($user, [
+            'videos_synced'       => 12,
+            'comments_synced'     => 34,
+            'search_terms_synced' => 56,
+        ], 'Test — YouTube Analyse');
+
+        $this->addFlash('success', 'Message Telegram de test envoyé au chat ' . $user->getTelegramChatId());
         return $this->redirectToRoute('profile_index');
     }
 }

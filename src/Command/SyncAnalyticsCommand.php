@@ -5,6 +5,7 @@ namespace App\Command;
 use App\Repository\GoogleTokenRepository;
 use App\Service\EmailNotificationService;
 use App\Service\QuotaGuardService;
+use App\Service\TelegramNotificationService;
 use App\Service\YouTubeSyncService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -19,10 +20,11 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class SyncAnalyticsCommand extends Command
 {
     public function __construct(
-        private readonly YouTubeSyncService $syncService,
-        private readonly GoogleTokenRepository $tokenRepo,
-        private readonly QuotaGuardService $quotaGuard,
-        private readonly EmailNotificationService $emailService,
+        private readonly YouTubeSyncService          $syncService,
+        private readonly GoogleTokenRepository       $tokenRepo,
+        private readonly QuotaGuardService           $quotaGuard,
+        private readonly EmailNotificationService    $emailService,
+        private readonly TelegramNotificationService $telegramService,
     ) {
         parent::__construct();
     }
@@ -69,16 +71,18 @@ class SyncAnalyticsCommand extends Command
                     $io->writeln('  Reporting API : jobs créés (premiers rapports disponibles dans 24-48h)');
                 }
 
-                $emailError = $this->emailService->sendSyncSummary(
-                    $user,
-                    $result,
-                    $token->getChannelTitle() ?? $token->getChannelId(),
-                    $this->quotaGuard->getUsed()
-                );
+                $channel = $token->getChannelTitle() ?? $token->getChannelId();
+
+                $emailError = $this->emailService->sendSyncSummary($user, $result, $channel, $this->quotaGuard->getUsed());
                 if ($emailError) {
                     $io->writeln('  <fg=yellow>Email non envoyé : ' . $emailError . '</>');
                 } elseif ($user->hasSmtpConfigured()) {
                     $io->writeln('  ✉ Résumé envoyé à ' . $user->getNotifEmail());
+                }
+
+                $this->telegramService->sendSyncSummary($user, $result, $channel);
+                if ($user->hasTelegramConfigured()) {
+                    $io->writeln('  ✈ Telegram sync summary envoyé');
                 }
 
             } catch (\RuntimeException $e) {

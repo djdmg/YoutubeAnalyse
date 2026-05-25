@@ -80,8 +80,20 @@
         </div>
     </div>
 
+    {# ── Telegram ──────────────────────────────── #}
+    <div class="form-section-title" style="margin-top:8px"><i class="fab fa-telegram"></i> Telegram</div>
+
+    <div class="form-field" style="margin-bottom:8px">
+        {{ form_label(form.telegramChatId) }}
+        {{ form_widget(form.telegramChatId, {'attr': {'class': 'form-control'}}) }}
+        <span class="help-text">
+            Démarrez une conversation avec <strong>@userinfobot</strong> sur Telegram pour obtenir votre Chat ID.
+            Le bot doit être configuré dans <code>TELEGRAM_BOT_TOKEN</code> côté serveur.
+        </span>
+    </div>
+
     {# ── Actions ───────────────────────────────── #}
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:24px">
         <button type="submit" class="btn btn-primary">
             <i class="fas fa-save"></i> Enregistrer
         </button>
@@ -90,25 +102,49 @@
     {{ form_end(form) }}
 
     {# Test email — form séparé pour éviter conflit avec le form de settings #}
-    {% if user.hasSmtpConfigured() %}
-    <form method="post" action="{{ path('profile_test_email') }}" style="margin-top:12px">
-        <button type="submit" class="btn btn-outline">
-            <i class="fas fa-paper-plane"></i> Envoyer un email de test
-        </button>
-    </form>
-    {% endif %}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        {% if user.hasSmtpConfigured() %}
+        <form method="post" action="{{ path('profile_test_email') }}">
+            <button type="submit" class="btn btn-outline">
+                <i class="fas fa-paper-plane"></i> Test email
+            </button>
+        </form>
+        {% endif %}
 
-    {# Statut #}
-    {% if user.hasSmtpConfigured() %}
-    <div class="smtp-status active" style="margin-top:16px">
-        <i class="fas fa-check-circle"></i>
-        Notifications actives — emails envoyés à <strong>{{ user.notifEmail }}</strong>
+        {% if user.hasTelegramConfigured() %}
+        <form method="post" action="{{ path('profile_test_telegram') }}">
+            <button type="submit" class="btn btn-outline" style="border-color:#2ca5e0;color:#2ca5e0">
+                <i class="fab fa-telegram"></i> Test Telegram
+            </button>
+        </form>
+        {% endif %}
     </div>
-    {% else %}
-    <div class="smtp-status inactive" style="margin-top:16px">
-        <i class="fas fa-info-circle"></i>
-        Remplissez tous les champs pour activer les notifications.
+
+    {# Statuts #}
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+        {% if user.hasSmtpConfigured() %}
+        <div class="smtp-status active">
+            <i class="fas fa-check-circle"></i>
+            Email actif — <strong>{{ user.notifEmail }}</strong>
+        </div>
+        {% else %}
+        <div class="smtp-status inactive">
+            <i class="fas fa-info-circle"></i>
+            Remplissez les champs SMTP pour activer les emails.
+        </div>
+        {% endif %}
+
+        {% if user.hasTelegramConfigured() %}
+        <div class="smtp-status active" style="border-color:#2ca5e0">
+            <i class="fab fa-telegram" style="color:#2ca5e0"></i>
+            Telegram actif — chat <strong>{{ user.telegramChatId }}</strong>
+        </div>
+        {% else %}
+        <div class="smtp-status inactive">
+            <i class="fab fa-telegram"></i>
+            Entrez votre Chat ID pour activer Telegram.
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 {% endblock %}

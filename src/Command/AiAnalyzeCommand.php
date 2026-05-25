@@ -7,6 +7,7 @@ use App\Repository\AiReportRepository;
 use App\Repository\GoogleTokenRepository;
 use App\Service\AiAnalysisService;
 use App\Service\EmailNotificationService;
+use App\Service\TelegramNotificationService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -21,10 +22,11 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class AiAnalyzeCommand extends Command
 {
     public function __construct(
-        private readonly AiAnalysisService $aiService,
-        private readonly GoogleTokenRepository $tokenRepo,
-        private readonly AiReportRepository $aiReportRepo,
-        private readonly EmailNotificationService $emailService,
+        private readonly AiAnalysisService           $aiService,
+        private readonly GoogleTokenRepository       $tokenRepo,
+        private readonly AiReportRepository          $aiReportRepo,
+        private readonly EmailNotificationService    $emailService,
+        private readonly TelegramNotificationService $telegramService,
     ) {
         parent::__construct();
     }
@@ -82,14 +84,21 @@ class AiAnalyzeCommand extends Command
                 $total = array_sum($result['counts']);
                 $io->success(sprintf('%d rapport(s) IA généré(s)', $total));
 
-                // Send email digest for new reports
-                if ($total > 0 && $user->hasSmtpConfigured()) {
+                if ($total > 0) {
                     $newReports = $this->aiReportRepo->findGeneratedSince($user, $runStartedAt);
-                    $error      = $this->emailService->sendAiRecommendations($user, $newReports);
-                    if ($error) {
-                        $io->warning('Email non envoyé : ' . $error);
-                    } else {
-                        $io->writeln(sprintf('  ✉ Email envoyé à %s (%d rapport(s))', $user->getNotifEmail(), count($newReports)));
+
+                    if ($user->hasSmtpConfigured()) {
+                        $error = $this->emailService->sendAiRecommendations($user, $newReports);
+                        if ($error) {
+                            $io->warning('Email non envoyé : ' . $error);
+                        } else {
+                            $io->writeln(sprintf('  ✉ Email envoyé à %s (%d rapport(s))', $user->getNotifEmail(), count($newReports)));
+                        }
+                    }
+
+                    $this->telegramService->sendAiRecommendations($user, $newReports);
+                    if ($user->hasTelegramConfigured()) {
+                        $io->writeln(sprintf('  ✈ Telegram envoyé (%d rapport(s))', count($newReports)));
                     }
                 }
 
