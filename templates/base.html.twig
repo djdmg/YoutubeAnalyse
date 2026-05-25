@@ -78,10 +78,9 @@
     </div>
 </nav>
 <script>
-document.getElementById('navToggle')?.addEventListener('click', function() {
-    const links = document.getElementById('navLinks');
-    const isOpen = links.classList.toggle('open');
-    this.querySelector('i').className = isOpen ? 'fas fa-times' : 'fas fa-bars';
+$('#navToggle').on('click', function() {
+    const open = $('#navLinks').toggleClass('open').hasClass('open');
+    $(this).find('i').attr('class', open ? 'fas fa-times' : 'fas fa-bars');
 });
 </script>
 
@@ -104,54 +103,60 @@ document.getElementById('navToggle')?.addEventListener('click', function() {
 
 <script>
 // ── Global AJAX utility ──────────────────────────────────────────────────────
-window.ajaxPost = function(url, body, onSuccess, onError) {
-    return fetch(url, {
+window.ajaxPost = function(url, data, onSuccess, onError) {
+    $.ajax({
+        url: url,
         method: 'POST',
+        data: data instanceof FormData ? data : data,
+        processData: !(data instanceof FormData),
+        contentType: data instanceof FormData ? false : 'application/x-www-form-urlencoded; charset=UTF-8',
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        body: body instanceof FormData ? body : new URLSearchParams(body),
-    })
-    .then(r => r.json().then(data => ({ ok: r.ok, data })))
-    .then(({ ok, data }) => ok && data.success ? onSuccess(data) : (onError || showToast)(data.message || 'Erreur', 'error'))
-    .catch(() => (onError || showToast)('Erreur réseau', 'error'));
+        success: function(res) {
+            if (res.success) { onSuccess(res); }
+            else { (onError || showToast)(res.message || 'Erreur', 'error'); }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON?.message || 'Erreur réseau';
+            (onError || showToast)(msg, 'error');
+        }
+    });
 };
 
-window.showToast = function(message, type = 'success') {
-    const el = document.createElement('div');
-    el.className = 'alert alert-' + type;
-    el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;min-width:280px;max-width:420px;animation:fadeInRight .3s ease';
-    el.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + '"></i> ' + message;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+window.showToast = function(message, type) {
+    type = type || 'success';
+    const icon = type === 'success' ? 'check-circle' : 'exclamation-circle';
+    const $el = $('<div class="alert alert-' + type + '">')
+        .css({ position:'fixed', top:'20px', right:'20px', zIndex:9999, minWidth:'280px', maxWidth:'420px', display:'none' })
+        .html('<i class="fas fa-' + icon + '"></i> ' + message);
+    $('body').append($el);
+    $el.fadeIn(200);
+    setTimeout(function() { $el.fadeOut(300, function() { $el.remove(); }); }, 4000);
 };
 
 // ── Sync button (dashboard + /videos) ───────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.js-sync-form').forEach(function(form) {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const btn = form.querySelector('button[type=submit]');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Synchronisation…';
+$(function() {
+    $('.js-sync-form').on('submit', function(e) {
+        e.preventDefault();
+        const $form = $(this);
+        const $btn  = $form.find('button[type=submit]');
+        const orig  = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Synchronisation…');
 
-            ajaxPost(form.action, new FormData(form),
-                function(data) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    showToast(data.message, 'success');
-                },
-                function(msg) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    showToast(msg, 'error');
-                }
-            );
-        });
+        ajaxPost($form.attr('action'), new FormData(this),
+            function(data) {
+                $btn.prop('disabled', false).html(orig);
+                showToast(data.message, 'success');
+            },
+            function(msg) {
+                $btn.prop('disabled', false).html(orig);
+                showToast(msg, 'error');
+            }
+        );
     });
 });
 </script>
 <style>
-@keyframes fadeInRight { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:none; } }
+/* toast uses jQuery fadeIn/fadeOut — no keyframe needed */
 </style>
 </body>
 </html>

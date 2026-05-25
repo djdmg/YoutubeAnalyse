@@ -149,34 +149,30 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.js-test-notif').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi…';
+$(function() {
+    $('.js-test-notif').on('click', function() {
+        const $btn = $(this);
+        const orig = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Envoi…');
 
-            const body = {};
-            // If the button needs to pass the current chat ID value
-            const extraField = btn.dataset.extraField;
-            if (extraField) {
-                const input = document.querySelector('[name$="[' + extraField.replace('telegram_', 'telegram') + ']"], [name="' + extraField + '"]');
-                if (input) body[extraField] = input.value;
+        const body = {};
+        const extraField = $btn.data('extra-field');
+        if (extraField) {
+            // Match both "profile_email_settings[telegramChatId]" and plain "telegram_chat_id"
+            const $input = $('[name*="telegramChatId"], [name="' + extraField + '"]').first();
+            if ($input.length) body[extraField] = $input.val();
+        }
+
+        ajaxPost($btn.data('url'), body,
+            function(data) {
+                $btn.prop('disabled', false).html(orig);
+                showToast(data.message, 'success');
+            },
+            function(msg) {
+                $btn.prop('disabled', false).html(orig);
+                showToast(msg, 'error');
             }
-
-            ajaxPost(btn.dataset.url, body,
-                function(data) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    showToast(data.message, 'success');
-                },
-                function(msg) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    showToast(msg, 'error');
-                }
-            );
-        });
+        );
     });
 });
 </script>
