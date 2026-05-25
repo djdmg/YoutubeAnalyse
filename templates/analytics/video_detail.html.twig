@@ -262,6 +262,75 @@
 
 </div>
 
+{# Meta History #}
+{% if meta_history|length > 1 %}
+<div class="section-card">
+  <div class="section-header">
+    <h3><i class="fas fa-history"></i> Historique titre &amp; description</h3>
+    <span style="font-size:12px;color:var(--text-muted)">{{ meta_history|length }} versions</span>
+  </div>
+
+  <div class="meta-timeline">
+  {% for entry in meta_history %}
+    {% set s = entry.snapshot %}
+    <div class="meta-entry {{ entry.is_current ? 'meta-current' : '' }} {{ entry.is_best is defined ? 'meta-best' : '' }}">
+
+      <div class="meta-entry-left">
+        <div class="meta-dot {{ entry.is_current ? 'dot-blue' : (entry.is_best is defined ? 'dot-green' : '') }}"></div>
+        <div class="meta-line"></div>
+      </div>
+
+      <div class="meta-entry-body">
+        <div class="meta-entry-header">
+          <span class="meta-date">{{ entry.from|date('d/m/Y') }}</span>
+          {% if entry.is_current %}
+            <span class="badge badge-blue">Actuel</span>
+          {% endif %}
+          {% if entry.is_best is defined %}
+            <span class="badge badge-green"><i class="fas fa-trophy" style="font-size:10px"></i> Meilleure perf</span>
+          {% endif %}
+          {% if entry.days_active > 0 %}
+            <span style="font-size:11px;color:var(--text-muted)">{{ entry.days_active }} jour{{ entry.days_active > 1 ? 's' : '' }} actif</span>
+          {% endif %}
+        </div>
+
+        <div class="meta-title">{{ s.title }}</div>
+
+        {% if s.description %}
+        <div class="meta-desc">{{ s.description|slice(0, 160) }}{% if s.description|length > 160 %}…{% endif %}</div>
+        {% endif %}
+
+        {% if entry.total_views > 0 or entry.avg_ctr is not null %}
+        <div class="meta-stats">
+          {% if entry.avg_views_day > 0 %}
+          <span class="meta-stat">
+            <i class="fas fa-eye"></i>
+            <strong>{{ entry.avg_views_day|number_format(0, ',', ' ') }}</strong> vues/jour
+          </span>
+          {% endif %}
+          {% if entry.total_views > 0 %}
+          <span class="meta-stat">
+            <i class="fas fa-chart-bar"></i>
+            {{ entry.total_views|number_format(0, ',', ' ') }} total
+          </span>
+          {% endif %}
+          {% if entry.avg_ctr is not null %}
+          <span class="meta-stat">
+            <i class="fas fa-mouse-pointer"></i>
+            CTR {{ entry.avg_ctr }}%
+          </span>
+          {% endif %}
+        </div>
+        {% else %}
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px">Pas encore de données pour cette période</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {# SEO Report #}
 {% if seo_report and seo_report.payload %}
 {% set p = seo_report.payload %}

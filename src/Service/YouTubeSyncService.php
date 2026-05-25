@@ -7,12 +7,14 @@ use App\Entity\DailyMetric;
 use App\Entity\RetentionPoint;
 use App\Entity\User;
 use App\Entity\Video;
+use App\Entity\VideoMetaSnapshot;
 use App\Entity\VideoSearchTerm;
 use App\Repository\CommentRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\GoogleTokenRepository;
 use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
+use App\Repository\VideoMetaSnapshotRepository;
 use App\Repository\VideoSearchTermRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Google\Service\YouTube;
@@ -30,6 +32,7 @@ class YouTubeSyncService
         private readonly DailyMetricRepository $dailyMetricRepo,
         private readonly RetentionPointRepository $retentionRepo,
         private readonly CommentRepository $commentRepo,
+        private readonly VideoMetaSnapshotRepository $snapshotRepo,
         private readonly VideoSearchTermRepository $searchTermRepo,
         private readonly LoggerInterface $logger,
         private readonly ?YouTubeReportingService $reportingService = null,
@@ -96,11 +99,17 @@ class YouTubeSyncService
                 $stats   = $item->getStatistics();
                 $details = $item->getContentDetails();
 
+                $newTitle       = $this->sanitizeText($snippet->getTitle()) ?? '';
+                $newDescription = $this->sanitizeText(mb_substr($snippet->getDescription() ?? '', 0, 2000));
+
+                // Snapshot before overwriting — detect title/description changes
+                $this->recordSnapshotIfChanged($video, $newTitle, $newDescription);
+
                 $video->setUser($user)
                     ->setYoutubeId($item->getId())
                     ->setChannelId($channelId)
-                    ->setTitle($this->sanitizeText($snippet->getTitle()) ?? '')
-                    ->setDescription($this->sanitizeText(mb_substr($snippet->getDescription() ?? '', 0, 2000)))
+                    ->setTitle($newTitle)
+                    ->setDescription($newDescription)
                     ->setThumbnailUrl($snippet->getThumbnails()?->getMedium()?->getUrl())
                     ->setPublishedAt(new \DateTimeImmutable($snippet->getPublishedAt()))
                     ->setDurationSeconds($this->isoDurationToSeconds($details->getDuration()));
@@ -225,6 +234,23 @@ class YouTubeSyncService
         }
 
         return $count;
+    }
+
+    private function recordSnapshotIfChanged(Video $video, string $newTitle, ?string $newDescription): void
+    {
+        $last = $this->snapshotRepo->findLatestForVideo($video);
+
+        $titleChanged = $last === null || $last->getTitle() !== $newTitle;
+        $descChanged  = $last !== null && $last->getDescription() !== $newDescription;
+
+        if ($titleChanged || $descChanged) {
+            $snapshot = (new VideoMetaSnapshot())
+                ->setVideo($video)
+                ->setTitle($newTitle)
+                ->setDescription($newDescription)
+                ->setRecordedAt(new \DateTimeImmutable());
+            $this->em->persist($snapshot);
+        }
     }
 
     /**
