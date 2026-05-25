@@ -3,7 +3,9 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Repository\AppSettingRepository;
 use App\Repository\UserRepository;
+use App\Service\TelegramNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,8 +18,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class AdminController extends AbstractController
 {
     public function __construct(
-        private readonly UserRepository $userRepository,
+        private readonly UserRepository         $userRepository,
         private readonly EntityManagerInterface $em,
+        private readonly AppSettingRepository   $settingRepo,
     ) {}
 
     #[Route('', name: 'admin_users')]
@@ -121,5 +124,27 @@ class AdminController extends AbstractController
 
         $this->addFlash('success', "{$name} supprimé.");
         return $this->redirectToRoute('admin_users');
+    }
+
+    #[Route('/settings', name: 'admin_settings')]
+    public function settings(): Response
+    {
+        return $this->render('admin/settings.html.twig', [
+            'telegram_token' => $this->settingRepo->get(TelegramNotificationService::SETTING_KEY),
+        ]);
+    }
+
+    #[Route('/settings/save', name: 'admin_settings_save', methods: ['POST'])]
+    public function settingsSave(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('admin_settings', $request->request->get('_token'))) {
+            throw $this->createAccessDeniedException();
+        }
+
+        $token = trim((string) $request->request->get('telegram_token', ''));
+        $this->settingRepo->set(TelegramNotificationService::SETTING_KEY, $token ?: null);
+
+        $this->addFlash('success', 'Paramètres sauvegardés.');
+        return $this->redirectToRoute('admin_settings');
     }
 }

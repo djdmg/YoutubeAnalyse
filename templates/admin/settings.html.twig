@@ -1,0 +1,75 @@
+{% extends 'base.html.twig' %}
+{% block title %}Admin — Paramètres application{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-cogs"></i> Paramètres application</h1>
+        <span class="last-sync">Configuration globale</span>
+    </div>
+    <a href="{{ path('admin_users') }}" class="btn btn-outline"><i class="fas fa-users"></i> Utilisateurs</a>
+</div>
+
+{% for type, messages in app.flashes %}
+  {% for msg in messages %}
+    <div class="alert-banner alert-{{ type == 'success' ? 'success' : 'danger' }}" style="margin-bottom:1.25rem">
+        <i class="fas fa-{{ type == 'success' ? 'check-circle' : 'exclamation-circle' }}"></i>
+        <div>{{ msg }}</div>
+    </div>
+  {% endfor %}
+{% endfor %}
+
+<div class="section-card" style="max-width:640px">
+    <div class="section-header">
+        <h3><i class="fab fa-telegram"></i> Notifications Telegram</h3>
+        {% if telegram_token %}
+            <span class="badge badge-green" style="background:rgba(34,197,94,.15);color:#86efac;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">
+                <i class="fas fa-circle" style="font-size:8px;vertical-align:middle;margin-right:4px"></i> Configuré
+            </span>
+        {% else %}
+            <span style="background:rgba(239,68,68,.1);color:#fca5a5;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">
+                <i class="fas fa-circle" style="font-size:8px;vertical-align:middle;margin-right:4px"></i> Non configuré
+            </span>
+        {% endif %}
+    </div>
+
+    <p style="color:var(--text-secondary);font-size:13px;margin:0 0 20px">
+        Token du bot Telegram utilisé pour envoyer des notifications à tous les utilisateurs qui ont renseigné leur Chat ID.
+        Créez un bot via <strong>@BotFather</strong> sur Telegram pour obtenir ce token.
+    </p>
+
+    <form method="post" action="{{ path('admin_settings_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_settings') }}">
+
+        <div class="form-field" style="margin-bottom:20px">
+            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
+                Token bot Telegram
+            </label>
+            <input
+                type="password"
+                name="telegram_token"
+                class="form-control"
+                autocomplete="new-password"
+                placeholder="{{ telegram_token ? '••••••••••••••••••••••••••••••••••••••••••••' : 'Ex : 123456789:ABCdefGhIJKlmNoPQRsTUVwXyZ' }}"
+                style="font-family:monospace"
+            >
+            {% if telegram_token %}
+            <span class="help-text">Un token est déjà enregistré. Laisser vide pour le conserver.</span>
+            {% else %}
+            <span class="help-text">Envoyez <code>/newbot</code> à <strong>@BotFather</strong> sur Telegram.</span>
+            {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Enregistrer
+        </button>
+    </form>
+
+    {% if telegram_token %}
+    <div class="smtp-status active" style="margin-top:20px;border-color:#2ca5e0">
+        <i class="fab fa-telegram" style="color:#2ca5e0"></i>
+        Bot configuré — les utilisateurs avec un Chat ID recevront les notifications.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
