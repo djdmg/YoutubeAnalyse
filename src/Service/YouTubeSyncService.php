@@ -7,11 +7,13 @@ use App\Entity\DailyMetric;
 use App\Entity\RetentionPoint;
 use App\Entity\User;
 use App\Entity\Video;
+use App\Entity\VideoSearchTerm;
 use App\Repository\CommentRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\GoogleTokenRepository;
 use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
+use App\Repository\VideoSearchTermRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Google\Service\YouTube;
 use Google\Service\YouTubeAnalytics;
@@ -28,6 +30,7 @@ class YouTubeSyncService
         private readonly DailyMetricRepository $dailyMetricRepo,
         private readonly RetentionPointRepository $retentionRepo,
         private readonly CommentRepository $commentRepo,
+        private readonly VideoSearchTermRepository $searchTermRepo,
         private readonly LoggerInterface $logger,
         private readonly ?YouTubeReportingService $reportingService = null,
     ) {}
@@ -49,8 +52,9 @@ class YouTubeSyncService
         $analytics = new YouTubeAnalytics($client);
         $today     = new \DateTimeImmutable();
 
-        $videosCount   = $this->syncVideos($youtube, $analytics, $channelId, $user, $today);
-        $commentsCount = $this->syncComments($youtube, $channelId, $user);
+        $videosCount      = $this->syncVideos($youtube, $analytics, $channelId, $user, $today);
+        $commentsCount    = $this->syncComments($youtube, $channelId, $user);
+        $searchTermsCount = $this->syncSearchTerms($analytics, $channelId, $user, $today);
 
         $reportingCounts = ['impressions_ctr' => 0, 'demographics' => 0, 'traffic_sources' => 0];
         if ($this->reportingService) {
@@ -64,6 +68,7 @@ class YouTubeSyncService
         return [
             'videos_synced'           => $videosCount,
             'comments_synced'         => $commentsCount,
+            'search_terms_synced'     => $searchTermsCount,
             'channel_id'              => $channelId,
             'impressions_ctr_updated' => $reportingCounts['impressions_ctr'],
             'demographics_updated'    => $reportingCounts['demographics'],
@@ -220,6 +225,61 @@ class YouTubeSyncService
         }
 
         return $count;
+    }
+
+    /**
+     * Syncs top search queries that led viewers to each video.
+     * Uses insightTrafficSourceDetail with YT_SEARCH filter — 1 API unit per video.
+     */
+    private function syncSearchTerms(YouTubeAnalytics $analytics, string $channelId, User $user, \DateTimeImmutable $today): int
+    {
+        $videos  = $this->videoRepo->findForUser($user);
+        $endDate = $today->modify('-1 day')->format('Y-m-d');
+        $now     = new \DateTimeImmutable();
+        $synced  = 0;
+
+        foreach ($videos as $video) {
+            if (!$this->quotaGuard->hasQuota(1)) break;
+
+            $startDate = $video->getPublishedAt()?->format('Y-m-d') ?? '2020-01-01';
+
+            try {
+                $response = $analytics->reports->query([
+                    'ids'        => "channel=={$channelId}",
+                    'startDate'  => $startDate,
+                    'endDate'    => $endDate,
+                    'metrics'    => 'views',
+                    'dimensions' => 'insightTrafficSourceDetail',
+                    'filters'    => "video=={$video->getYoutubeId()};insightTrafficSourceType==YT_SEARCH",
+                    'sort'       => '-views',
+                    'max-results'=> 25,
+                ]);
+                $this->quotaGuard->consume(1);
+
+                foreach ($response->getRows() ?? [] as $row) {
+                    $query = trim((string) $row[0]);
+                    $views = (int) ($row[1] ?? 0);
+                    if ($query === '' || $views === 0) continue;
+
+                    $term = $this->searchTermRepo->findByQuery($video, $query)
+                        ?? (new VideoSearchTerm())->setVideo($video)->setQuery($query);
+
+                    $term->setViews($views)->setSyncedAt($now);
+                    $this->em->persist($term);
+                    $synced++;
+                }
+
+                $this->em->flush();
+
+            } catch (\Exception $e) {
+                $this->logger->warning('Search terms sync failed', [
+                    'video'   => $video->getYoutubeId(),
+                    'error'   => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $synced;
     }
 
     private function getAllVideoIds(YouTube $youtube, string $channelId): array
