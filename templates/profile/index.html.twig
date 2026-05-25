@@ -104,20 +104,20 @@
     {# Test email — form séparé pour éviter conflit avec le form de settings #}
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
         {% if user.hasSmtpConfigured() %}
-        <form method="post" action="{{ path('profile_test_email') }}">
-            <button type="submit" class="btn btn-outline">
-                <i class="fas fa-paper-plane"></i> Test email
-            </button>
-        </form>
+        <button class="btn btn-outline js-test-notif"
+            data-url="{{ path('profile_test_email') }}"
+            data-label="Test email">
+            <i class="fas fa-paper-plane"></i> Test email
+        </button>
         {% endif %}
 
-        <form method="post" action="{{ path('profile_test_telegram') }}" id="telegram-test-form">
-            {# Pass current input value so Chat ID is saved even if user hasn't clicked Save yet #}
-            <input type="hidden" name="telegram_chat_id" id="telegram-test-chat-id" value="{{ user.telegramChatId ?? '' }}">
-            <button type="submit" class="btn btn-outline" style="border-color:#2ca5e0;color:#2ca5e0">
-                <i class="fab fa-telegram"></i> Test Telegram
-            </button>
-        </form>
+        <button class="btn btn-outline js-test-notif"
+            data-url="{{ path('profile_test_telegram') }}"
+            data-extra-field="telegram_chat_id"
+            data-label="Test Telegram"
+            style="border-color:#2ca5e0;color:#2ca5e0">
+            <i class="fab fa-telegram"></i> Test Telegram
+        </button>
     </div>
 
     {# Statuts #}
@@ -149,13 +149,35 @@
 </div>
 
 <script>
-// Keep the hidden test-form field in sync with the visible Chat ID input
-(function () {
-    var input  = document.querySelector('input[name="profile_email_settings[telegramChatId]"]');
-    var hidden = document.getElementById('telegram-test-chat-id');
-    if (input && hidden) {
-        input.addEventListener('input', function () { hidden.value = this.value; });
-    }
-}());
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.js-test-notif').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi…';
+
+            const body = {};
+            // If the button needs to pass the current chat ID value
+            const extraField = btn.dataset.extraField;
+            if (extraField) {
+                const input = document.querySelector('[name$="[' + extraField.replace('telegram_', 'telegram') + ']"], [name="' + extraField + '"]');
+                if (input) body[extraField] = input.value;
+            }
+
+            ajaxPost(btn.dataset.url, body,
+                function(data) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                    showToast(data.message, 'success');
+                },
+                function(msg) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                    showToast(msg, 'error');
+                }
+            );
+        });
+    });
+});
 </script>
 {% endblock %}

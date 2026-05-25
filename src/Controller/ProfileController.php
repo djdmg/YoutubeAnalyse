@@ -7,6 +7,7 @@ use App\Form\ProfileEmailSettingsType;
 use App\Service\EmailNotificationService;
 use App\Service\TelegramNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -52,24 +53,20 @@ class ProfileController extends AbstractController
     }
 
     #[Route('/test-email', name: 'test_email', methods: ['POST'])]
-    public function testEmail(): Response
+    public function testEmail(Request $request): Response
     {
         /** @var User $user */
         $user = $this->getUser();
 
         if (!$user->hasSmtpConfigured()) {
-            $this->addFlash('error', 'Configurez d\'abord vos paramètres SMTP.');
-            return $this->redirectToRoute('profile_index');
+            return $this->testResponse($request, false, 'Configurez d\'abord vos paramètres SMTP.');
         }
 
         $error = $this->emailService->sendTestEmail($user);
         if ($error) {
-            $this->addFlash('error', 'Échec de l\'envoi : ' . $error);
-        } else {
-            $this->addFlash('success', 'Email de test envoyé à ' . $user->getNotifEmail());
+            return $this->testResponse($request, false, 'Échec de l\'envoi : ' . $error);
         }
-
-        return $this->redirectToRoute('profile_index');
+        return $this->testResponse($request, true, 'Email de test envoyé à ' . $user->getNotifEmail());
     }
 
     #[Route('/test-telegram', name: 'test_telegram', methods: ['POST'])]
@@ -78,7 +75,6 @@ class ProfileController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        // Save the chat ID submitted in the form before testing so it's not lost
         $chatId = trim((string) $request->request->get('telegram_chat_id', ''));
         if ($chatId !== '') {
             $user->setTelegramChatId($chatId);
@@ -86,17 +82,22 @@ class ProfileController extends AbstractController
         }
 
         if (!$user->hasTelegramConfigured()) {
-            $this->addFlash('error', 'Renseignez un Chat ID avant de tester.');
-            return $this->redirectToRoute('profile_index');
+            return $this->testResponse($request, false, 'Renseignez un Chat ID avant de tester.');
         }
 
         $error = $this->telegramService->sendTest($user);
         if ($error) {
-            $this->addFlash('error', 'Telegram : ' . $error);
-        } else {
-            $this->addFlash('success', 'Message Telegram envoyé au chat ' . $user->getTelegramChatId() . ' ✓');
+            return $this->testResponse($request, false, 'Telegram : ' . $error);
         }
+        return $this->testResponse($request, true, 'Message Telegram envoyé au chat ' . $user->getTelegramChatId() . ' ✓');
+    }
 
+    private function testResponse(Request $request, bool $success, string $message): Response
+    {
+        if ($request->isXmlHttpRequest()) {
+            return new JsonResponse(['success' => $success, 'message' => $message], $success ? 200 : 400);
+        }
+        $this->addFlash($success ? 'success' : 'error', $message);
         return $this->redirectToRoute('profile_index');
     }
 }

@@ -77,18 +77,24 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/sync', name: 'sync_data', methods: ['POST'])]
-    public function sync(): Response
+    public function sync(Request $request): Response
     {
         /** @var User $user */
         $user = $this->getUser();
+        $isAjax = $request->isXmlHttpRequest();
+
         try {
             $result = $this->youtubeService->syncAll($user);
-            $this->addFlash('success', sprintf(
-                'Synchronisation réussie ! %d vidéos pour "%s".',
-                $result['videos_synced'],
-                $result['channel']
-            ));
+            $message = sprintf('Synchronisation réussie : %d vidéos.', $result['videos_synced']);
+
+            if ($isAjax) {
+                return new JsonResponse(['success' => true, 'message' => $message, 'result' => $result]);
+            }
+            $this->addFlash('success', $message);
         } catch (\Exception $e) {
+            if ($isAjax) {
+                return new JsonResponse(['success' => false, 'message' => $e->getMessage()], 500);
+            }
             $this->addFlash('error', 'Erreur: ' . $e->getMessage());
         }
 
