@@ -9,6 +9,7 @@ use App\Repository\CommentRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
+use App\Repository\VideoMetaSnapshotRepository;
 use App\Repository\VideoSearchTermRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -26,6 +27,7 @@ class VideoController extends AbstractController
         private readonly RetentionPointRepository $retentionRepo,
         private readonly CommentRepository $commentRepo,
         private readonly AiReportRepository $aiReportRepo,
+        private readonly VideoMetaSnapshotRepository $snapshotRepo,
         private readonly VideoSearchTermRepository $searchTermRepo,
     ) {}
 
@@ -90,6 +92,8 @@ class VideoController extends AbstractController
         $prediction   = $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
         $seoReport    = $this->aiReportRepo->findRecentDone($video, AiReportType::SeoOptimization, 168);
         $searchTerms  = $this->searchTermRepo->findTopForVideo($video, 20);
+        $snapshots    = $this->snapshotRepo->findAllForVideo($video);
+        $metaHistory  = $this->buildMetaHistory($snapshots, $metrics);
 
         $chartData = ['labels' => [], 'views' => [], 'ctr' => [], 'watchTime' => [], 'subscribers' => []];
         foreach ($metrics as $m) {
@@ -119,7 +123,69 @@ class VideoController extends AbstractController
             'prediction'     => $prediction,
             'seo_report'     => $seoReport,
             'search_terms'   => $searchTerms,
+            'meta_history'   => $metaHistory,
         ]);
+    }
+
+    /**
+     * Builds a timeline of meta changes enriched with performance metrics for each period.
+     * Each entry: snapshot + avg_views_day + avg_ctr + total_views + days_active + is_best
+     */
+    private function buildMetaHistory(array $snapshots, array $metrics): array
+    {
+        if (empty($snapshots)) return [];
+
+        // Index metrics by date string for fast lookup
+        $metricsByDate = [];
+        foreach ($metrics as $m) {
+            $metricsByDate[$m->getDate()->format('Y-m-d')] = $m;
+        }
+
+        $history = [];
+        $count   = count($snapshots);
+
+        foreach ($snapshots as $i => $snapshot) {
+            $from    = $snapshot->getRecordedAt()->setTime(0, 0, 0);
+            $to      = isset($snapshots[$i + 1])
+                ? $snapshots[$i + 1]->getRecordedAt()->setTime(0, 0, 0)
+                : new \DateTimeImmutable();
+
+            // Aggregate metrics in the period [from, to)
+            $periodViews = 0;
+            $periodCtrs  = [];
+            $days        = 0;
+
+            $cursor = $from;
+            while ($cursor < $to) {
+                $key = $cursor->format('Y-m-d');
+                if (isset($metricsByDate[$key])) {
+                    $m = $metricsByDate[$key];
+                    $periodViews += $m->getViews();
+                    if ($m->getCtr() !== null) $periodCtrs[] = $m->getCtr();
+                    $days++;
+                }
+                $cursor = $cursor->modify('+1 day');
+            }
+
+            $history[] = [
+                'snapshot'       => $snapshot,
+                'from'           => $from,
+                'to'             => $to,
+                'is_current'     => ($i === $count - 1),
+                'total_views'    => $periodViews,
+                'avg_views_day'  => $days > 0 ? round($periodViews / $days) : 0,
+                'avg_ctr'        => !empty($periodCtrs) ? round(array_sum($periodCtrs) / count($periodCtrs), 2) : null,
+                'days_active'    => (int) $from->diff($to)->days,
+            ];
+        }
+
+        // Mark the best performing period by avg_views_day
+        if (!empty($history)) {
+            $best = array_keys($history, max(array_column($history, 'avg_views_day')))[0];
+            $history[$best]['is_best'] = true;
+        }
+
+        return array_reverse($history); // most recent first
     }
 
     #[Route('/alerts', name: 'analytics_alerts')]
