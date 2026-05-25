@@ -45,11 +45,14 @@
             <i class="fas fa-list-ul"></i> Playlists IA
         </a>
         {% if is_granted('ROLE_ADMIN') %}
-        <a href="{{ path('admin_users') }}" class="{{ app.request.attributes.get('_route') starts with 'admin' ? 'active' : '' }}" style="{{ not (app.request.attributes.get('_route') starts with 'admin') ? 'color:var(--yellow)' : '' }}">
+        <a href="{{ path('admin_users') }}" class="{{ app.request.attributes.get('_route') == 'admin_users' ? 'active' : '' }}" style="{{ app.request.attributes.get('_route') != 'admin_users' ? 'color:var(--yellow)' : '' }}">
             <i class="fas fa-users-cog"></i> Admin
             {% if pending_approval_count is defined and pending_approval_count > 0 %}
             <span class="nav-badge">{{ pending_approval_count }}</span>
             {% endif %}
+        </a>
+        <a href="{{ path('admin_settings') }}" class="{{ app.request.attributes.get('_route') == 'admin_settings' ? 'active' : '' }}" style="{{ app.request.attributes.get('_route') != 'admin_settings' ? 'color:var(--yellow)' : '' }}">
+            <i class="fas fa-cogs"></i> Paramètres
         </a>
         {% endif %}
         <div class="navbar-user">
