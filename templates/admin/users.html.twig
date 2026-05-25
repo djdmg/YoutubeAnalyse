@@ -44,19 +44,19 @@
             </div>
 
             <div class="user-actions">
-                <form method="post" action="{{ path('admin_approve', {id: user.id}) }}" style="display:inline">
-                    <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
-                    <button type="submit" class="btn btn-approve">
-                        <i class="fas fa-check"></i> Approuver
-                    </button>
-                </form>
-                <form method="post" action="{{ path('admin_reject', {id: user.id}) }}" style="display:inline"
-                      onsubmit="return confirm('Supprimer {{ user.displayName }} ?')">
-                    <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
-                    <button type="submit" class="btn btn-reject">
-                        <i class="fas fa-times"></i> Refuser
-                    </button>
-                </form>
+                <button class="btn btn-approve js-admin-action"
+                    data-url="{{ path('admin_approve', {id: user.id}) }}"
+                    data-token="{{ csrf_token('admin_action_' ~ user.id) }}"
+                    data-action="approved">
+                    <i class="fas fa-check"></i> Approuver
+                </button>
+                <button class="btn btn-reject js-admin-action"
+                    data-url="{{ path('admin_reject', {id: user.id}) }}"
+                    data-token="{{ csrf_token('admin_action_' ~ user.id) }}"
+                    data-action="removed"
+                    data-confirm="Supprimer {{ user.displayName }} ?">
+                    <i class="fas fa-times"></i> Refuser
+                </button>
             </div>
         </div>
         {% endfor %}
@@ -129,26 +129,29 @@
                     <td>
                         {% if user != app.user %}
                         <div class="action-group">
-                            <form method="post" action="{{ path('admin_toggle_admin', {id: user.id}) }}" style="display:inline">
-                                <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
-                                <button type="submit" class="btn btn-outline btn-sm" title="{{ user.isAdmin ? 'Retirer admin' : 'Promouvoir admin' }}">
-                                    <i class="fas fa-{{ user.isAdmin ? 'user-minus' : 'crown' }}"></i>
-                                    {{ user.isAdmin ? 'Retirer admin' : 'Promouvoir' }}
-                                </button>
-                            </form>
-                            <form method="post" action="{{ path('admin_revoke', {id: user.id}) }}" style="display:inline">
-                                <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
-                                <button type="submit" class="btn btn-outline btn-sm" title="Révoquer l'accès">
-                                    <i class="fas fa-ban"></i> Révoquer
-                                </button>
-                            </form>
-                            <form method="post" action="{{ path('admin_delete', {id: user.id}) }}" style="display:inline"
-                                  onsubmit="return confirm('Supprimer définitivement {{ user.displayName }} ?')">
-                                <input type="hidden" name="_token" value="{{ csrf_token('admin_action_' ~ user.id) }}">
-                                <button type="submit" class="btn btn-reject btn-sm">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
+                            <button class="btn btn-outline btn-sm js-admin-action"
+                                data-url="{{ path('admin_toggle_admin', {id: user.id}) }}"
+                                data-token="{{ csrf_token('admin_action_' ~ user.id) }}"
+                                data-action="toggle_admin"
+                                title="{{ user.isAdmin ? 'Retirer admin' : 'Promouvoir admin' }}">
+                                <i class="fas fa-{{ user.isAdmin ? 'user-minus' : 'crown' }}"></i>
+                                {{ user.isAdmin ? 'Retirer admin' : 'Promouvoir' }}
+                            </button>
+                            <button class="btn btn-outline btn-sm js-admin-action"
+                                data-url="{{ path('admin_revoke', {id: user.id}) }}"
+                                data-token="{{ csrf_token('admin_action_' ~ user.id) }}"
+                                data-action="removed"
+                                data-confirm="Révoquer l'accès de {{ user.displayName }} ?"
+                                title="Révoquer l'accès">
+                                <i class="fas fa-ban"></i> Révoquer
+                            </button>
+                            <button class="btn btn-reject btn-sm js-admin-action"
+                                data-url="{{ path('admin_delete', {id: user.id}) }}"
+                                data-token="{{ csrf_token('admin_action_' ~ user.id) }}"
+                                data-action="removed"
+                                data-confirm="Supprimer définitivement {{ user.displayName }} ?">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
                         {% else %}
                         <span class="na">—</span>
@@ -242,4 +245,57 @@
 .users-table-wrapper { overflow-x:auto; }
 </style>
 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.js-admin-action').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (btn.dataset.confirm && !confirm(btn.dataset.confirm)) return;
+
+            btn.disabled = true;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            ajaxPost(btn.dataset.url, { _token: btn.dataset.token },
+                function(data) {
+                    const action = data.action;
+                    const row = btn.closest('tr') || btn.closest('.user-row');
+                    if (!row) { location.reload(); return; }
+
+                    if (action === 'removed') {
+                        row.style.transition = 'opacity .3s,transform .3s';
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(30px)';
+                        setTimeout(() => row.remove(), 300);
+                    } else if (action === 'approved') {
+                        row.style.transition = 'opacity .3s';
+                        row.style.opacity = '0';
+                        setTimeout(() => { row.remove(); location.reload(); }, 400);
+                    } else if (action === 'toggle_admin') {
+                        // Update role badge and button label in-place
+                        const roleCell = row.querySelector('td:nth-child(3)');
+                        if (roleCell) {
+                            roleCell.innerHTML = data.is_admin
+                                ? '<span class="badge badge-red"><i class="fas fa-crown"></i> Admin</span>'
+                                : '<span class="badge" style="background:rgba(59,130,246,0.12);color:#3b82f6"><i class="fas fa-user"></i> Utilisateur</span>';
+                        }
+                        btn.innerHTML = data.is_admin
+                            ? '<i class="fas fa-user-minus"></i> Retirer admin'
+                            : '<i class="fas fa-crown"></i> Promouvoir';
+                        btn.disabled = false;
+                    } else {
+                        btn.disabled = false;
+                        btn.innerHTML = originalHtml;
+                    }
+                    showToast(data.message, 'success');
+                },
+                function(msg) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                    showToast(msg, 'error');
+                }
+            );
+        });
+    });
+});
+</script>
 {% endblock %}
