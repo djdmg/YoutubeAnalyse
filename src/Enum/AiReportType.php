@@ -8,6 +8,7 @@ enum AiReportType: string
     case Anomaly           = 'anomaly';
     case Prediction        = 'prediction';
     case UploadSchedule    = 'upload_schedule';
+    case SeoOptimization   = 'seo_optimization';
 
     public function label(): string
     {
@@ -17,6 +18,7 @@ enum AiReportType: string
             self::Anomaly           => 'Anomalie détectée',
             self::Prediction        => 'Prédiction J+30',
             self::UploadSchedule    => 'Stratégie publication',
+            self::SeoOptimization   => 'SEO — Requêtes de recherche',
         };
     }
 }

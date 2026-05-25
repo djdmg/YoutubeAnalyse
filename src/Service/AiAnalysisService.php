@@ -11,6 +11,7 @@ use App\Repository\AiReportRepository;
 use App\Repository\CommentRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\VideoRepository;
+use App\Repository\VideoSearchTermRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 
@@ -34,6 +35,7 @@ class AiAnalysisService
         private readonly VideoRepository $videoRepo,
         private readonly DailyMetricRepository $dailyMetricRepo,
         private readonly CommentRepository $commentRepo,
+        private readonly VideoSearchTermRepository $searchTermRepo,
         private readonly LoggerInterface $logger,
         private readonly float $ctrThreshold = 4.0,
     ) {}
@@ -52,6 +54,7 @@ class AiAnalysisService
             'comment_analysis'   => $this->runCommentAnalysis($user, $skipped),
             'anomaly'            => $this->runAnomalyDetection($user, $skipped),
             'prediction'         => $this->runPredictions($user, $skipped),
+            'seo_optimization'   => $this->runSeoOptimization($user, $skipped),
         ];
         return ['counts' => $counts, 'skipped' => $skipped];
     }
@@ -66,6 +69,7 @@ class AiAnalysisService
             AiReportType::Anomaly           => $this->runAnomalyDetection($user, $skipped),
             AiReportType::Prediction        => $this->runPredictions($user, $skipped),
             AiReportType::UploadSchedule    => $this->runUploadSchedule($user, $skipped),
+            AiReportType::SeoOptimization   => $this->runSeoOptimization($user, $skipped),
         };
         return ['counts' => [$type->value => $count], 'skipped' => $skipped];
     }
@@ -371,5 +375,95 @@ class AiAnalysisService
             $variance += ($v - $mean) ** 2;
         }
         return [$mean, $n > 1 ? sqrt($variance / ($n - 1)) : 0];
+    }
+
+    // ─── Analysis 6: SEO Optimization (search terms) ───────────────────────
+
+    private function runSeoOptimization(User $user, array &$skipped): int
+    {
+        $videos  = $this->videoRepo->findForUser($user);
+        $count   = 0;
+
+        foreach ($videos as $video) {
+            $dedupH = $this->dedupHours($video);
+
+            if (!$this->force && $this->aiReportRepo->findRecentDone($video, AiReportType::SeoOptimization, $dedupH)) {
+                $skipped[] = ['video' => $video->getTitle(), 'type' => 'seo_optimization', 'reason' => 'recent'];
+                continue;
+            }
+
+            $terms = $this->searchTermRepo->findTopForVideo($video, 25);
+            if (empty($terms)) {
+                $skipped[] = ['video' => $video->getTitle(), 'type' => 'seo_optimization', 'reason' => 'no_search_terms'];
+                continue;
+            }
+
+            $termsList = implode("\n", array_map(
+                fn($t) => sprintf('- "%s" (%d vues)', $t->getQuery(), $t->getViews()),
+                $terms
+            ));
+
+            $latestMetric = $this->dailyMetricRepo->findLatestForVideo($video);
+            $trafficBreakdown = '';
+            if ($latestMetric?->getTrafficSources()) {
+                arsort($latestMetric->getTrafficSources());
+                foreach (array_slice($latestMetric->getTrafficSources(), 0, 5, true) as $src => $views) {
+                    $trafficBreakdown .= sprintf("- %s : %d vues\n", str_replace('_', ' ', strtolower($src)), $views);
+                }
+            }
+
+            $description = mb_substr($video->getDescription() ?? '', 0, 800);
+
+            $prompt = <<<PROMPT
+Tu es un expert en optimisation SEO pour YouTube.
+
+Voici les données d'une vidéo YouTube :
+
+Titre actuel : "{$video->getTitle()}"
+Description actuelle (extrait) :
+{$description}
+
+Requêtes de recherche YouTube qui ont amené des spectateurs sur cette vidéo (du plus au moins fréquent) :
+{$termsList}
+
+Sources de trafic (répartition) :
+{$trafficBreakdown}
+
+Analyse ces données et propose :
+1. Un titre optimisé qui intègre naturellement les requêtes les plus performantes
+2. Les mots-clés manquants à ajouter dans la description (ceux des requêtes non présents dans le titre/description)
+3. Un extrait de description optimisé pour le SEO (premières 150 mots — visibles avant "Voir plus")
+4. Un diagnostic : pourquoi ces requêtes performent, qu'est-ce qui attire les spectateurs
+
+Réponds UNIQUEMENT en JSON valide, sans texte avant ni après :
+{
+  "titre_optimise": "...",
+  "mots_cles_manquants": ["...", "..."],
+  "description_optimisee": "...",
+  "diagnostic": "...",
+  "requetes_principales": ["...", "..."]
+}
+PROMPT;
+
+            $report = (new AiReport())
+                ->setVideo($video)
+                ->setType(AiReportType::SeoOptimization)
+                ->setStatus(AiReportStatus::Pending)
+                ->setCreatedAt(new \DateTimeImmutable());
+
+            $this->em->persist($report);
+
+            $result = $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+
+            if ($result) {
+                $this->em->flush();
+                $count++;
+                $this->logger->info('SEO analysis done', ['video' => $video->getTitle()]);
+            } else {
+                $this->em->flush();
+            }
+        }
+
+        return $count;
     }
 }

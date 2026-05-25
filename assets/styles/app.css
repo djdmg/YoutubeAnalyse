@@ -912,10 +912,16 @@ html, body {
 .alert-card-footer { margin-top: 12px; }
 
 /* Traffic sources */
-.traffic-sources { display: flex; flex-direction: column; gap: 8px; }
-.traffic-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.traffic-sources { display: flex; flex-direction: column; gap: 4px; }
+.traffic-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.traffic-row:last-child { border-bottom: none; }
 .traffic-source { text-transform: capitalize; color: var(--text-secondary); }
-.traffic-views { font-weight: 600; }
+.traffic-views { font-weight: 600; white-space: nowrap; }
+.traffic-bar-wrap { width: 60px; height: 4px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+.traffic-bar { height: 100%; background: var(--blue); border-radius: 2px; transition: width .3s; }
+
+/* Field label (shared) */
+.field-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; font-weight: 600; }
 
 /* Video detail header */
 .video-thumb-header { width: 48px; height: 27px; object-fit: cover; border-radius: 4px; vertical-align: middle; margin-right: 8px; }

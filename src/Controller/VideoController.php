@@ -9,6 +9,7 @@ use App\Repository\CommentRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
+use App\Repository\VideoSearchTermRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,6 +26,7 @@ class VideoController extends AbstractController
         private readonly RetentionPointRepository $retentionRepo,
         private readonly CommentRepository $commentRepo,
         private readonly AiReportRepository $aiReportRepo,
+        private readonly VideoSearchTermRepository $searchTermRepo,
     ) {}
 
     #[Route('/videos', name: 'analytics_videos')]
@@ -86,6 +88,8 @@ class VideoController extends AbstractController
         $commentReport= $this->aiReportRepo->findRecentDone($video, AiReportType::CommentAnalysis, 168);
         $anomalyReport= $this->aiReportRepo->findRecentDone($video, AiReportType::Anomaly, 168);
         $prediction   = $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
+        $seoReport    = $this->aiReportRepo->findRecentDone($video, AiReportType::SeoOptimization, 168);
+        $searchTerms  = $this->searchTermRepo->findTopForVideo($video, 20);
 
         $chartData = ['labels' => [], 'views' => [], 'ctr' => [], 'watchTime' => [], 'subscribers' => []];
         foreach ($metrics as $m) {
@@ -113,6 +117,8 @@ class VideoController extends AbstractController
             'comment_report' => $commentReport,
             'anomaly_report' => $anomalyReport,
             'prediction'     => $prediction,
+            'seo_report'     => $seoReport,
+            'search_terms'   => $searchTerms,
         ]);
     }
 

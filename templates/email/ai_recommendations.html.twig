@@ -130,6 +130,28 @@
           <div class="field-value">{% for f in p.facteurs %}<div>· {{ f }}</div>{% endfor %}</div>
         {% endif %}
 
+      {# ── SEO Optimization ─────────────────────────── #}
+      {% elseif typeValue == 'seo_optimization' %}
+        <div style="background:rgba(168,85,247,.1);border-radius:4px;padding:6px 10px;margin-bottom:10px;font-size:11px;color:#c084fc">
+          ⚠️ Suggestions uniquement — aucune modification automatique
+        </div>
+        {% if p.diagnostic is defined %}
+          <div class="field-label">Diagnostic</div>
+          <div class="field-value">{{ p.diagnostic }}</div>
+        {% endif %}
+        {% if p.titre_optimise is defined %}
+          <div class="field-label">Titre suggéré</div>
+          <div class="field-value" style="border-left:3px solid #3b82f6;padding-left:10px;font-weight:600">{{ p.titre_optimise }}</div>
+        {% endif %}
+        {% if p.mots_cles_manquants is defined and p.mots_cles_manquants|length > 0 %}
+          <div class="field-label">Mots-clés à ajouter</div>
+          <div class="field-value">{% for k in p.mots_cles_manquants %}<span class="tag">{{ k }}</span>{% endfor %}</div>
+        {% endif %}
+        {% if p.description_optimisee is defined %}
+          <div class="field-label">Début de description suggéré</div>
+          <div class="field-value" style="font-size:12px;color:#94a3b8;white-space:pre-line">{{ p.description_optimisee }}</div>
+        {% endif %}
+
       {# ── Upload Schedule ──────────────────────────── #}
       {% elseif typeValue == 'upload_schedule' %}
         {% if p.meilleur_jour is defined %}

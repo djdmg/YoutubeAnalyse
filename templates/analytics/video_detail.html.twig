@@ -199,18 +199,113 @@
 
 </div>
 
-{# Traffic Sources #}
-{% if latest_metric and latest_metric.trafficSources %}
-<div class="section-card">
+{# Traffic Sources + Search Terms #}
+<div class="detail-grid" style="grid-template-columns: 1fr 1fr">
+
+  {% if latest_metric and latest_metric.trafficSources %}
+  <div class="section-card">
     <div class="section-header"><h3><i class="fas fa-traffic-light"></i> Sources de trafic</h3></div>
     <div class="traffic-sources">
+        {% set total = latest_metric.trafficSources|reduce((carry, v) => carry + v, 0) %}
         {% for source, views in latest_metric.trafficSources %}
         <div class="traffic-row">
-            <span class="traffic-source">{{ source|replace({'_': ' '}) }}</span>
-            <span class="traffic-views">{{ views|number_format(0, ',', ' ') }} vues</span>
+            <span class="traffic-source">{{ source|replace({'_': ' ', 'YT ': 'YouTube '}) }}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+                {% if total > 0 %}
+                <div class="traffic-bar-wrap">
+                    <div class="traffic-bar" style="width:{{ ((views / total) * 100)|round }}%"></div>
+                </div>
+                <span style="font-size:11px;color:var(--text-muted);width:32px;text-align:right">{{ ((views / total) * 100)|round }}%</span>
+                {% endif %}
+                <span class="traffic-views">{{ views|number_format(0, ',', ' ') }}</span>
+            </div>
         </div>
         {% endfor %}
     </div>
+  </div>
+  {% endif %}
+
+  {% if search_terms|length > 0 %}
+  <div class="section-card">
+    <div class="section-header">
+      <h3><i class="fas fa-search"></i> Requêtes de recherche</h3>
+      <span style="font-size:12px;color:var(--text-muted)">{{ search_terms|length }} requêtes</span>
+    </div>
+    {% set maxViews = search_terms[0].views %}
+    <div class="traffic-sources">
+      {% for term in search_terms %}
+      <div class="traffic-row">
+        <span class="traffic-source" style="font-size:13px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ term.query }}">
+          {{ term.query }}
+        </span>
+        <div style="display:flex;align-items:center;gap:8px">
+          {% if maxViews > 0 %}
+          <div class="traffic-bar-wrap">
+            <div class="traffic-bar" style="width:{{ ((term.views / maxViews) * 100)|round }}%;background:var(--purple)"></div>
+          </div>
+          {% endif %}
+          <span class="traffic-views">{{ term.views }} vues</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% elseif search_terms|length == 0 %}
+  <div class="section-card">
+    <div class="section-header"><h3><i class="fas fa-search"></i> Requêtes de recherche</h3></div>
+    <div class="empty-state" style="padding:24px">
+      <i class="fas fa-sync fa-lg"></i>
+      <p style="margin-top:8px;font-size:13px">Données disponibles après la prochaine synchronisation</p>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# SEO Report #}
+{% if seo_report and seo_report.payload %}
+{% set p = seo_report.payload %}
+<div class="section-card" style="border-left:3px solid var(--purple)">
+  <div class="section-header">
+    <h3><i class="fas fa-magic" style="color:var(--purple)"></i> Suggestions SEO — IA</h3>
+    <span class="ai-model">{{ seo_report.modelVersion }}</span>
+  </div>
+  <div style="background:rgba(168,85,247,.08);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:12px;color:var(--text-muted)">
+    <i class="fas fa-info-circle" style="color:var(--purple)"></i>
+    Suggestions uniquement — aucune modification n'est appliquée automatiquement sur ta chaîne.
+  </div>
+
+  {% if p.diagnostic is defined %}
+  <div class="ai-diagnostic" style="margin-bottom:16px">{{ p.diagnostic }}</div>
+  {% endif %}
+
+  {% if p.titre_optimise is defined %}
+  <div class="field-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Titre optimisé</div>
+  <div style="background:var(--bg-secondary);border-left:3px solid var(--blue);border-radius:0 6px 6px 0;padding:10px 14px;font-size:14px;font-weight:500;color:#e2e8f0;margin-bottom:16px">
+    {{ p.titre_optimise }}
+  </div>
+  {% endif %}
+
+  {% if p.mots_cles_manquants is defined and p.mots_cles_manquants|length > 0 %}
+  <div class="field-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Mots-clés manquants à ajouter</div>
+  <div class="ai-keywords" style="margin-bottom:16px">
+    {% for kw in p.mots_cles_manquants %}
+    <span class="keyword-tag"><i class="fas fa-plus" style="font-size:9px;margin-right:3px"></i>{{ kw }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if p.description_optimisee is defined %}
+  <div class="field-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Description optimisée (début)</div>
+  <div style="background:var(--bg-secondary);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-line;margin-bottom:4px">{{ p.description_optimisee }}</div>
+  {% endif %}
+
+  {% if p.requetes_principales is defined and p.requetes_principales|length > 0 %}
+  <div style="margin-top:12px;font-size:12px;color:var(--text-muted)">
+    <i class="fas fa-search"></i>
+    Requêtes ciblées : {{ p.requetes_principales|join(', ') }}
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 
