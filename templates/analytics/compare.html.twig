@@ -92,7 +92,7 @@
             {% set color = colors[loop.index0] %}
             {% set allViews = item.daily_data|map(d => d.views) %}
             {% set totalViews = allViews|reduce((carry, v) => carry + v, 0) %}
-            {% set peakViews = allViews|length > 0 ? allViews|max : 0 %}
+            {% set peakViews = allViews|length > 0 ? max(allViews) : 0 %}
             {% set activeDays = allViews|filter(v => v > 0)|length %}
             {% set avgViews = activeDays > 0 ? (totalViews / activeDays)|round : 0 %}
             <tr>
