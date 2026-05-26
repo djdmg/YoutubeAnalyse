@@ -25,128 +25,287 @@
     </div>
 </div>
 
-{# KPI Cards #}
-{% if latest_metric %}
-<div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-icon views"><i class="fas fa-eye"></i></div>
-        <div class="kpi-content">
-            <div class="kpi-value">{{ latest_metric.views|number_format(0, ',', ' ') }}</div>
-            <div class="kpi-label">Vues (J)</div>
-        </div>
-    </div>
-    {% if latest_metric.ctr is not null %}
-    <div class="kpi-card">
-        <div class="kpi-icon" style="background:rgba(234,179,8,0.15);color:#eab308"><i class="fas fa-percentage"></i></div>
-        <div class="kpi-content">
-            <div class="kpi-value">{{ latest_metric.ctr|number_format(2) }}%</div>
-            <div class="kpi-label">CTR</div>
-        </div>
-    </div>
-    {% endif %}
-    {% if latest_metric.watchTimeMinutes %}
-    <div class="kpi-card">
-        <div class="kpi-icon watchtime"><i class="fas fa-clock"></i></div>
-        <div class="kpi-content">
-            <div class="kpi-value">{{ (latest_metric.watchTimeMinutes / 60)|number_format(1, ',', ' ') }}h</div>
-            <div class="kpi-label">Watch Time</div>
-        </div>
-    </div>
-    {% endif %}
-    {% if latest_metric.avgRetentionPercent is not null %}
-    <div class="kpi-card">
-        <div class="kpi-icon" style="background:rgba(168,85,247,0.15);color:#a855f7"><i class="fas fa-film"></i></div>
-        <div class="kpi-content">
-            <div class="kpi-value">{{ latest_metric.avgRetentionPercent|number_format(1) }}%</div>
-            <div class="kpi-label">Rétention moy.</div>
-        </div>
-    </div>
-    {% endif %}
-    {% if latest_metric.subscribersGained is not null %}
-    <div class="kpi-card">
-        <div class="kpi-icon subscribers"><i class="fas fa-user-plus"></i></div>
-        <div class="kpi-content">
-            <div class="kpi-value">+{{ latest_metric.subscribersGained }}</div>
-            <div class="kpi-label">Abonnés gagnés</div>
-        </div>
-    </div>
-    {% endif %}
-</div>
-{% endif %}
+{# ── Tab nav ──────────────────────────────────────────────────────────── #}
+{% set ai_count = (prediction ? 1 : 0) + (title_report ? 1 : 0) + (comment_report ? 1 : 0) %}
+{% set opti_count = (seo_report ? 1 : 0) + (title_report ? 1 : 0) + (meta_history|length > 1 ? 1 : 0) %}
 
-{# Anomaly Banner #}
-{% if anomaly_report and anomaly_report.payload %}
-<div class="alert-banner alert-{{ anomaly_report.payload.type == 'surperformance' ? 'success' : 'danger' }}">
-    <i class="fas fa-{{ anomaly_report.payload.type == 'surperformance' ? 'rocket' : 'exclamation-triangle' }}"></i>
-    <div>
-        <strong>{{ anomaly_report.payload.type == 'surperformance' ? 'Surperformance détectée !' : 'Sous-performance détectée' }}</strong>
-        <p>{{ anomaly_report.payload.cause_probable }}</p>
-        <p class="alert-action"><i class="fas fa-lightbulb"></i> {{ anomaly_report.payload.action_recommandee }}</p>
-    </div>
-</div>
-{% endif %}
-
-<div class="detail-grid">
-    {# Views Chart #}
-    {% if chart_data.labels|length > 0 %}
-    <div class="chart-card span-2">
-        <div class="chart-header"><h3><i class="fas fa-eye"></i> Vues journalières</h3></div>
-        <canvas id="viewsChart" height="80"></canvas>
-    </div>
-    {% endif %}
-
-    {# Retention Curve #}
-    {% if retention_data.labels|length > 0 %}
-    <div class="chart-card">
-        <div class="chart-header"><h3><i class="fas fa-film"></i> Courbe de rétention</h3></div>
-        <canvas id="retentionChart" height="120"></canvas>
-    </div>
-    {% endif %}
-
-    {# CTR Chart #}
-    {% if chart_data.ctr|filter(v => v > 0)|length > 0 %}
-    <div class="chart-card">
-        <div class="chart-header"><h3><i class="fas fa-percentage"></i> CTR</h3></div>
-        <canvas id="ctrChart" height="120"></canvas>
-    </div>
-    {% endif %}
+<div class="tab-nav" id="detailTabs">
+    <button class="tab-btn active" data-tab="perf">
+        <i class="fas fa-chart-line"></i> Performance
+    </button>
+    <button class="tab-btn" data-tab="ai">
+        <i class="fas fa-robot"></i> Analyses IA
+        {% if ai_count > 0 %}<span class="tab-badge">{{ ai_count }}</span>{% endif %}
+    </button>
+    <button class="tab-btn" data-tab="opti">
+        <i class="fas fa-magic"></i> Optimisations
+        {% if opti_count > 0 %}<span class="tab-badge">{{ opti_count }}</span>{% endif %}
+    </button>
 </div>
 
-{# AI Blocks #}
-<div class="ai-blocks-grid">
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# Tab 1 — Performance                                                    #}
+{# ══════════════════════════════════════════════════════════════════════ #}
+<div class="tab-panel active" id="tab-perf">
 
-    {# Projection J+30 #}
-    {% if prediction and prediction.payload %}
-    <div class="ai-block ai-block-prediction">
-        <div class="ai-block-header">
-            <i class="fas fa-chart-line"></i>
-            <h3>Projection J+30</h3>
-            <span class="ai-model">{{ prediction.modelVersion }}</span>
-        </div>
-        <div class="prediction-main">
-            <div class="prediction-value">{{ prediction.payload.vues_estimees_j30|number_format(0, ',', ' ') }}</div>
-            <div class="prediction-label">vues estimées</div>
-            <div class="prediction-range">
-                {{ prediction.payload.fourchette.min|number_format(0, ',', ' ') }} – {{ prediction.payload.fourchette.max|number_format(0, ',', ' ') }} vues
+    {# KPI Cards #}
+    {% if latest_metric %}
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon views"><i class="fas fa-eye"></i></div>
+            <div class="kpi-content">
+                <div class="kpi-value">{{ latest_metric.views|number_format(0, ',', ' ') }}</div>
+                <div class="kpi-label">Vues (J)</div>
             </div>
         </div>
-        <div class="confidence-gauge confidence-{{ prediction.payload.confiance }}">
-            <span>Confiance : <strong>{{ prediction.payload.confiance }}</strong></span>
+        {% if latest_metric.ctr is not null %}
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background:rgba(234,179,8,0.15);color:#eab308"><i class="fas fa-percentage"></i></div>
+            <div class="kpi-content">
+                <div class="kpi-value">{{ latest_metric.ctr|number_format(2) }}%</div>
+                <div class="kpi-label">CTR</div>
+            </div>
         </div>
-        {% if prediction.payload.facteurs %}
-        <ul class="ai-list">
-            {% for f in prediction.payload.facteurs %}<li>{{ f }}</li>{% endfor %}
-        </ul>
+        {% endif %}
+        {% if latest_metric.watchTimeMinutes %}
+        <div class="kpi-card">
+            <div class="kpi-icon watchtime"><i class="fas fa-clock"></i></div>
+            <div class="kpi-content">
+                <div class="kpi-value">{{ (latest_metric.watchTimeMinutes / 60)|number_format(1, ',', ' ') }}h</div>
+                <div class="kpi-label">Watch Time</div>
+            </div>
+        </div>
+        {% endif %}
+        {% if latest_metric.avgRetentionPercent is not null %}
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background:rgba(168,85,247,0.15);color:#a855f7"><i class="fas fa-film"></i></div>
+            <div class="kpi-content">
+                <div class="kpi-value">{{ latest_metric.avgRetentionPercent|number_format(1) }}%</div>
+                <div class="kpi-label">Rétention moy.</div>
+            </div>
+        </div>
+        {% endif %}
+        {% if latest_metric.subscribersGained is not null %}
+        <div class="kpi-card">
+            <div class="kpi-icon subscribers"><i class="fas fa-user-plus"></i></div>
+            <div class="kpi-content">
+                <div class="kpi-value">+{{ latest_metric.subscribersGained }}</div>
+                <div class="kpi-label">Abonnés gagnés</div>
+            </div>
+        </div>
         {% endif %}
     </div>
     {% endif %}
 
-    {# Recommandations IA (title) #}
+    {# Anomaly Banner #}
+    {% if anomaly_report and anomaly_report.payload %}
+    <div class="alert-banner alert-{{ anomaly_report.payload.type == 'surperformance' ? 'success' : 'danger' }}">
+        <i class="fas fa-{{ anomaly_report.payload.type == 'surperformance' ? 'rocket' : 'exclamation-triangle' }}"></i>
+        <div>
+            <strong>{{ anomaly_report.payload.type == 'surperformance' ? 'Surperformance détectée !' : 'Sous-performance détectée' }}</strong>
+            <p>{{ anomaly_report.payload.cause_probable }}</p>
+            <p class="alert-action"><i class="fas fa-lightbulb"></i> {{ anomaly_report.payload.action_recommandee }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Charts #}
+    <div class="detail-grid">
+        {% if chart_data.labels|length > 0 %}
+        <div class="chart-card span-2">
+            <div class="chart-header"><h3><i class="fas fa-eye"></i> Vues journalières</h3></div>
+            <canvas id="viewsChart" height="80"></canvas>
+        </div>
+        {% endif %}
+        {% if retention_data.labels|length > 0 %}
+        <div class="chart-card">
+            <div class="chart-header"><h3><i class="fas fa-film"></i> Courbe de rétention</h3></div>
+            <canvas id="retentionChart" height="120"></canvas>
+        </div>
+        {% endif %}
+        {% if chart_data.ctr|filter(v => v > 0)|length > 0 %}
+        <div class="chart-card">
+            <div class="chart-header"><h3><i class="fas fa-percentage"></i> CTR</h3></div>
+            <canvas id="ctrChart" height="120"></canvas>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Traffic Sources + Search Terms #}
+    <div class="detail-grid" style="grid-template-columns: 1fr 1fr">
+        {% if latest_metric and latest_metric.trafficSources %}
+        <div class="section-card">
+            <div class="section-header"><h3><i class="fas fa-traffic-light"></i> Sources de trafic</h3></div>
+            <div class="traffic-sources">
+                {% set total = latest_metric.trafficSources|reduce((carry, v) => carry + v, 0) %}
+                {% for source, views in latest_metric.trafficSources %}
+                <div class="traffic-row">
+                    <span class="traffic-source">{{ source|replace({'_': ' ', 'YT ': 'YouTube '}) }}</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        {% if total > 0 %}
+                        <div class="traffic-bar-wrap">
+                            <div class="traffic-bar" style="width:{{ ((views / total) * 100)|round }}%"></div>
+                        </div>
+                        <span style="font-size:11px;color:var(--text-muted);width:32px;text-align:right">{{ ((views / total) * 100)|round }}%</span>
+                        {% endif %}
+                        <span class="traffic-views">{{ views|number_format(0, ',', ' ') }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if search_terms|length > 0 %}
+        <div class="section-card">
+            <div class="section-header">
+                <h3><i class="fas fa-search"></i> Requêtes de recherche</h3>
+                <span style="font-size:12px;color:var(--text-muted)">{{ search_terms|length }} requêtes</span>
+            </div>
+            {% set maxViews = search_terms[0].views %}
+            <div class="traffic-sources">
+                {% for term in search_terms %}
+                <div class="traffic-row">
+                    <span class="traffic-source" style="font-size:13px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ term.query }}">
+                        {{ term.query }}
+                    </span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        {% if maxViews > 0 %}
+                        <div class="traffic-bar-wrap">
+                            <div class="traffic-bar" style="width:{{ ((term.views / maxViews) * 100)|round }}%;background:var(--purple)"></div>
+                        </div>
+                        {% endif %}
+                        <span class="traffic-views">{{ term.views }} vues</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="section-card">
+            <div class="section-header"><h3><i class="fas fa-search"></i> Requêtes de recherche</h3></div>
+            <div class="empty-state" style="padding:24px">
+                <i class="fas fa-sync fa-lg"></i>
+                <p style="margin-top:8px;font-size:13px">Données disponibles après la prochaine synchronisation</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+</div>{# /tab-perf #}
+
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# Tab 2 — Analyses IA                                                    #}
+{# ══════════════════════════════════════════════════════════════════════ #}
+<div class="tab-panel" id="tab-ai">
+
+    {% if ai_count == 0 %}
+    <div class="section-card">
+        <div class="empty-state">
+            <i class="fas fa-robot fa-3x"></i>
+            <h3>Aucune analyse IA</h3>
+            <p>Lance <strong>app:ai:analyze</strong> pour générer des analyses sur cette vidéo.</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="ai-blocks-grid">
+
+        {# Projection J+30 #}
+        {% if prediction and prediction.payload %}
+        <div class="ai-block ai-block-prediction">
+            <div class="ai-block-header">
+                <i class="fas fa-chart-line"></i>
+                <h3>Projection J+30</h3>
+                <span class="ai-model">{{ prediction.modelVersion }}</span>
+            </div>
+            <div class="prediction-main">
+                <div class="prediction-value">{{ prediction.payload.vues_estimees_j30|number_format(0, ',', ' ') }}</div>
+                <div class="prediction-label">vues estimées</div>
+                <div class="prediction-range">
+                    {{ prediction.payload.fourchette.min|number_format(0, ',', ' ') }} – {{ prediction.payload.fourchette.max|number_format(0, ',', ' ') }} vues
+                </div>
+            </div>
+            <div class="confidence-gauge confidence-{{ prediction.payload.confiance }}">
+                <span>Confiance : <strong>{{ prediction.payload.confiance }}</strong></span>
+            </div>
+            {% if prediction.payload.facteurs %}
+            <ul class="ai-list">
+                {% for f in prediction.payload.facteurs %}<li>{{ f }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# Anomaly details #}
+        {% if anomaly_report and anomaly_report.payload %}
+        <div class="ai-block" style="border-color:{{ anomaly_report.payload.type == 'surperformance' ? 'rgba(34,197,94,.3)' : 'rgba(239,68,68,.3)' }}">
+            <div class="ai-block-header">
+                <i class="fas fa-{{ anomaly_report.payload.type == 'surperformance' ? 'rocket' : 'exclamation-triangle' }}" style="color:{{ anomaly_report.payload.type == 'surperformance' ? 'var(--green)' : '#ef4444' }}"></i>
+                <h3>Détection d'anomalie</h3>
+                <span class="ai-model">{{ anomaly_report.modelVersion }}</span>
+            </div>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px"><strong>Cause :</strong> {{ anomaly_report.payload.cause_probable }}</p>
+            <p style="color:var(--text-secondary);font-size:13px;font-style:italic"><i class="fas fa-lightbulb" style="color:var(--yellow)"></i> {{ anomaly_report.payload.action_recommandee }}</p>
+        </div>
+        {% endif %}
+
+        {# Feedback audience #}
+        {% if comment_report and comment_report.payload %}
+        <div class="ai-block ai-block-comments">
+            <div class="ai-block-header">
+                <i class="fas fa-comments"></i>
+                <h3>Feedback audience</h3>
+                <span class="ai-model">{{ comment_report.modelVersion }}</span>
+            </div>
+            {% set score = comment_report.payload.score_sentiment ?? 0 %}
+            {% set sg = comment_report.payload.sentiment_global ?? 'neutre' %}
+            <div class="sentiment-widget">
+                <div class="sentiment-score sentiment-{{ sg }}">
+                    <span class="sentiment-emoji">{{ sg == 'positif' ? '😊' : (sg == 'négatif' ? '😞' : '😐') }}</span>
+                    <span class="sentiment-label">{{ sg|capitalize }}</span>
+                    <span class="sentiment-pct">{{ (score * 100)|round }}%</span>
+                </div>
+            </div>
+            <p class="ai-resume">{{ comment_report.payload.resume }}</p>
+            {% if comment_report.payload.themes_recurrents %}
+            <div class="themes-list">
+                {% for t in comment_report.payload.themes_recurrents %}
+                <span class="theme-tag">{{ t }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if comment_report.payload.demandes_tracklist %}
+            <div class="tracklist-notice"><i class="fas fa-music"></i> Tracklist demandée en commentaires</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+    </div>
+    {% endif %}
+
+</div>{# /tab-ai #}
+
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# Tab 3 — Optimisations                                                  #}
+{# ══════════════════════════════════════════════════════════════════════ #}
+<div class="tab-panel" id="tab-opti">
+
+    {% if opti_count == 0 %}
+    <div class="section-card">
+        <div class="empty-state">
+            <i class="fas fa-magic fa-3x"></i>
+            <h3>Aucune suggestion d'optimisation</h3>
+            <p>Lance <strong>app:ai:analyze</strong> pour obtenir des recommandations SEO et titre.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Title recommendations #}
     {% if title_report and title_report.payload %}
-    <div class="ai-block ai-block-title">
+    <div class="ai-block ai-block-title" style="margin-bottom:20px">
         <div class="ai-block-header">
             <i class="fas fa-magic"></i>
-            <h3>Recommandations IA</h3>
+            <h3>Recommandations de titre — IA</h3>
             <span class="ai-model">{{ title_report.modelVersion }}</span>
         </div>
         <p class="ai-diagnostic"><i class="fas fa-search"></i> {{ title_report.payload.diagnostic }}</p>
@@ -166,217 +325,117 @@
     </div>
     {% endif %}
 
-    {# Feedback audience #}
-    {% if comment_report and comment_report.payload %}
-    <div class="ai-block ai-block-comments">
-        <div class="ai-block-header">
-            <i class="fas fa-comments"></i>
-            <h3>Feedback audience</h3>
-            <span class="ai-model">{{ comment_report.modelVersion }}</span>
+    {# SEO Report #}
+    {% if seo_report and seo_report.payload %}
+    {% set p = seo_report.payload %}
+    <div class="section-card" style="border-left:3px solid var(--purple);margin-bottom:20px">
+        <div class="section-header">
+            <h3><i class="fas fa-magic" style="color:var(--purple)"></i> Suggestions SEO — IA</h3>
+            <span class="ai-model">{{ seo_report.modelVersion }}</span>
         </div>
-        {% set score = comment_report.payload.score_sentiment ?? 0 %}
-        {% set sg = comment_report.payload.sentiment_global ?? 'neutre' %}
-        <div class="sentiment-widget">
-            <div class="sentiment-score sentiment-{{ sg }}">
-                <span class="sentiment-emoji">{{ sg == 'positif' ? '😊' : (sg == 'négatif' ? '😞' : '😐') }}</span>
-                <span class="sentiment-label">{{ sg|capitalize }}</span>
-                <span class="sentiment-pct">{{ (score * 100)|round }}%</span>
-            </div>
+        <div style="background:rgba(168,85,247,.08);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:12px;color:var(--text-muted)">
+            <i class="fas fa-info-circle" style="color:var(--purple)"></i>
+            Suggestions uniquement — aucune modification n'est appliquée automatiquement sur ta chaîne.
         </div>
-        <p class="ai-resume">{{ comment_report.payload.resume }}</p>
-        {% if comment_report.payload.themes_recurrents %}
-        <div class="themes-list">
-            {% for t in comment_report.payload.themes_recurrents %}
-            <span class="theme-tag">{{ t }}</span>
+        {% if p.diagnostic is defined %}
+        <div class="ai-diagnostic" style="margin-bottom:16px">{{ p.diagnostic }}</div>
+        {% endif %}
+        {% if p.titre_optimise is defined %}
+        <div class="field-label">Titre optimisé</div>
+        <div style="background:var(--bg-secondary);border-left:3px solid var(--blue);border-radius:0 6px 6px 0;padding:10px 14px;font-size:14px;font-weight:500;color:#e2e8f0;margin-bottom:16px">
+            {{ p.titre_optimise }}
+        </div>
+        {% endif %}
+        {% if p.mots_cles_manquants is defined and p.mots_cles_manquants|length > 0 %}
+        <div class="field-label">Mots-clés manquants</div>
+        <div class="ai-keywords" style="margin-bottom:16px">
+            {% for kw in p.mots_cles_manquants %}
+            <span class="keyword-tag"><i class="fas fa-plus" style="font-size:9px;margin-right:3px"></i>{{ kw }}</span>
             {% endfor %}
         </div>
         {% endif %}
-        {% if comment_report.payload.demandes_tracklist %}
-        <div class="tracklist-notice"><i class="fas fa-music"></i> Tracklist demandée en commentaires</div>
+        {% if p.description_optimisee is defined %}
+        <div class="field-label">Description optimisée</div>
+        <div style="background:var(--bg-secondary);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-line;margin-bottom:4px">{{ p.description_optimisee }}</div>
+        {% endif %}
+        {% if p.requetes_principales is defined and p.requetes_principales|length > 0 %}
+        <div style="margin-top:12px;font-size:12px;color:var(--text-muted)">
+            <i class="fas fa-search"></i> Requêtes ciblées : {{ p.requetes_principales|join(', ') }}
+        </div>
         {% endif %}
     </div>
     {% endif %}
 
-</div>
-
-{# Traffic Sources + Search Terms #}
-<div class="detail-grid" style="grid-template-columns: 1fr 1fr">
-
-  {% if latest_metric and latest_metric.trafficSources %}
-  <div class="section-card">
-    <div class="section-header"><h3><i class="fas fa-traffic-light"></i> Sources de trafic</h3></div>
-    <div class="traffic-sources">
-        {% set total = latest_metric.trafficSources|reduce((carry, v) => carry + v, 0) %}
-        {% for source, views in latest_metric.trafficSources %}
-        <div class="traffic-row">
-            <span class="traffic-source">{{ source|replace({'_': ' ', 'YT ': 'YouTube '}) }}</span>
-            <div style="display:flex;align-items:center;gap:8px">
-                {% if total > 0 %}
-                <div class="traffic-bar-wrap">
-                    <div class="traffic-bar" style="width:{{ ((views / total) * 100)|round }}%"></div>
+    {# Meta History #}
+    {% if meta_history|length > 1 %}
+    <div class="section-card">
+        <div class="section-header">
+            <h3><i class="fas fa-history"></i> Historique titre &amp; description</h3>
+            <span style="font-size:12px;color:var(--text-muted)">{{ meta_history|length }} versions</span>
+        </div>
+        <div class="meta-timeline">
+            {% for entry in meta_history %}
+            {% set s = entry.snapshot %}
+            <div class="meta-entry {{ entry.is_current ? 'meta-current' : '' }} {{ entry.is_best is defined ? 'meta-best' : '' }}">
+                <div class="meta-entry-left">
+                    <div class="meta-dot {{ entry.is_current ? 'dot-blue' : (entry.is_best is defined ? 'dot-green' : '') }}"></div>
+                    <div class="meta-line"></div>
                 </div>
-                <span style="font-size:11px;color:var(--text-muted);width:32px;text-align:right">{{ ((views / total) * 100)|round }}%</span>
-                {% endif %}
-                <span class="traffic-views">{{ views|number_format(0, ',', ' ') }}</span>
+                <div class="meta-entry-body">
+                    <div class="meta-entry-header">
+                        <span class="meta-date">{{ entry.from|date('d/m/Y') }}</span>
+                        {% if entry.is_current %}<span class="badge badge-blue">Actuel</span>{% endif %}
+                        {% if entry.is_best is defined %}<span class="badge badge-green"><i class="fas fa-trophy" style="font-size:10px"></i> Meilleure perf</span>{% endif %}
+                        {% if entry.days_active > 0 %}<span style="font-size:11px;color:var(--text-muted)">{{ entry.days_active }} jour{{ entry.days_active > 1 ? 's' : '' }} actif</span>{% endif %}
+                    </div>
+                    <div class="meta-title">{{ s.title }}</div>
+                    {% if s.description %}
+                    <div class="meta-desc">{{ s.description|slice(0, 160) }}{% if s.description|length > 160 %}…{% endif %}</div>
+                    {% endif %}
+                    {% if entry.total_views > 0 or entry.avg_ctr is not null %}
+                    <div class="meta-stats">
+                        {% if entry.avg_views_day > 0 %}
+                        <span class="meta-stat"><i class="fas fa-eye"></i> <strong>{{ entry.avg_views_day|number_format(0, ',', ' ') }}</strong> vues/jour</span>
+                        {% endif %}
+                        {% if entry.total_views > 0 %}
+                        <span class="meta-stat"><i class="fas fa-chart-bar"></i> {{ entry.total_views|number_format(0, ',', ' ') }} total</span>
+                        {% endif %}
+                        {% if entry.avg_ctr is not null %}
+                        <span class="meta-stat"><i class="fas fa-mouse-pointer"></i> CTR {{ entry.avg_ctr }}%</span>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:6px">Pas encore de données pour cette période</div>
+                    {% endif %}
+                </div>
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {% if search_terms|length > 0 %}
-  <div class="section-card">
-    <div class="section-header">
-      <h3><i class="fas fa-search"></i> Requêtes de recherche</h3>
-      <span style="font-size:12px;color:var(--text-muted)">{{ search_terms|length }} requêtes</span>
-    </div>
-    {% set maxViews = search_terms[0].views %}
-    <div class="traffic-sources">
-      {% for term in search_terms %}
-      <div class="traffic-row">
-        <span class="traffic-source" style="font-size:13px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ term.query }}">
-          {{ term.query }}
-        </span>
-        <div style="display:flex;align-items:center;gap:8px">
-          {% if maxViews > 0 %}
-          <div class="traffic-bar-wrap">
-            <div class="traffic-bar" style="width:{{ ((term.views / maxViews) * 100)|round }}%;background:var(--purple)"></div>
-          </div>
-          {% endif %}
-          <span class="traffic-views">{{ term.views }} vues</span>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% elseif search_terms|length == 0 %}
-  <div class="section-card">
-    <div class="section-header"><h3><i class="fas fa-search"></i> Requêtes de recherche</h3></div>
-    <div class="empty-state" style="padding:24px">
-      <i class="fas fa-sync fa-lg"></i>
-      <p style="margin-top:8px;font-size:13px">Données disponibles après la prochaine synchronisation</p>
-    </div>
-  </div>
-  {% endif %}
+</div>{# /tab-opti #}
 
-</div>
+<script>
+$(function() {
+    var TAB_KEY = 'yt_detail_tab_{{ video.youtubeId }}';
+    var savedTab = localStorage.getItem(TAB_KEY) || 'perf';
 
-{# Meta History #}
-{% if meta_history|length > 1 %}
-<div class="section-card">
-  <div class="section-header">
-    <h3><i class="fas fa-history"></i> Historique titre &amp; description</h3>
-    <span style="font-size:12px;color:var(--text-muted)">{{ meta_history|length }} versions</span>
-  </div>
+    function activateTab(name) {
+        $('.tab-btn').removeClass('active');
+        $('.tab-panel').removeClass('active');
+        $('.tab-btn[data-tab="' + name + '"]').addClass('active');
+        $('#tab-' + name).addClass('active');
+        localStorage.setItem(TAB_KEY, name);
+    }
 
-  <div class="meta-timeline">
-  {% for entry in meta_history %}
-    {% set s = entry.snapshot %}
-    <div class="meta-entry {{ entry.is_current ? 'meta-current' : '' }} {{ entry.is_best is defined ? 'meta-best' : '' }}">
+    activateTab(savedTab);
 
-      <div class="meta-entry-left">
-        <div class="meta-dot {{ entry.is_current ? 'dot-blue' : (entry.is_best is defined ? 'dot-green' : '') }}"></div>
-        <div class="meta-line"></div>
-      </div>
-
-      <div class="meta-entry-body">
-        <div class="meta-entry-header">
-          <span class="meta-date">{{ entry.from|date('d/m/Y') }}</span>
-          {% if entry.is_current %}
-            <span class="badge badge-blue">Actuel</span>
-          {% endif %}
-          {% if entry.is_best is defined %}
-            <span class="badge badge-green"><i class="fas fa-trophy" style="font-size:10px"></i> Meilleure perf</span>
-          {% endif %}
-          {% if entry.days_active > 0 %}
-            <span style="font-size:11px;color:var(--text-muted)">{{ entry.days_active }} jour{{ entry.days_active > 1 ? 's' : '' }} actif</span>
-          {% endif %}
-        </div>
-
-        <div class="meta-title">{{ s.title }}</div>
-
-        {% if s.description %}
-        <div class="meta-desc">{{ s.description|slice(0, 160) }}{% if s.description|length > 160 %}…{% endif %}</div>
-        {% endif %}
-
-        {% if entry.total_views > 0 or entry.avg_ctr is not null %}
-        <div class="meta-stats">
-          {% if entry.avg_views_day > 0 %}
-          <span class="meta-stat">
-            <i class="fas fa-eye"></i>
-            <strong>{{ entry.avg_views_day|number_format(0, ',', ' ') }}</strong> vues/jour
-          </span>
-          {% endif %}
-          {% if entry.total_views > 0 %}
-          <span class="meta-stat">
-            <i class="fas fa-chart-bar"></i>
-            {{ entry.total_views|number_format(0, ',', ' ') }} total
-          </span>
-          {% endif %}
-          {% if entry.avg_ctr is not null %}
-          <span class="meta-stat">
-            <i class="fas fa-mouse-pointer"></i>
-            CTR {{ entry.avg_ctr }}%
-          </span>
-          {% endif %}
-        </div>
-        {% else %}
-        <div style="font-size:12px;color:var(--text-muted);margin-top:6px">Pas encore de données pour cette période</div>
-        {% endif %}
-      </div>
-    </div>
-  {% endfor %}
-  </div>
-</div>
-{% endif %}
-
-{# SEO Report #}
-{% if seo_report and seo_report.payload %}
-{% set p = seo_report.payload %}
-<div class="section-card" style="border-left:3px solid var(--purple)">
-  <div class="section-header">
-    <h3><i class="fas fa-magic" style="color:var(--purple)"></i> Suggestions SEO — IA</h3>
-    <span class="ai-model">{{ seo_report.modelVersion }}</span>
-  </div>
-  <div style="background:rgba(168,85,247,.08);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:12px;color:var(--text-muted)">
-    <i class="fas fa-info-circle" style="color:var(--purple)"></i>
-    Suggestions uniquement — aucune modification n'est appliquée automatiquement sur ta chaîne.
-  </div>
-
-  {% if p.diagnostic is defined %}
-  <div class="ai-diagnostic" style="margin-bottom:16px">{{ p.diagnostic }}</div>
-  {% endif %}
-
-  {% if p.titre_optimise is defined %}
-  <div class="field-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Titre optimisé</div>
-  <div style="background:var(--bg-secondary);border-left:3px solid var(--blue);border-radius:0 6px 6px 0;padding:10px 14px;font-size:14px;font-weight:500;color:#e2e8f0;margin-bottom:16px">
-    {{ p.titre_optimise }}
-  </div>
-  {% endif %}
-
-  {% if p.mots_cles_manquants is defined and p.mots_cles_manquants|length > 0 %}
-  <div class="field-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Mots-clés manquants à ajouter</div>
-  <div class="ai-keywords" style="margin-bottom:16px">
-    {% for kw in p.mots_cles_manquants %}
-    <span class="keyword-tag"><i class="fas fa-plus" style="font-size:9px;margin-right:3px"></i>{{ kw }}</span>
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  {% if p.description_optimisee is defined %}
-  <div class="field-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Description optimisée (début)</div>
-  <div style="background:var(--bg-secondary);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-line;margin-bottom:4px">{{ p.description_optimisee }}</div>
-  {% endif %}
-
-  {% if p.requetes_principales is defined and p.requetes_principales|length > 0 %}
-  <div style="margin-top:12px;font-size:12px;color:var(--text-muted)">
-    <i class="fas fa-search"></i>
-    Requêtes ciblées : {{ p.requetes_principales|join(', ') }}
-  </div>
-  {% endif %}
-</div>
-{% endif %}
+    $('#detailTabs').on('click', '.tab-btn', function() {
+        activateTab($(this).data('tab'));
+    });
+});
+</script>
 
 {% endblock %}
 
