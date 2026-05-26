@@ -30,18 +30,36 @@
 {% set opti_count = (seo_report ? 1 : 0) + (title_report ? 1 : 0) + (meta_history|length > 1 ? 1 : 0) %}
 
 <div class="tab-nav" id="detailTabs">
-    <button class="tab-btn active" data-tab="perf">
+    <button class="tab-btn active" data-tab="perf" onclick="switchTab('perf')">
         <i class="fas fa-chart-line"></i> Performance
     </button>
-    <button class="tab-btn" data-tab="ai">
+    <button class="tab-btn" data-tab="ai" onclick="switchTab('ai')">
         <i class="fas fa-robot"></i> Analyses IA
         {% if ai_count > 0 %}<span class="tab-badge">{{ ai_count }}</span>{% endif %}
     </button>
-    <button class="tab-btn" data-tab="opti">
+    <button class="tab-btn" data-tab="opti" onclick="switchTab('opti')">
         <i class="fas fa-magic"></i> Optimisations
         {% if opti_count > 0 %}<span class="tab-badge">{{ opti_count }}</span>{% endif %}
     </button>
 </div>
+
+<script>
+var _activeTab = (function() {
+    try { return localStorage.getItem('yt_tab_{{ video.youtubeId }}') || 'perf'; } catch(e) { return 'perf'; }
+})();
+
+function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-tab') === name);
+    });
+    document.querySelectorAll('.tab-panel').forEach(function(p) {
+        p.style.display = p.id === 'tab-' + name ? 'block' : 'none';
+    });
+    try { localStorage.setItem('yt_tab_{{ video.youtubeId }}', name); } catch(e) {}
+    _activeTab = name;
+}
+switchTab(_activeTab);
+</script>
 
 {# ══════════════════════════════════════════════════════════════════════ #}
 {# Tab 1 — Performance                                                    #}

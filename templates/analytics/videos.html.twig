@@ -263,61 +263,79 @@
 .btn-xs { padding:4px 10px; font-size:11px; }
 </style>
 
+<script>
+(function() {
+    var _selected = [];
+    var VIEW_KEY = 'yt_videos_view';
+
+    function setView(view) {
+        var cards = document.getElementById('viewCards');
+        var table = document.getElementById('viewTable');
+        if (cards) cards.style.display = view === 'cards' ? '' : 'none';
+        if (table) table.style.display = view === 'table' ? '' : 'none';
+        document.querySelectorAll('#viewToggle .view-toggle-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-view') === view);
+        });
+        try { localStorage.setItem(VIEW_KEY, view); } catch(e) {}
+    }
+
+    var _savedView = 'cards';
+    try { _savedView = localStorage.getItem(VIEW_KEY) || 'cards'; } catch(e) {}
+    setView(_savedView);
+
+    document.querySelectorAll('#viewToggle .view-toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { setView(this.getAttribute('data-view')); });
+    });
+
+    function updateCompareUI() {
+        var count = document.getElementById('compareCount');
+        var btn = document.getElementById('compareBtn');
+        if (count) count.textContent = _selected.length;
+        if (btn) btn.disabled = _selected.length < 2;
+        document.querySelectorAll('.video-card').forEach(function(card) {
+            var cb = card.querySelector('.video-compare-cb');
+            if (cb) card.classList.toggle('card-selected', _selected.indexOf(cb.value) !== -1);
+        });
+    }
+
+    function onCbChange(cb) {
+        var id = cb.value;
+        if (cb.checked) {
+            if (_selected.length < 4 && _selected.indexOf(id) === -1) {
+                _selected.push(id);
+                document.querySelectorAll('.video-compare-cb[value="' + id + '"]').forEach(function(c) { c.checked = true; });
+            } else { cb.checked = false; return; }
+        } else {
+            _selected = _selected.filter(function(x) { return x !== id; });
+            document.querySelectorAll('.video-compare-cb[value="' + id + '"]').forEach(function(c) { c.checked = false; });
+        }
+        updateCompareUI();
+    }
+
+    document.querySelectorAll('.video-compare-cb').forEach(function(cb) {
+        cb.addEventListener('change', function() { onCbChange(this); });
+    });
+
+    var checkAll = document.getElementById('checkAll');
+    if (checkAll) {
+        checkAll.addEventListener('change', function() {
+            var checked = this.checked;
+            document.querySelectorAll('.video-compare-cb').forEach(function(cb) {
+                if (cb.checked !== checked) { cb.checked = checked; onCbChange(cb); }
+            });
+        });
+    }
+
+    window.openCompare = function() {
+        if (_selected.length < 2) return;
+        var url = '{{ path('analytics_compare') }}?' + _selected.map(function(id) { return 'ids[]=' + encodeURIComponent(id); }).join('&');
+        window.location.href = url;
+    };
+})();
+</script>
+
 {% endblock %}
 
 {% block javascripts %}
 {{ parent() }}
-<script>
-$(function() {
-    var selected = [];
-    var VIEW_KEY = 'yt_videos_view';
-    var savedView = localStorage.getItem(VIEW_KEY) || 'cards';
-
-    function setView(view) {
-        if (view === 'cards') {
-            $('#viewCards').show(); $('#viewTable').hide();
-        } else {
-            $('#viewCards').hide(); $('#viewTable').show();
-        }
-        $('#viewToggle .view-toggle-btn').removeClass('active');
-        $('#viewToggle .view-toggle-btn[data-view="' + view + '"]').addClass('active');
-        localStorage.setItem(VIEW_KEY, view);
-    }
-
-    setView(savedView);
-
-    $('#viewToggle').on('click', '.view-toggle-btn', function() {
-        setView($(this).data('view'));
-    });
-
-    $('#checkAll').on('change', function() {
-        $('.video-compare-cb').prop('checked', this.checked).trigger('change');
-    });
-
-    $(document).on('change', '.video-compare-cb', function() {
-        var id = $(this).val();
-        if (this.checked) {
-            if (selected.length < 4 && !selected.includes(id)) {
-                selected.push(id);
-                $('.video-compare-cb[value="' + id + '"]').prop('checked', true);
-            } else { this.checked = false; return; }
-        } else {
-            selected = selected.filter(function(x) { return x !== id; });
-            $('.video-compare-cb[value="' + id + '"]').prop('checked', false);
-        }
-        $('#compareCount').text(selected.length);
-        $('#compareBtn').prop('disabled', selected.length < 2);
-        $('.video-card').each(function() {
-            var id = $(this).find('.video-compare-cb').val();
-            $(this).toggleClass('card-selected', selected.includes(id));
-        });
-    });
-
-    window.openCompare = function() {
-        if (selected.length < 2) return;
-        var url = '{{ path('analytics_compare') }}?' + selected.map(function(id) { return 'ids[]=' + encodeURIComponent(id); }).join('&');
-        window.location.href = url;
-    };
-});
-</script>
 {% endblock %}
