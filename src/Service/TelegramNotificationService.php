@@ -74,6 +74,36 @@ class TelegramNotificationService
         $this->sendRaw($user->getTelegramChatId(), implode("\n", $lines));
     }
 
+    public function sendWeeklyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $weekStart, \DateTimeImmutable $weekEnd): void
+    {
+        if (!$user->hasTelegramConfigured() || !$this->botToken()) return;
+
+        $views    = number_format((int) ($stats['views'] ?? 0), 0, ',', "\u{202F}");
+        $watch    = (int) ($stats['watch_time'] ?? 0);
+        $watchFmt = $watch >= 60 ? round($watch / 60, 1) . 'h' : $watch . ' min';
+        $subs     = (int) ($stats['subscribers'] ?? 0);
+
+        $lines = [
+            sprintf('📅 *Bilan semaine — %s au %s*', $this->escape($weekStart->format('d/m')), $this->escape($weekEnd->format('d/m/Y'))),
+            '',
+            sprintf('👁 Vues : *%s*', $this->escape($views)),
+            sprintf('⏱ Watch time : *%s*', $this->escape($watchFmt)),
+            sprintf('👤 Abonnés : *%s%d*', $subs >= 0 ? '\\+' : '', $subs),
+        ];
+
+        if (!empty($topVideos)) {
+            $lines[] = '';
+            $lines[] = '🏆 *Top vidéos de la semaine*';
+            foreach (array_slice($topVideos, 0, 3) as $i => $item) {
+                $title  = mb_strimwidth($item['video']->getTitle(), 0, 40, '…');
+                $vViews = number_format((int)$item['total_views'], 0, ',', "\u{202F}");
+                $lines[] = sprintf('%d\. %s — %s vues', $i + 1, $this->escape($title), $this->escape($vViews));
+            }
+        }
+
+        $this->sendRaw($user->getTelegramChatId(), implode("\n", $lines));
+    }
+
     /** @param AiReport[] $reports */
     public function sendAiRecommendations(User $user, array $reports): void
     {

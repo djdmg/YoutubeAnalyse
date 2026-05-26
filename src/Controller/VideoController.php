@@ -39,7 +39,8 @@ class VideoController extends AbstractController
         $sortBy = $request->query->get('sort', 'views');
         $videos = $this->videoRepo->findForUser($user);
 
-        $listStats = $this->metricRepo->getListStatsForUser($user);
+        $listStats  = $this->metricRepo->getListStatsForUser($user);
+        $sparklines = $this->metricRepo->getSparklineDataForUser($user, 7);
 
         $videosData = [];
         foreach ($videos as $video) {
@@ -49,11 +50,13 @@ class VideoController extends AbstractController
             $prediction= $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
 
             $videosData[] = [
-                'video'      => $video,
-                'stats'      => $stats,
-                'anomaly'    => $anomaly,
-                'sentiment'  => $sentiment,
-                'prediction' => $prediction,
+                'video'        => $video,
+                'stats'        => $stats,
+                'health_score' => self::computeHealthScore($stats),
+                'sparkline'    => $sparklines[$video->getId()] ?? [],
+                'anomaly'      => $anomaly,
+                'sentiment'    => $sentiment,
+                'prediction'   => $prediction,
             ];
         }
 
@@ -61,10 +64,11 @@ class VideoController extends AbstractController
             $sa = $a['stats'];
             $sb = $b['stats'];
             return match($sortBy) {
-                'ctr'        => ($sb['avg_ctr'] ?? 0) <=> ($sa['avg_ctr'] ?? 0),
-                'watch_time' => ($sb['total_watch_time'] ?? 0) <=> ($sa['total_watch_time'] ?? 0),
-                'date'       => ($b['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')) <=> ($a['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')),
-                default      => ($sb['total_views'] ?? 0) <=> ($sa['total_views'] ?? 0),
+                'ctr'          => ($sb['avg_ctr'] ?? 0) <=> ($sa['avg_ctr'] ?? 0),
+                'watch_time'   => ($sb['total_watch_time'] ?? 0) <=> ($sa['total_watch_time'] ?? 0),
+                'date'         => ($b['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')) <=> ($a['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')),
+                'health'       => $b['health_score'] <=> $a['health_score'],
+                default        => ($sb['total_views'] ?? 0) <=> ($sa['total_views'] ?? 0),
             };
         });
 
@@ -72,6 +76,111 @@ class VideoController extends AbstractController
             'videos_data' => $videosData,
             'sort_by'     => $sortBy,
         ]);
+    }
+
+    #[Route('/compare', name: 'analytics_compare')]
+    public function compare(Request $request): Response
+    {
+        /** @var User $user */
+        $user      = $this->getUser();
+        $youtubeIds = array_filter((array) $request->query->all('ids'));
+        $youtubeIds = array_slice($youtubeIds, 0, 4); // max 4 videos
+
+        $videos = [];
+        foreach ($youtubeIds as $ytId) {
+            $v = $this->videoRepo->findByYoutubeId($ytId);
+            if ($v && $v->getUser() === $user) {
+                $videos[] = $v;
+            }
+        }
+
+        $compareData = [];
+        if (!empty($videos)) {
+            $rawData = $this->metricRepo->getCompareDataForVideos($videos, 30);
+            foreach ($videos as $video) {
+                $compareData[] = [
+                    'video'      => $video,
+                    'daily_data' => $rawData[$video->getId()] ?? [],
+                ];
+            }
+        }
+
+        return $this->render('analytics/compare.html.twig', [
+            'compare_data' => $compareData,
+            'all_videos'   => $this->videoRepo->findForUser($user),
+        ]);
+    }
+
+    #[Route('/best-time', name: 'analytics_best_time')]
+    public function bestTime(): Response
+    {
+        /** @var User $user */
+        $user          = $this->getUser();
+        $videos        = $this->videoRepo->findForUser($user);
+        $firstWeek     = $this->metricRepo->getFirstWeekViewsByVideo($user);
+
+        $dowData  = []; // day_of_week (1=Mon…7=Sun) => [views]
+        $hourData = []; // hour_bucket (0-7, 3h slots) => [views]
+
+        foreach ($videos as $video) {
+            $pub     = $video->getPublishedAt();
+            $videoId = $video->getId();
+            if (!$pub || !isset($firstWeek[$videoId])) continue;
+
+            $views      = $firstWeek[$videoId];
+            $dow        = (int) $pub->format('N'); // 1=Mon … 7=Sun
+            $hourBucket = intdiv((int) $pub->format('G'), 3); // 0-7
+
+            $dowData[$dow][]        = $views;
+            $hourData[$hourBucket][] = $views;
+        }
+
+        $dowStats = [];
+        foreach ($dowData as $dow => $viewsList) {
+            $dowStats[$dow] = [
+                'avg'   => (int) round(array_sum($viewsList) / count($viewsList)),
+                'count' => count($viewsList),
+            ];
+        }
+
+        $hourStats = [];
+        foreach ($hourData as $bucket => $viewsList) {
+            $hourStats[$bucket] = [
+                'avg'   => (int) round(array_sum($viewsList) / count($viewsList)),
+                'count' => count($viewsList),
+            ];
+        }
+
+        $maxDowAvg  = $dowStats  ? max(array_column($dowStats,  'avg')) : 1;
+        $maxHourAvg = $hourStats ? max(array_column($hourStats, 'avg')) : 1;
+
+        return $this->render('analytics/best_time.html.twig', [
+            'dow_stats'    => $dowStats,
+            'hour_stats'   => $hourStats,
+            'max_dow_avg'  => $maxDowAvg,
+            'max_hour_avg' => $maxHourAvg,
+            'total_videos' => count($videos),
+            'analyzed'     => count($firstWeek),
+        ]);
+    }
+
+    private static function computeHealthScore(array $stats): int
+    {
+        $ctr      = (float) ($stats['avg_ctr'] ?? 0);
+        $views    = (int)   ($stats['total_views'] ?? 0);
+        $watchMin = (int)   ($stats['total_watch_time'] ?? 0);
+
+        // CTR: 0-40 pts (5% CTR = max)
+        $ctrPts = min(40.0, $ctr / 5.0 * 40.0);
+
+        // Watch quality: avg minutes per view vs 5 min target, 0-30 pts
+        $avgMinPerView = $views > 0 ? $watchMin / $views : 0.0;
+        $watchPts = min(30.0, $avgMinPerView / 5.0 * 30.0);
+
+        // Scale: logarithmic 0-30 pts (50 000 views = max)
+        $scalePts = $views > 0 ? min(30.0, log10(max(1, $views)) / log10(50000) * 30.0) : 0.0;
+
+        return (int) round($ctrPts + $watchPts + $scalePts);
     }
 
     #[Route('/videos/{youtubeId}', name: 'analytics_video_detail')]

@@ -23,6 +23,7 @@ Encore
     .addEntry('app', './assets/app.js')
     .addEntry('dashboard', './assets/dashboard.js')
     .addEntry('video_detail', './assets/video_detail.js')
+    .addEntry('compare', './assets/compare.js')
 
     // When enabled, Webpack "splits" your files into smaller pieces for greater optimization.
     .splitEntryChunks()

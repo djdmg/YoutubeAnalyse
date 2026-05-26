@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0f172a !important; color:#e2e8f0; margin:0; padding:0; }
+  .container { max-width:600px; margin:0 auto; padding:20px; }
+  .header { background:#1e293b; border-radius:12px; padding:24px; margin-bottom:20px; border-left:4px solid #a855f7; }
+  .header h1 { margin:0 0 4px; font-size:1.2rem; color:#fff; }
+  .header p  { margin:0; color:#94a3b8; font-size:0.85rem; }
+  .kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  .kpi { background:#1e293b; border-radius:10px; padding:16px 20px; }
+  .kpi-value { font-size:1.8rem; font-weight:700; color:#a855f7; line-height:1; margin-bottom:4px; }
+  .kpi-value.blue { color:#3b82f6; }
+  .kpi-value.green { color:#22c55e; }
+  .kpi-value.zero { color:#475569; }
+  .kpi-label { font-size:0.75rem; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+  .section { background:#1e293b; border-radius:10px; padding:16px 20px; margin-bottom:12px; }
+  .section-title { font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
+  .video-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #0f172a; }
+  .video-row:last-child { border-bottom:none; }
+  .video-thumb { width:64px; height:36px; border-radius:4px; object-fit:cover; background:#0f172a; flex-shrink:0; }
+  .video-info { flex:1; min-width:0; }
+  .video-title { font-size:0.83rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .video-views { font-size:0.78rem; color:#a855f7; font-weight:600; margin-top:2px; }
+  .video-rank { font-size:0.8rem; font-weight:700; color:#475569; width:20px; flex-shrink:0; text-align:center; }
+  .medal-1 { color:#f59e0b; }
+  .medal-2 { color:#94a3b8; }
+  .medal-3 { color:#b45309; }
+  .footer { text-align:center; color:#475569; font-size:0.75rem; margin-top:20px; padding-top:16px; border-top:1px solid #1e293b; }
+</style>
+</head>
+<body bgcolor="#0f172a" style="background:#0f172a !important;margin:0;padding:0;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0f172a" style="background:#0f172a;">
+<tr><td align="center" bgcolor="#0f172a" style="background:#0f172a;">
+<div class="container">
+
+  <div class="header">
+    <h1>📅 Bilan de la semaine</h1>
+    <p>{{ week_start|date('d/m/Y') }} → {{ week_end|date('d/m/Y') }} · {{ user.displayName }}</p>
+  </div>
+
+  {% set views = stats.views|default(0)|number_format(0, ',', ' ') %}
+  {% set watch = stats.watch_time|default(0) %}
+  {% set subs  = stats.subscribers|default(0) %}
+  {% set ctr   = stats.avg_ctr|default(null) %}
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-value blue {{ stats.views|default(0) == 0 ? 'zero' : '' }}">{{ views }}</div>
+      <div class="kpi-label">Vues totales</div>
+    </div>
+    <div class="kpi">
+      {% if watch >= 60 %}
+        <div class="kpi-value green">{{ (watch / 60)|round(1) }}h</div>
+      {% else %}
+        <div class="kpi-value green {{ watch == 0 ? 'zero' : '' }}">{{ watch }} min</div>
+      {% endif %}
+      <div class="kpi-label">Temps de visionnage</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-value {{ subs == 0 ? 'zero' : '' }}">{{ subs >= 0 ? '+' : '' }}{{ subs }}</div>
+      <div class="kpi-label">Abonnés gagnés</div>
+    </div>
+    <div class="kpi">
+      {% if ctr is not null %}
+        <div class="kpi-value blue">{{ ctr|round(1) }}%</div>
+      {% else %}
+        <div class="kpi-value zero">—</div>
+      {% endif %}
+      <div class="kpi-label">CTR moyen</div>
+    </div>
+  </div>
+
+  {% if top_videos|length > 0 %}
+  <div class="section">
+    <div class="section-title">🏆 Top vidéos de la semaine</div>
+    {% for item in top_videos %}
+      {% set v = item.video %}
+      <div class="video-row">
+        <div class="video-rank {% if loop.index == 1 %}medal-1{% elseif loop.index == 2 %}medal-2{% elseif loop.index == 3 %}medal-3{% endif %}">
+          {{ loop.index == 1 ? '🥇' : (loop.index == 2 ? '🥈' : (loop.index == 3 ? '🥉' : loop.index)) }}
+        </div>
+        {% if v.thumbnailUrl %}
+          <img class="video-thumb" src="{{ v.thumbnailUrl }}" alt="">
+        {% else %}
+          <div class="video-thumb"></div>
+        {% endif %}
+        <div class="video-info">
+          <div class="video-title">{{ v.title|length > 55 ? v.title|slice(0,55) ~ '…' : v.title }}</div>
+          <div class="video-views">{{ item.total_views|number_format(0, ',', ' ') }} vues cette semaine</div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="footer">YouTube Analyse · Bilan auto · {{ week_end|date('Y') }}</div>
+</div>
+</td></tr>
+</table>
+</body>
+</html>
