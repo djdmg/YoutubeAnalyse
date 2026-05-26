@@ -16,8 +16,8 @@
         <a href="{{ path('analytics_best_time') }}" class="btn btn-outline btn-sm">
             <i class="fas fa-clock"></i> Meilleur moment
         </a>
-        <button id="compareBtn" class="btn btn-outline btn-sm" style="display:none" onclick="openCompare()">
-            <i class="fas fa-exchange-alt"></i> Comparer (<span id="compareCount">0</span>)
+        <button id="compareBtn" class="btn btn-outline btn-sm" disabled title="Coche 2 à 4 vidéos pour les comparer" onclick="openCompare()">
+            <i class="fas fa-exchange-alt"></i> Comparer <span id="compareCount" style="background:rgba(59,130,246,.2);color:var(--blue);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;margin-left:2px">0</span>
         </button>
     </div>
 </div>
@@ -52,7 +52,10 @@
         {% set prediction = item.prediction %}
         {% set scoreColor = score >= 70 ? 'var(--green)' : (score >= 40 ? 'var(--yellow)' : '#ef4444') %}
         <div class="video-card {{ anomaly ? 'card-anomaly' : '' }}">
-            <input type="checkbox" class="video-compare-cb" value="{{ video.youtubeId }}" title="Comparer">
+            <label class="video-card-select-label" title="Sélectionner pour comparer">
+            <input type="checkbox" class="video-compare-cb" value="{{ video.youtubeId }}">
+            <span class="video-card-select-icon"><i class="fas fa-check"></i></span>
+        </label>
             <div class="video-card-health">
                 <div class="health-ring" title="Score : {{ score }}/100" style="--score:{{ score }};--color:{{ scoreColor }}">
                     <svg width="32" height="32" viewBox="0 0 36 36">
@@ -300,7 +303,12 @@ $(function() {
             $('.video-compare-cb[value="' + id + '"]').prop('checked', false);
         }
         $('#compareCount').text(selected.length);
-        $('#compareBtn').toggle(selected.length >= 2);
+        $('#compareBtn').prop('disabled', selected.length < 2);
+        // sync card visual state
+        $('.video-card').each(function() {
+            var id = $(this).find('.video-compare-cb').val();
+            $(this).toggleClass('card-selected', selected.includes(id));
+        });
     });
 
     window.openCompare = function() {
