@@ -263,6 +263,10 @@
 .btn-xs { padding:4px 10px; font-size:11px; }
 </style>
 
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
 <script>
 $(function() {
     var selected = [];
@@ -295,7 +299,6 @@ $(function() {
         if (this.checked) {
             if (selected.length < 4 && !selected.includes(id)) {
                 selected.push(id);
-                // check the sibling checkbox in the other view
                 $('.video-compare-cb[value="' + id + '"]').prop('checked', true);
             } else { this.checked = false; return; }
         } else {
@@ -304,7 +307,6 @@ $(function() {
         }
         $('#compareCount').text(selected.length);
         $('#compareBtn').prop('disabled', selected.length < 2);
-        // sync card visual state
         $('.video-card').each(function() {
             var id = $(this).find('.video-compare-cb').val();
             $(this).toggleClass('card-selected', selected.includes(id));
