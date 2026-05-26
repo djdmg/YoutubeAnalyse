@@ -11,6 +11,8 @@ use App\Repository\VideoStatsRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Google\Service\YouTube;
 use Google\Service\YouTubeAnalytics;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class YouTubeDataService
 {
@@ -20,6 +22,7 @@ class YouTubeDataService
         private readonly ChannelStatsRepository $channelStatsRepo,
         private readonly VideoStatsRepository $videoStatsRepo,
         private readonly GoogleTokenRepository $tokenRepo,
+        private readonly CacheInterface $cache,
     ) {}
 
     public function syncAll(User $user): array
@@ -40,6 +43,9 @@ class YouTubeDataService
 
         $channelStats = $this->syncChannelStats($youtube, $analytics, $channelId, $user, $syncTime);
         $videoCount   = $this->syncVideoStats($youtube, $analytics, $channelId, $user, $syncTime);
+
+        // Invalidate dashboard chart cache so next load fetches fresh data
+        $this->cache->delete('yt_daily_analytics_' . $user->getId() . '_30');
 
         return [
             'channel'       => $channelStats->getChannelTitle(),
@@ -200,41 +206,46 @@ class YouTubeDataService
 
     public function getDailyAnalytics(User $user, int $days = 30): array
     {
-        $client = $this->authService->getAuthenticatedClientForUser($user);
-        if (!$client) return [];
+        $cacheKey = 'yt_daily_analytics_' . $user->getId() . '_' . $days;
+        return $this->cache->get($cacheKey, function (ItemInterface $item) use ($user, $days) {
+            $item->expiresAfter(21600); // 6h — YouTube Analytics data lags 1-2 days anyway
 
-        $token     = $this->tokenRepo->findForUser($user);
-        $analytics = new YouTubeAnalytics($client);
-        $today     = (new \DateTimeImmutable())->format('Y-m-d');
-        $from      = (new \DateTimeImmutable("-{$days} days"))->format('Y-m-d');
+            $client = $this->authService->getAuthenticatedClientForUser($user);
+            if (!$client) return [];
 
-        foreach ([
-            'views,estimatedMinutesWatched,subscribersGained',
-            'views,estimatedMinutesWatched',
-        ] as $metrics) {
-            try {
-                $response = $analytics->reports->query([
-                    'ids'        => "channel=={$token->getChannelId()}",
-                    'startDate'  => $from,
-                    'endDate'    => $today,
-                    'metrics'    => $metrics,
-                    'dimensions' => 'day',
-                    'sort'       => 'day',
-                ]);
-                $rows = $response->getRows() ?? [];
-                if (!empty($rows)) {
-                    $hasSubscribers = str_contains($metrics, 'subscribersGained');
-                    return array_map(fn($row) => [
-                        $row[0],                              // day
-                        (int) ($row[1] ?? 0),                 // views
-                        (int) ($row[2] ?? 0),                 // watchTime
-                        $hasSubscribers ? (int)($row[3] ?? 0) : 0, // subscribers
-                    ], $rows);
+            $token     = $this->tokenRepo->findForUser($user);
+            $analytics = new YouTubeAnalytics($client);
+            $today     = (new \DateTimeImmutable())->format('Y-m-d');
+            $from      = (new \DateTimeImmutable("-{$days} days"))->format('Y-m-d');
+
+            foreach ([
+                'views,estimatedMinutesWatched,subscribersGained',
+                'views,estimatedMinutesWatched',
+            ] as $metrics) {
+                try {
+                    $response = $analytics->reports->query([
+                        'ids'        => "channel=={$token->getChannelId()}",
+                        'startDate'  => $from,
+                        'endDate'    => $today,
+                        'metrics'    => $metrics,
+                        'dimensions' => 'day',
+                        'sort'       => 'day',
+                    ]);
+                    $rows = $response->getRows() ?? [];
+                    if (!empty($rows)) {
+                        $hasSubscribers = str_contains($metrics, 'subscribersGained');
+                        return array_map(fn($row) => [
+                            $row[0],
+                            (int) ($row[1] ?? 0),
+                            (int) ($row[2] ?? 0),
+                            $hasSubscribers ? (int)($row[3] ?? 0) : 0,
+                        ], $rows);
+                    }
+                } catch (\Exception $e) {
+                    error_log('[YouTubeAnalytics] metrics="'.$metrics.'" error: '.$e->getMessage());
                 }
-            } catch (\Exception $e) {
-                error_log('[YouTubeAnalytics] metrics="'.$metrics.'" error: '.$e->getMessage());
             }
-        }
-        return [];
+            return [];
+        });
     }
 }

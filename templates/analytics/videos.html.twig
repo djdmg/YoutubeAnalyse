@@ -9,6 +9,12 @@
         <span class="last-sync">{{ videos_data|length }} vidéo(s)</span>
     </div>
     <div class="header-actions">
+        <a href="{{ path('analytics_best_time') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-clock"></i> Meilleur moment
+        </a>
+        <button id="compareBtn" class="btn btn-outline btn-sm" style="display:none" onclick="openCompare()">
+            <i class="fas fa-exchange-alt"></i> Comparer (<span id="compareCount">0</span>)
+        </button>
         <a href="{{ path('videos') }}" class="btn btn-outline btn-sm">
             <i class="fas fa-list"></i> Vue classique
         </a>
@@ -21,6 +27,7 @@
         <a href="?sort=views" class="sort-btn {{ sort_by == 'views' ? 'active' : '' }}"><i class="fas fa-eye"></i> Vues</a>
         <a href="?sort=ctr" class="sort-btn {{ sort_by == 'ctr' ? 'active' : '' }}"><i class="fas fa-percentage"></i> CTR</a>
         <a href="?sort=watch_time" class="sort-btn {{ sort_by == 'watch_time' ? 'active' : '' }}"><i class="fas fa-clock"></i> Watch Time</a>
+        <a href="?sort=health" class="sort-btn {{ sort_by == 'health' ? 'active' : '' }}"><i class="fas fa-heartbeat"></i> Score</a>
         <a href="?sort=date" class="sort-btn {{ sort_by == 'date' ? 'active' : '' }}"><i class="fas fa-calendar"></i> Date</a>
     </div>
 
@@ -35,14 +42,17 @@
         <table class="videos-table">
             <thead>
                 <tr>
+                    <th style="width:32px"><input type="checkbox" id="checkAll" title="Tout sélectionner"></th>
                     <th>#</th>
                     <th>Vidéo</th>
+                    <th><i class="fas fa-heartbeat"></i> Score</th>
+                    <th><i class="fas fa-chart-area"></i> 7j</th>
                     <th><i class="fas fa-eye"></i> Vues</th>
                     <th><i class="fas fa-percentage"></i> CTR</th>
                     <th><i class="fas fa-clock"></i> Watch Time</th>
                     <th><i class="fas fa-comment"></i> Sentiment</th>
                     <th><i class="fas fa-exclamation-triangle"></i> Anomalie</th>
-                    <th><i class="fas fa-chart-line"></i> Projection J+30</th>
+                    <th><i class="fas fa-chart-line"></i> Proj. J+30</th>
                     <th><i class="fas fa-calendar"></i> Publication</th>
                     <th></th>
                 </tr>
@@ -51,10 +61,13 @@
                 {% for item in videos_data %}
                 {% set video = item.video %}
                 {% set stats = item.stats %}
+                {% set score = item.health_score %}
+                {% set sparkline = item.sparkline %}
                 {% set anomaly = item.anomaly %}
                 {% set sentiment = item.sentiment %}
                 {% set prediction = item.prediction %}
                 <tr class="{{ anomaly ? 'row-anomaly' : '' }}">
+                    <td><input type="checkbox" class="video-compare-cb" value="{{ video.youtubeId }}"></td>
                     <td class="rank">{{ loop.index }}</td>
                     <td class="video-cell">
                         <div class="video-cell-inner">
@@ -71,6 +84,32 @@
                             </div>
                         </div>
                     </td>
+                    <td>
+                        {% set scoreColor = score >= 70 ? 'var(--green)' : (score >= 40 ? 'var(--yellow)' : '#ef4444') %}
+                        <div class="health-ring" title="Score de santé : {{ score }}/100" style="--score:{{ score }};--color:{{ scoreColor }}">
+                            <svg width="36" height="36" viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
+                                <circle cx="18" cy="18" r="15" fill="none" stroke="{{ scoreColor }}" stroke-width="3"
+                                    stroke-dasharray="{{ (score / 100 * 94.25)|round(1) }} 94.25"
+                                    stroke-linecap="round"
+                                    transform="rotate(-90 18 18)"/>
+                            </svg>
+                            <span class="health-ring-label" style="color:{{ scoreColor }}">{{ score }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        {% if sparkline|length > 0 %}
+                        {% set maxVal = sparkline|max %}
+                        <svg width="56" height="22" viewBox="0 0 56 22" class="sparkline-svg">
+                            {% if maxVal > 0 %}
+                            <polyline
+                                points="{% for i, v in sparkline %}{{ (i / (sparkline|length - 1) * 52 + 2)|round(1) }},{{ (20 - (v / maxVal * 18))|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"
+                                fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="{{ (52 + 2)|round(1) }}" cy="{{ (20 - (sparkline|last / maxVal * 18))|round(1) }}" r="2" fill="var(--blue)"/>
+                            {% endif %}
+                        </svg>
+                        {% else %}<span class="na">—</span>{% endif %}
+                    </td>
                     <td class="num">{{ stats.total_views > 0 ? stats.total_views|number_format(0, ',', ' ') : '—' }}</td>
                     <td class="num">
                         {% if stats.avg_ctr is not null %}
@@ -86,10 +125,10 @@
                     </td>
                     <td class="num">
                         {% if sentiment and sentiment.payload %}
-                            {% set score = sentiment.payload.score_sentiment ?? 0 %}
+                            {% set score_s = sentiment.payload.score_sentiment ?? 0 %}
                             {% set sentimentGlobal = sentiment.payload.sentiment_global ?? 'neutre' %}
                             <span class="badge {{ sentimentGlobal == 'positif' ? 'badge-green' : (sentimentGlobal == 'négatif' ? 'badge-red' : 'badge-yellow') }}" title="{{ sentimentGlobal }}">
-                                {{ sentimentGlobal == 'positif' ? '😊' : (sentimentGlobal == 'négatif' ? '😞' : '😐') }} {{ (score * 100)|round }}%
+                                {{ sentimentGlobal == 'positif' ? '😊' : (sentimentGlobal == 'négatif' ? '😞' : '😐') }} {{ (score_s * 100)|round }}%
                             </span>
                         {% else %}<span class="na">—</span>{% endif %}
                     </td>
@@ -123,4 +162,39 @@
     </div>
     {% endif %}
 </div>
+
+<style>
+.health-ring { position:relative; display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; }
+.health-ring-label { position:absolute; font-size:9px; font-weight:700; line-height:1; }
+.sparkline-svg { display:block; }
+.btn-xs { padding:4px 10px; font-size:11px; }
+</style>
+
+<script>
+$(function() {
+    var selected = [];
+
+    $('#checkAll').on('change', function() {
+        $('.video-compare-cb').prop('checked', this.checked).trigger('change');
+    });
+
+    $(document).on('change', '.video-compare-cb', function() {
+        var id = $(this).val();
+        if (this.checked) {
+            if (selected.length < 4 && !selected.includes(id)) selected.push(id);
+            else { this.checked = false; return; }
+        } else {
+            selected = selected.filter(function(x) { return x !== id; });
+        }
+        $('#compareCount').text(selected.length);
+        $('#compareBtn').toggle(selected.length >= 2);
+    });
+
+    window.openCompare = function() {
+        if (selected.length < 2) return;
+        var url = '{{ path('analytics_compare') }}?' + selected.map(function(id) { return 'ids[]=' + encodeURIComponent(id); }).join('&');
+        window.location.href = url;
+    };
+});
+</script>
 {% endblock %}
