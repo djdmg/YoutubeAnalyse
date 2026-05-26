@@ -9,15 +9,16 @@
         <span class="last-sync">{{ videos_data|length }} vidéo(s)</span>
     </div>
     <div class="header-actions">
+        <div class="view-toggle" id="viewToggle">
+            <button class="view-toggle-btn active" data-view="cards" title="Vue cartes"><i class="fas fa-th-large"></i></button>
+            <button class="view-toggle-btn" data-view="table" title="Vue tableau"><i class="fas fa-list"></i></button>
+        </div>
         <a href="{{ path('analytics_best_time') }}" class="btn btn-outline btn-sm">
             <i class="fas fa-clock"></i> Meilleur moment
         </a>
         <button id="compareBtn" class="btn btn-outline btn-sm" style="display:none" onclick="openCompare()">
             <i class="fas fa-exchange-alt"></i> Comparer (<span id="compareCount">0</span>)
         </button>
-        <a href="{{ path('videos') }}" class="btn btn-outline btn-sm">
-            <i class="fas fa-list"></i> Vue classique
-        </a>
     </div>
 </div>
 
@@ -38,7 +39,97 @@
         <p>Lance <strong>app:youtube:sync</strong> pour synchroniser tes vidéos.</p>
     </div>
     {% else %}
-    <div class="videos-table-wrapper">
+
+    {# ── Card grid view ──────────────────────────────────────────────────── #}
+    <div id="viewCards" class="video-cards-grid">
+        {% for item in videos_data %}
+        {% set video = item.video %}
+        {% set stats = item.stats %}
+        {% set score = item.health_score %}
+        {% set sparkline = item.sparkline %}
+        {% set anomaly = item.anomaly %}
+        {% set sentiment = item.sentiment %}
+        {% set prediction = item.prediction %}
+        {% set scoreColor = score >= 70 ? 'var(--green)' : (score >= 40 ? 'var(--yellow)' : '#ef4444') %}
+        <div class="video-card {{ anomaly ? 'card-anomaly' : '' }}">
+            <input type="checkbox" class="video-compare-cb" value="{{ video.youtubeId }}" title="Comparer">
+            <div class="video-card-health">
+                <div class="health-ring" title="Score : {{ score }}/100" style="--score:{{ score }};--color:{{ scoreColor }}">
+                    <svg width="32" height="32" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3"/>
+                        <circle cx="18" cy="18" r="15" fill="none" stroke="{{ scoreColor }}" stroke-width="3"
+                            stroke-dasharray="{{ (score / 100 * 94.25)|round(1) }} 94.25"
+                            stroke-linecap="round" transform="rotate(-90 18 18)"/>
+                    </svg>
+                    <span class="health-ring-label" style="color:{{ scoreColor }};font-size:8px">{{ score }}</span>
+                </div>
+            </div>
+            {% if video.thumbnailUrl %}
+            <img src="{{ video.thumbnailUrl }}" alt="{{ video.title }}" class="video-card-thumb" loading="lazy">
+            {% else %}
+            <div class="video-card-thumb-placeholder"><i class="fas fa-video fa-2x"></i></div>
+            {% endif %}
+            <div class="video-card-body">
+                <div class="video-card-title">{{ video.title }}</div>
+                <div class="video-card-meta">
+                    {% if video.publishedAt %}<span><i class="fas fa-calendar"></i> {{ video.publishedAt|date('d/m/Y') }}</span>{% endif %}
+                    {% if video.durationSeconds %}<span><i class="fas fa-clock"></i> {{ (video.durationSeconds // 60) }}m</span>{% endif %}
+                </div>
+                <div class="video-card-stats">
+                    <div class="video-card-stat"><i class="fas fa-eye" style="color:var(--blue)"></i> <strong>{{ stats.total_views > 0 ? stats.total_views|number_format(0, ',', ' ') : '—' }}</strong></div>
+                    <div class="video-card-stat">
+                        <i class="fas fa-percentage" style="color:var(--yellow)"></i>
+                        {% if stats.avg_ctr is not null %}<strong>{{ stats.avg_ctr|number_format(1) }}%</strong>{% else %}—{% endif %}
+                    </div>
+                    <div class="video-card-stat"><i class="fas fa-clock" style="color:var(--orange)"></i>
+                        {% if stats.total_watch_time > 0 %}<strong>{{ (stats.total_watch_time / 60)|number_format(1) }}h</strong>{% else %}—{% endif %}
+                    </div>
+                    <div class="video-card-stat" style="align-items:center">
+                        {% if sparkline|length > 0 %}
+                        {% set maxVal = sparkline|max %}
+                        <svg width="50" height="18" viewBox="0 0 50 18">
+                            {% if maxVal > 0 %}
+                            <polyline
+                                points="{% for i, v in sparkline %}{{ (i / (sparkline|length - 1) * 46 + 2)|round(1) }},{{ (16 - (v / maxVal * 14))|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"
+                                fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            {% endif %}
+                        </svg>
+                        {% else %}—{% endif %}
+                    </div>
+                </div>
+                <div class="video-card-badges">
+                    {% if anomaly and anomaly.payload %}
+                    <span class="badge {{ anomaly.payload.type == 'surperformance' ? 'badge-green' : 'badge-red' }}">
+                        <i class="fas fa-{{ anomaly.payload.type == 'surperformance' ? 'arrow-up' : 'arrow-down' }}"></i>
+                        {{ anomaly.payload.type == 'surperformance' ? 'Surperf.' : 'Sous-perf.' }}
+                    </span>
+                    {% endif %}
+                    {% if sentiment and sentiment.payload %}
+                    {% set sentimentGlobal = sentiment.payload.sentiment_global ?? 'neutre' %}
+                    <span class="badge {{ sentimentGlobal == 'positif' ? 'badge-green' : (sentimentGlobal == 'négatif' ? 'badge-red' : 'badge-yellow') }}">
+                        {{ sentimentGlobal == 'positif' ? '😊' : (sentimentGlobal == 'négatif' ? '😞' : '😐') }}
+                    </span>
+                    {% endif %}
+                    {% if prediction and prediction.payload %}
+                    <span class="badge badge-blue" title="Proj. J+30">~{{ prediction.payload.vues_estimees_j30|number_format(0, ',', ' ') }} vues</span>
+                    {% endif %}
+                    {% if stats.avg_ctr is not null %}
+                    <span class="badge {{ stats.avg_ctr >= 4 ? 'badge-green' : (stats.avg_ctr >= 2 ? 'badge-yellow' : 'badge-red') }}">CTR {{ stats.avg_ctr|number_format(1) }}%</span>
+                    {% endif %}
+                </div>
+                <div class="video-card-footer">
+                    <span style="font-size:11px;color:var(--text-muted)">#{{ loop.index }}</span>
+                    <a href="{{ path('analytics_video_detail', {youtubeId: video.youtubeId}) }}" class="btn btn-outline btn-xs">
+                        <i class="fas fa-chart-line"></i> Détail
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# ── Table view (secondary) ──────────────────────────────────────────── #}
+    <div id="viewTable" class="videos-table-wrapper" style="display:none">
         <table class="videos-table">
             <thead>
                 <tr>
@@ -86,13 +177,12 @@
                     </td>
                     <td>
                         {% set scoreColor = score >= 70 ? 'var(--green)' : (score >= 40 ? 'var(--yellow)' : '#ef4444') %}
-                        <div class="health-ring" title="Score de santé : {{ score }}/100" style="--score:{{ score }};--color:{{ scoreColor }}">
+                        <div class="health-ring" title="Score de santé : {{ score }}/100">
                             <svg width="36" height="36" viewBox="0 0 36 36">
                                 <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
                                 <circle cx="18" cy="18" r="15" fill="none" stroke="{{ scoreColor }}" stroke-width="3"
                                     stroke-dasharray="{{ (score / 100 * 94.25)|round(1) }} 94.25"
-                                    stroke-linecap="round"
-                                    transform="rotate(-90 18 18)"/>
+                                    stroke-linecap="round" transform="rotate(-90 18 18)"/>
                             </svg>
                             <span class="health-ring-label" style="color:{{ scoreColor }}">{{ score }}</span>
                         </div>
@@ -173,6 +263,25 @@
 <script>
 $(function() {
     var selected = [];
+    var VIEW_KEY = 'yt_videos_view';
+    var savedView = localStorage.getItem(VIEW_KEY) || 'cards';
+
+    function setView(view) {
+        if (view === 'cards') {
+            $('#viewCards').show(); $('#viewTable').hide();
+        } else {
+            $('#viewCards').hide(); $('#viewTable').show();
+        }
+        $('#viewToggle .view-toggle-btn').removeClass('active');
+        $('#viewToggle .view-toggle-btn[data-view="' + view + '"]').addClass('active');
+        localStorage.setItem(VIEW_KEY, view);
+    }
+
+    setView(savedView);
+
+    $('#viewToggle').on('click', '.view-toggle-btn', function() {
+        setView($(this).data('view'));
+    });
 
     $('#checkAll').on('change', function() {
         $('.video-compare-cb').prop('checked', this.checked).trigger('change');
@@ -181,10 +290,14 @@ $(function() {
     $(document).on('change', '.video-compare-cb', function() {
         var id = $(this).val();
         if (this.checked) {
-            if (selected.length < 4 && !selected.includes(id)) selected.push(id);
-            else { this.checked = false; return; }
+            if (selected.length < 4 && !selected.includes(id)) {
+                selected.push(id);
+                // check the sibling checkbox in the other view
+                $('.video-compare-cb[value="' + id + '"]').prop('checked', true);
+            } else { this.checked = false; return; }
         } else {
             selected = selected.filter(function(x) { return x !== id; });
+            $('.video-compare-cb[value="' + id + '"]').prop('checked', false);
         }
         $('#compareCount').text(selected.length);
         $('#compareBtn').toggle(selected.length >= 2);
