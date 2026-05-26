@@ -32,15 +32,9 @@ class WeeklyReportCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $io->title('Bilan hebdomadaire YouTube');
 
-        // Last Monday 00:00 → last Sunday 23:59
+        // Derive both bounds from the same anchor to avoid inversion (Tue–Sun: 'last monday' > 'last sunday')
         $weekEnd   = new \DateTimeImmutable('last sunday 23:59:59');
-        $weekStart = new \DateTimeImmutable('last monday 00:00:00');
-
-        // If today is Monday, "last monday" resolves to today — go back 7 days
-        if ($weekStart->format('Y-m-d') === (new \DateTimeImmutable())->format('Y-m-d')) {
-            $weekStart = $weekStart->modify('-7 days');
-            $weekEnd   = $weekEnd->modify('-7 days');
-        }
+        $weekStart = $weekEnd->modify('-6 days')->setTime(0, 0, 0);
 
         $io->text(sprintf('Période : %s → %s', $weekStart->format('d/m/Y'), $weekEnd->format('d/m/Y')));
 

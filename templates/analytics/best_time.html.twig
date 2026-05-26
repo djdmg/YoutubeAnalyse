@@ -6,7 +6,7 @@
 <div class="dashboard-header">
     <div>
         <h1><i class="fas fa-clock"></i> Meilleur moment de publication</h1>
-        <span class="last-sync">Analyse sur {{ analyzed }} vidéo(s) · premières 48h</span>
+        <span class="last-sync">Analyse sur {{ analyzed }} vidéo(s) · 7 premiers jours</span>
     </div>
     <div class="header-actions">
         <a href="{{ path('analytics_videos') }}" class="btn btn-outline btn-sm">
@@ -75,7 +75,7 @@
 {# Day of week chart #}
 <div class="section-card">
     <div class="section-header">
-        <h3><i class="fas fa-calendar-week"></i> Vues premières 48h par jour de publication</h3>
+        <h3><i class="fas fa-calendar-week"></i> Vues 7 premiers jours par jour de publication</h3>
         <span style="font-size:12px;color:var(--text-muted)">Moyenne par vidéo publiée ce jour-là</span>
     </div>
     <div class="best-time-grid">
@@ -104,7 +104,7 @@
 {% if hour_stats|length > 0 %}
 <div class="section-card">
     <div class="section-header">
-        <h3><i class="fas fa-sun"></i> Vues premières 48h par créneau horaire</h3>
+        <h3><i class="fas fa-sun"></i> Vues 7 premiers jours par créneau horaire</h3>
         <span style="font-size:12px;color:var(--text-muted)">Heure locale de publication</span>
     </div>
     <div class="best-time-grid" style="grid-template-columns:repeat(8,1fr)">
