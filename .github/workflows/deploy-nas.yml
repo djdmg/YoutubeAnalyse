@@ -74,7 +74,7 @@ jobs:
             php84 bin/console doctrine:migrations:migrate --no-interaction --env=prod
 
             echo "→ Cache..."
-            php84 bin/console cache:clear --env=prod
+            rm -rf var/cache/prod
             php84 bin/console cache:warmup --env=prod
 
             echo "→ Build des assets Webpack (npm)..."
