@@ -1029,6 +1029,13 @@ html, body {
 .video-card:hover { border-color: rgba(99,102,241,.4); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
 .video-card.card-anomaly { border-left: 3px solid #ef4444; }
 .video-card-cb { position: absolute; top: 8px; left: 8px; z-index: 2; width: 18px; height: 18px; accent-color: var(--blue); cursor: pointer; }
+.video-card-select-label { position: absolute; top: 8px; left: 8px; z-index: 2; cursor: pointer; }
+.video-card-select-label input { display: none; }
+.video-card-select-icon { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; background: rgba(0,0,0,.55); border: 2px solid rgba(255,255,255,.3); color: transparent; font-size: 11px; transition: var(--transition); }
+.video-card-select-label:hover .video-card-select-icon { border-color: var(--blue); color: rgba(255,255,255,.5); }
+.video-card-select-label input:checked ~ .video-card-select-icon { background: var(--blue); border-color: var(--blue); color: #fff; }
+.video-card.card-selected { border-color: rgba(59,130,246,.6); box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+button:disabled { opacity: .45; cursor: not-allowed; }
 .video-card-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: var(--bg-secondary); }
 .video-card-thumb-placeholder { width: 100%; aspect-ratio: 16/9; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
 .video-card-body { padding: 12px; }
