@@ -89,7 +89,7 @@
                     </div>
                     <div class="video-card-stat" style="align-items:center">
                         {% if sparkline|length > 0 %}
-                        {% set maxVal = sparkline|max %}
+                        {% set maxVal = max(sparkline) %}
                         <svg width="50" height="18" viewBox="0 0 50 18">
                             {% if maxVal > 0 %}
                             <polyline
@@ -192,7 +192,7 @@
                     </td>
                     <td>
                         {% if sparkline|length > 0 %}
-                        {% set maxVal = sparkline|max %}
+                        {% set maxVal = max(sparkline) %}
                         <svg width="56" height="22" viewBox="0 0 56 22" class="sparkline-svg">
                             {% if maxVal > 0 %}
                             <polyline
