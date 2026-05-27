@@ -269,15 +269,16 @@
     {% endif %}
     {% if is_connected and latest_stats %}
     <script>
-    $(function() {
+    document.addEventListener('DOMContentLoaded', function() {
         var activeDays = 30;
 
         function renderDelta(elId, pct) {
-            var $el = $('#' + elId);
-            if (pct === null || pct === undefined) { $el.html('<span class="delta-neutral">—</span>'); return; }
+            var el = document.getElementById(elId);
+            if (!el) return;
+            if (pct === null || pct === undefined) { el.innerHTML = '<span class="delta-neutral">—</span>'; return; }
             var cls  = pct > 0 ? 'delta-up' : (pct < 0 ? 'delta-down' : 'delta-neutral');
             var icon = pct > 0 ? '↑' : (pct < 0 ? '↓' : '');
-            $el.html('<span class="' + cls + '">' + icon + ' ' + Math.abs(pct) + '%</span>');
+            el.innerHTML = '<span class="' + cls + '">' + icon + ' ' + Math.abs(pct) + '%</span>';
         }
 
         function fmtViews(n) { return n.toLocaleString('fr-FR'); }
@@ -286,27 +287,38 @@
         function fmtCtr(v)   { return v !== null ? v.toFixed(2) + '%' : '—'; }
 
         function loadKpis(days) {
-            $('#periodKpiGrid .period-kpi-value').css('opacity', 0.4);
-            $.getJSON('/api/kpi-data?days=' + days, function(d) {
-                $('#kpi-views').text(fmtViews(d.views)).css('opacity', 1);
-                $('#kpi-watch').text(fmtWatch(d.watch_time)).css('opacity', 1);
-                $('#kpi-subs').text(fmtSubs(d.subscribers)).css('opacity', 1);
-                $('#kpi-ctr').text(fmtCtr(d.avg_ctr)).css('opacity', 1);
+            document.querySelectorAll('#periodKpiGrid .period-kpi-value').forEach(function(el) { el.style.opacity = '0.4'; });
+            fetch('/api/kpi-data?days=' + days, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var kv = document.getElementById('kpi-views'),
+                    kw = document.getElementById('kpi-watch'),
+                    ks = document.getElementById('kpi-subs'),
+                    kc = document.getElementById('kpi-ctr'),
+                    lb = document.getElementById('periodCompareLabel');
+                if (kv) { kv.textContent = fmtViews(d.views); kv.style.opacity = '1'; }
+                if (kw) { kw.textContent = fmtWatch(d.watch_time); kw.style.opacity = '1'; }
+                if (ks) { ks.textContent = fmtSubs(d.subscribers); ks.style.opacity = '1'; }
+                if (kc) { kc.textContent = fmtCtr(d.avg_ctr); kc.style.opacity = '1'; }
                 renderDelta('delta-views', d.delta_views);
                 renderDelta('delta-watch', d.delta_watch);
                 renderDelta('delta-subs', d.delta_subs);
-                $('#periodCompareLabel').text('vs ' + days + 'j précédents');
+                if (lb) lb.textContent = 'vs ' + days + 'j précédents';
             });
         }
 
-        $('#kpiPeriodSelector .period-btn').on('click', function() {
-            var days = parseInt($(this).data('days'));
-            if (days === activeDays) return;
-            activeDays = days;
-            $('#kpiPeriodSelector .period-btn').removeClass('active');
-            $(this).addClass('active');
-            loadKpis(days);
-        });
+        var selector = document.getElementById('kpiPeriodSelector');
+        if (selector) {
+            selector.addEventListener('click', function(e) {
+                var btn = e.target.closest('.period-btn');
+                if (!btn) return;
+                var days = parseInt(btn.dataset.days);
+                if (days === activeDays) return;
+                activeDays = days;
+                selector.querySelectorAll('.period-btn').forEach(function(b) { b.classList.toggle('active', b === btn); });
+                loadKpis(days);
+            });
+        }
     });
     </script>
     {% endif %}
