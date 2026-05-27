@@ -170,9 +170,32 @@
     </form>
 </div>
 
+<style>
+.cs-wrap{position:relative}
+.cs-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
+.cs-trigger:hover{border-color:rgba(255,255,255,.22);background:rgba(255,255,255,.07)}
+.cs-wrap.cs-open .cs-trigger{border-color:rgba(139,92,246,.55);background:rgba(139,92,246,.07)}
+.cs-trigger-inner{display:flex;align-items:center;gap:7px;flex:1;min-width:0;overflow:hidden}
+.cs-trigger-name{font-size:12px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cs-arrow{color:var(--text-muted);font-size:10px;flex-shrink:0;transition:transform .15s}
+.cs-wrap.cs-open .cs-arrow{transform:rotate(180deg)}
+.cs-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#0f0f1a;border:1px solid rgba(255,255,255,.13);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.55);z-index:999;display:none;max-height:280px;overflow-y:auto}
+.cs-wrap.cs-open .cs-panel{display:block}
+.cs-group{padding:8px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);border-top:1px solid rgba(255,255,255,.06)}
+.cs-opt{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;transition:background .1s}
+.cs-opt:hover{background:rgba(255,255,255,.05)}
+.cs-opt.cs-selected{background:rgba(139,92,246,.1)}
+.cs-opt-name{flex:1;font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cs-opt:hover .cs-opt-name,.cs-opt.cs-selected .cs-opt-name{color:var(--text-primary)}
+.cs-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;flex-shrink:0}
+.cs-badge-fast{background:rgba(34,197,94,.12);color:#86efac}
+.cs-badge-balanced{background:rgba(139,92,246,.15);color:#c4b5fd}
+.cs-badge-full{background:rgba(59,130,246,.15);color:#93c5fd}
+.cs-price{font-size:10px;font-family:monospace;color:var(--text-muted);flex-shrink:0;white-space:nowrap}
+</style>
+
 <script>
 var _savedTaskModels = {{ task_models|json_encode|raw }};
-var _availableModels = null;
 
 function loadModels(forceRefresh) {
     var btn  = document.getElementById('refreshModelsBtn');
@@ -187,7 +210,6 @@ function loadModels(forceRefresh) {
         icon.className = 'fas fa-sync-alt';
         btn.disabled = false;
         if (data.error) { alert('Erreur : ' + data.error); return; }
-        _availableModels = data;
         renderTaskModels(data);
     })
     .catch(function(e) {
@@ -197,28 +219,135 @@ function loadModels(forceRefresh) {
     });
 }
 
+function makeBadge(tier) {
+    if (!tier) return null;
+    var el = document.createElement('span');
+    el.className = 'cs-badge cs-badge-' + tier;
+    el.textContent = tier;
+    return el;
+}
+
+function makePrice(pricing) {
+    if (!pricing) return null;
+    var el = document.createElement('span');
+    el.className = 'cs-price';
+    el.textContent = '$' + pricing.in + ' / $' + pricing.out + ' /1M';
+    return el;
+}
+
+function buildCustomSelect(name, allOptions, savedVal) {
+    var wrap = document.createElement('div');
+    wrap.className = 'cs-wrap';
+
+    var hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = name;
+    hidden.value = savedVal;
+
+    var trigger = document.createElement('div');
+    trigger.className = 'cs-trigger';
+    var trigInner = document.createElement('div');
+    trigInner.className = 'cs-trigger-inner';
+    var arrow = document.createElement('span');
+    arrow.className = 'cs-arrow';
+    arrow.innerHTML = '<i class="fas fa-chevron-down"></i>';
+    trigger.appendChild(trigInner);
+    trigger.appendChild(arrow);
+
+    var panel = document.createElement('div');
+    panel.className = 'cs-panel';
+
+    var allEntries = [{ id: '', name: '— Défaut du code —', tier: null, pricing: null, group: null }].concat(allOptions);
+    var optEls = [];
+
+    // Default option (no group header)
+    (function() {
+        var el = document.createElement('div');
+        el.className = 'cs-opt' + (savedVal === '' ? ' cs-selected' : '');
+        el.dataset.value = '';
+        var nameEl = document.createElement('span');
+        nameEl.className = 'cs-opt-name';
+        nameEl.textContent = '— Défaut du code —';
+        el.appendChild(nameEl);
+        panel.appendChild(el);
+        optEls.push({ el: el, entry: allEntries[0] });
+    })();
+
+    // Grouped options
+    var groups = {};
+    allOptions.forEach(function(o) { if (!groups[o.group]) groups[o.group] = []; groups[o.group].push(o); });
+    Object.keys(groups).forEach(function(gName) {
+        var gl = document.createElement('div');
+        gl.className = 'cs-group';
+        gl.textContent = gName;
+        panel.appendChild(gl);
+        groups[gName].forEach(function(o) {
+            var el = document.createElement('div');
+            el.className = 'cs-opt' + (o.id === savedVal ? ' cs-selected' : '');
+            el.dataset.value = o.id;
+            var nameEl = document.createElement('span');
+            nameEl.className = 'cs-opt-name';
+            nameEl.textContent = o.name;
+            el.appendChild(nameEl);
+            var b = makeBadge(o.tier); if (b) el.appendChild(b);
+            var p = makePrice(o.pricing); if (p) el.appendChild(p);
+            panel.appendChild(el);
+            optEls.push({ el: el, entry: o });
+        });
+    });
+
+    function updateTrigger(id) {
+        var found = allEntries.find(function(e) { return e.id === id; }) || allEntries[0];
+        trigInner.innerHTML = '';
+        var nameEl = document.createElement('span');
+        nameEl.className = 'cs-trigger-name';
+        nameEl.textContent = found.name;
+        trigInner.appendChild(nameEl);
+        var b = makeBadge(found.tier); if (b) trigInner.appendChild(b);
+        var p = makePrice(found.pricing); if (p) { p.style.fontSize = '10px'; trigInner.appendChild(p); }
+        optEls.forEach(function(x) { x.el.classList.toggle('cs-selected', x.entry.id === id); });
+    }
+
+    updateTrigger(savedVal);
+
+    trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var opening = !wrap.classList.contains('cs-open');
+        document.querySelectorAll('.cs-wrap.cs-open').forEach(function(w) { w.classList.remove('cs-open'); });
+        if (opening) wrap.classList.add('cs-open');
+    });
+
+    optEls.forEach(function(x) {
+        x.el.addEventListener('click', function(e) {
+            e.stopPropagation();
+            hidden.value = x.entry.id;
+            updateTrigger(x.entry.id);
+            wrap.classList.remove('cs-open');
+        });
+    });
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(panel);
+    wrap.appendChild(hidden);
+    return wrap;
+}
+
+document.addEventListener('click', function() {
+    document.querySelectorAll('.cs-wrap.cs-open').forEach(function(w) { w.classList.remove('cs-open'); });
+});
+
 function renderTaskModels(data) {
     var grid = document.getElementById('taskModelsGrid');
     var form = document.getElementById('taskModelsForm');
     document.getElementById('modelsLoading').style.display = 'none';
     form.style.display = '';
 
-    var providerLabel = data.provider === 'gemini' ? '(Gemini)' : '(Claude)';
     var allOptions = [];
-
-    function pricingLabel(p) {
-        if (!p) return '';
-        return ' — $' + p.in + '/$' + p.out + ' /1M';
-    }
-
-    // Tier options first
     data.tiers.forEach(function(t) {
-        allOptions.push({ id: t.id, label: t.name, group: 'Alias universels' });
+        allOptions.push({ id: t.id, name: t.name, tier: t.tier, pricing: null, group: 'Alias universels' });
     });
-    // Real models
     data.models.forEach(function(m) {
-        var tierBadge = m.tier ? ' [' + m.tier + ']' : '';
-        allOptions.push({ id: m.id, label: m.name + tierBadge + ' ' + providerLabel + pricingLabel(m.pricing), group: 'Modèles ' + data.provider });
+        allOptions.push({ id: m.id, name: m.name, tier: m.tier, pricing: m.pricing, group: 'Modèles ' + data.provider });
     });
 
     var tasks = {{ ai_tasks_json|raw }};
@@ -227,46 +356,14 @@ function renderTaskModels(data) {
     tasks.forEach(function(task) {
         var savedVal = _savedTaskModels[task.value] || '';
         var row = document.createElement('div');
-        row.style.cssText = 'display:grid;grid-template-columns:220px 1fr;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px';
+        row.style.cssText = 'display:grid;grid-template-columns:220px 1fr;align-items:center;gap:12px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px';
 
         var label = document.createElement('label');
         label.style.cssText = 'font-size:13px;font-weight:500;color:var(--text-primary)';
         label.textContent = task.label;
-        label.setAttribute('for', 'task_model_' + task.value);
-
-        var select = document.createElement('select');
-        select.name  = 'ai_model_' + task.value;
-        select.id    = 'task_model_' + task.value;
-        select.className = 'form-control';
-        select.style.fontSize = '13px';
-
-        // Default option
-        var defOpt = document.createElement('option');
-        defOpt.value = '';
-        defOpt.textContent = '— Défaut du code —';
-        select.appendChild(defOpt);
-
-        // Group options
-        var groups = {};
-        allOptions.forEach(function(o) {
-            if (!groups[o.group]) groups[o.group] = [];
-            groups[o.group].push(o);
-        });
-        Object.keys(groups).forEach(function(groupName) {
-            var optgroup = document.createElement('optgroup');
-            optgroup.label = groupName;
-            groups[groupName].forEach(function(o) {
-                var opt = document.createElement('option');
-                opt.value = o.id;
-                opt.textContent = o.label;
-                if (o.id === savedVal) opt.selected = true;
-                optgroup.appendChild(opt);
-            });
-            select.appendChild(optgroup);
-        });
 
         row.appendChild(label);
-        row.appendChild(select);
+        row.appendChild(buildCustomSelect('ai_model_' + task.value, allOptions, savedVal));
         grid.appendChild(row);
     });
 }
