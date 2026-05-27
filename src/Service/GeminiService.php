@@ -174,11 +174,15 @@ class GeminiService implements AiProviderInterface
         return self::TIER_MAP[$model] ?? $model;
     }
 
-    public function getAvailableModels(): array
+    public function getAvailableModels(bool $forceRefresh = false): array
     {
         $apiKey = $this->settingRepo->get(self::SETTING_API_KEY);
         if (!$apiKey) {
             return $this->defaultModels();
+        }
+
+        if ($forceRefresh) {
+            $this->cache->delete('gemini_models');
         }
 
         return $this->cache->get('gemini_models', function (ItemInterface $item) use ($apiKey) {

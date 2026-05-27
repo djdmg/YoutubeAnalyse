@@ -161,10 +161,11 @@ class AdminController extends AbstractController
     }
 
     #[Route('/settings/models', name: 'admin_settings_models')]
-    public function modelsApi(): JsonResponse
+    public function modelsApi(Request $request): JsonResponse
     {
         try {
-            $models = $this->aiFactory->getAvailableModels();
+            $forceRefresh = (bool) $request->query->get('refresh');
+            $models = $this->aiFactory->getAvailableModels($forceRefresh);
             $provider = $this->aiFactory->activeProvider();
 
             // Prepend tier options (always available as universal aliases)

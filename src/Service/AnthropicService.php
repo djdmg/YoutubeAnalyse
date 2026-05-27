@@ -44,8 +44,11 @@ class AnthropicService implements AiProviderInterface
         return self::TIER_MAP[$model] ?? $model;
     }
 
-    public function getAvailableModels(): array
+    public function getAvailableModels(bool $forceRefresh = false): array
     {
+        if ($forceRefresh) {
+            $this->cache->delete('anthropic_models');
+        }
         return $this->cache->get('anthropic_models', function (ItemInterface $item) {
             $item->expiresAfter(86400);
             try {

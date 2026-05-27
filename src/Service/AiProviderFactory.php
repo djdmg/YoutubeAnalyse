@@ -47,8 +47,8 @@ class AiProviderFactory implements AiProviderInterface
         return $this->active()->callVision($imageUrl, $prompt, $model);
     }
 
-    public function getAvailableModels(): array
+    public function getAvailableModels(bool $forceRefresh = false): array
     {
-        return $this->active()->getAvailableModels();
+        return $this->active()->getAvailableModels($forceRefresh);
     }
 }

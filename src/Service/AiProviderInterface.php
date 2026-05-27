@@ -28,5 +28,5 @@ interface AiProviderInterface
      * Returns the list of models available for this provider.
      * Each entry: ['id' => string, 'name' => string, 'tier' => 'fast'|'balanced'|'full'|null]
      */
-    public function getAvailableModels(): array;
+    public function getAvailableModels(bool $forceRefresh = false): array;
 }
