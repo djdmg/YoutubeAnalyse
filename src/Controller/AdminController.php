@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Psr\Log\LoggerInterface;
 
 #[Route('/admin')]
 #[IsGranted('ROLE_ADMIN')]
@@ -28,6 +29,7 @@ class AdminController extends AbstractController
         private readonly AppSettingRepository   $settingRepo,
         private readonly AiProviderFactory      $aiFactory,
         private readonly GeminiService          $gemini,
+        private readonly LoggerInterface        $logger,
     ) {}
 
     #[Route('', name: 'admin_users')]
@@ -166,18 +168,23 @@ class AdminController extends AbstractController
     {
         try {
             $forceRefresh = (bool) $request->query->get('refresh');
-            $models = $this->aiFactory->getAvailableModels($forceRefresh);
             $provider = $this->aiFactory->activeProvider();
+            $models   = $this->aiFactory->getAvailableModels($forceRefresh);
 
-            // Prepend tier options (always available as universal aliases)
+            // If we got nothing (even after fallback), retry once with a forced refresh
+            if (empty($models)) {
+                $models = $this->aiFactory->getAvailableModels(true);
+            }
+
             $tiers = [
-                ['id' => AiProviderInterface::TIER_FAST,     'name' => '⚡ Fast (défaut rapide)',    'tier' => 'fast'],
+                ['id' => AiProviderInterface::TIER_FAST,     'name' => '⚡ Fast (défaut rapide)',     'tier' => 'fast'],
                 ['id' => AiProviderInterface::TIER_BALANCED, 'name' => '⚖️ Balanced (défaut équilibré)', 'tier' => 'balanced'],
-                ['id' => AiProviderInterface::TIER_FULL,     'name' => '🔬 Full (défaut complet)',   'tier' => 'full'],
+                ['id' => AiProviderInterface::TIER_FULL,     'name' => '🔬 Full (défaut complet)',    'tier' => 'full'],
             ];
 
             return new JsonResponse(['provider' => $provider, 'tiers' => $tiers, 'models' => $models]);
         } catch (\Throwable $e) {
+            $this->logger->error('modelsApi failed: ' . $e->getMessage());
             return new JsonResponse(['error' => $e->getMessage()], 500);
         }
     }

@@ -343,10 +343,12 @@ function renderTaskModels(data) {
     form.style.display = '';
 
     var allOptions = [];
+    var tierIds = data.tiers.map(function(t) { return t.id; });
     data.tiers.forEach(function(t) {
         allOptions.push({ id: t.id, name: t.name, tier: t.tier, pricing: null, group: 'Alias universels' });
     });
-    data.models.forEach(function(m) {
+    // Filter out fallback models whose IDs are the same as tier aliases (avoids confusing duplicates)
+    data.models.filter(function(m) { return tierIds.indexOf(m.id) === -1; }).forEach(function(m) {
         allOptions.push({ id: m.id, name: m.name, tier: m.tier, pricing: m.pricing, group: 'Modèles ' + data.provider });
     });
 
