@@ -108,88 +108,17 @@
     </table>
 </div>
 
-{# ── Chart data + inline script ────────────────────────────────────────────── #}
+{# ── Chart data (global var consumed by compare.js webpack entry) ─────────── #}
 <script>
-(function() {
-    var datasets = [
+var compareDatasets = [
 {% for item in compare_data %}
-        {
-            label: {{ item.video.title|json_encode|raw }},
-            dates: [{% for row in item.daily_data %}"{{ row.date }}"{% if not loop.last %},{% endif %}{% endfor %}],
-            views: [{% for row in item.daily_data %}{{ row.views }}{% if not loop.last %},{% endif %}{% endfor %}]
-        }{{ not loop.last ? ',' : '' }}
+    {
+        title: {{ item.video.title|json_encode|raw }},
+        dates: [{% for row in item.daily_data %}"{{ row.date }}"{% if not loop.last %},{% endif %}{% endfor %}],
+        views: [{% for row in item.daily_data %}{{ row.views }}{% if not loop.last %},{% endif %}{% endfor %}]
+    }{{ not loop.last ? ',' : '' }}
 {% endfor %}
-    ];
-
-    var allDates = [];
-    datasets.forEach(function(d) {
-        d.dates.forEach(function(date) {
-            if (allDates.indexOf(date) === -1) allDates.push(date);
-        });
-    });
-    allDates.sort();
-
-    var COLORS = ['#3b82f6','#ef4444','#22c55e','#a855f7'];
-    var gridColor = 'rgba(255,255,255,0.05)';
-    var tickColor = 'rgba(255,255,255,0.4)';
-
-    function waitForChart(attempt) {
-        if (typeof Chart === 'undefined') {
-            if (attempt < 20) setTimeout(function() { waitForChart(attempt + 1); }, 150);
-            return;
-        }
-        var canvas = document.getElementById('compareChart');
-        if (!canvas) return;
-
-        new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: allDates.map(function(d) { return d.slice(5).replace('-', '/'); }),
-                datasets: datasets.map(function(d, i) {
-                    var color = COLORS[i % COLORS.length];
-                    var rgba = color.replace('#', '');
-                    var r = parseInt(rgba.substr(0,2),16), g = parseInt(rgba.substr(2,2),16), b = parseInt(rgba.substr(4,2),16);
-                    return {
-                        label: d.label,
-                        data: allDates.map(function(date) {
-                            var idx = d.dates.indexOf(date);
-                            return idx >= 0 ? d.views[idx] : 0;
-                        }),
-                        borderColor: color,
-                        backgroundColor: 'rgba(' + r + ',' + g + ',' + b + ',0.06)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 3,
-                        pointHoverRadius: 6
-                    };
-                })
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { display: true, labels: { color: tickColor, boxWidth: 12, padding: 16 } },
-                    tooltip: {
-                        backgroundColor: 'rgba(20,20,20,0.95)',
-                        borderColor: 'rgba(60,60,60,0.8)',
-                        borderWidth: 1,
-                        titleColor: '#fff',
-                        bodyColor: 'rgba(255,255,255,0.7)',
-                        padding: 12
-                    }
-                },
-                scales: {
-                    x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 10 } },
-                    y: { grid: { color: gridColor }, ticks: { color: tickColor }, beginAtZero: true }
-                }
-            }
-        });
-    }
-
-    waitForChart(0);
-})();
+];
 </script>
 
 {% endif %}
