@@ -39,6 +39,10 @@ services:
             $apiKey: '%env(ANTHROPIC_API_KEY)%'
             $cache:  '@cache.app'
 
+    App\Service\GeminiService:
+        arguments:
+            $cache: '@cache.app'
+
     # Route AiProviderInterface to the dispatcher (reads AppSetting to pick Claude or Gemini)
     App\Service\AiProviderInterface: '@App\Service\AiProviderFactory'
 
