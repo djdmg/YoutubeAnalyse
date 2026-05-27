@@ -38,6 +38,9 @@ services:
         arguments:
             $apiKey: '%env(ANTHROPIC_API_KEY)%'
 
+    # Route AiProviderInterface to the dispatcher (reads AppSetting to pick Claude or Gemini)
+    App\Service\AiProviderInterface: '@App\Service\AiProviderFactory'
+
     App\Service\QuotaGuardService:
         arguments:
             $cache: '@cache.app'

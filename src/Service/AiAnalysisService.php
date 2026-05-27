@@ -29,7 +29,7 @@ class AiAnalysisService
     }
 
     public function __construct(
-        private readonly AnthropicService $anthropic,
+        private readonly AiProviderInterface $anthropic,
         private readonly EntityManagerInterface $em,
         private readonly AiReportRepository $aiReportRepo,
         private readonly VideoRepository $videoRepo,
@@ -116,7 +116,7 @@ class AiAnalysisService
                 'top_videos'         => $topRef,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
             $this->em->flush();
             $count++;
         }
@@ -158,7 +158,7 @@ class AiAnalysisService
                 'comments' => $commentTexts,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_FULL);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FULL);
             $this->em->flush();
             $count++;
         }
@@ -228,7 +228,7 @@ class AiAnalysisService
                 'traffic_sources' => $trafficSrc,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_FULL);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FULL);
             $this->em->flush();
             $count++;
         }
@@ -271,7 +271,7 @@ class AiAnalysisService
                 'reference_curves'   => $refCurves,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_FAST);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FAST);
             $this->em->flush();
             $count++;
         }
@@ -312,7 +312,7 @@ class AiAnalysisService
 
         $report = $this->createReport(null, AiReportType::UploadSchedule);
         $prompt = $this->anthropic->loadPrompt('upload_schedule', ['videos_data' => $videosData]);
-        $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+        $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
         $this->em->flush();
 
         return 1;
@@ -411,7 +411,7 @@ Tu es un expert en marketing visuel YouTube. Analyse cette miniature de vidéo Y
 Le score est de 1 à 10 (10 = miniature parfaite). Sois concis et factuel.
 PROMPT;
 
-            $result = $this->anthropic->callVision($thumbUrl, $prompt, AnthropicService::MODEL_FAST);
+            $result = $this->anthropic->callVision($thumbUrl, $prompt, AiProviderInterface::MODEL_FAST);
 
             if (!$result) {
                 $skipped[] = sprintf('[thumbnail_analysis] "%s" — appel vision échoué', $video->getTitle());
@@ -421,7 +421,7 @@ PROMPT;
             $report = $this->createReport($video, AiReportType::ThumbnailAnalysis);
             $report->setPayload($result);
             $report->setStatus(\App\Enum\AiReportStatus::Done);
-            $report->setModelVersion(AnthropicService::MODEL_FAST);
+            $report->setModelVersion(AiProviderInterface::MODEL_FAST);
             $this->em->flush();
             $count++;
         }
@@ -474,7 +474,7 @@ Réponds UNIQUEMENT en JSON valide, sans texte avant ni après :
 PROMPT;
 
             $report = $this->createReport($video, AiReportType::DescriptionOptimization);
-            $result = $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+            $result = $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
 
             if ($result) {
                 $this->em->flush();
@@ -563,7 +563,7 @@ PROMPT;
 
             $this->em->persist($report);
 
-            $result = $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+            $result = $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
 
             if ($result) {
                 $this->em->flush();

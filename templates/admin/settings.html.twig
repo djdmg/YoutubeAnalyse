@@ -40,6 +40,7 @@
 
     <form method="post" action="{{ path('admin_settings_save') }}">
         <input type="hidden" name="_token" value="{{ csrf_token('admin_settings') }}">
+        <input type="hidden" name="section" value="telegram">
 
         <div class="form-field" style="margin-bottom:20px">
             <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
@@ -72,4 +73,80 @@
     </div>
     {% endif %}
 </div>
+
+{# ── AI Provider ─────────────────────────────────────────────────────────── #}
+<div class="section-card" style="max-width:640px;margin-top:24px">
+    <div class="section-header">
+        <h3><i class="fas fa-robot"></i> Fournisseur IA</h3>
+        <span style="background:{{ ai_provider == 'gemini' ? 'rgba(66,133,244,.15);color:#93c5fd' : 'rgba(139,92,246,.15);color:#c4b5fd' }};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">
+            {{ ai_provider == 'gemini' ? 'Gemini (Google)' : 'Claude (Anthropic)' }}
+        </span>
+    </div>
+
+    <p style="color:var(--text-secondary);font-size:13px;margin:0 0 20px">
+        Choisissez le modèle IA utilisé pour toutes les analyses (titres, commentaires, anomalies, thumbnails…).
+        Claude et Gemini utilisent les mêmes niveaux : <strong>Fast</strong> (haiku / flash), <strong>Balanced</strong> (sonnet / 1.5 pro), <strong>Full</strong> (sonnet / 2.5 pro).
+    </p>
+
+    <form method="post" action="{{ path('admin_settings_save') }}" id="aiProviderForm">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_settings') }}">
+        <input type="hidden" name="section" value="ai">
+
+        <div class="form-field" style="margin-bottom:20px">
+            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:10px">Fournisseur actif</label>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:10px;padding:12px 20px;border:1px solid {{ ai_provider != 'gemini' ? 'rgba(139,92,246,.5)' : 'rgba(255,255,255,.1)' }};border-radius:10px;cursor:pointer;flex:1;min-width:160px;background:{{ ai_provider != 'gemini' ? 'rgba(139,92,246,.08)' : 'transparent' }}">
+                    <input type="radio" name="ai_provider" value="claude" {{ ai_provider != 'gemini' ? 'checked' : '' }} onchange="toggleGeminiKey(this.value)">
+                    <div>
+                        <div style="font-weight:600;font-size:14px"><i class="fas fa-robot" style="color:#c4b5fd;margin-right:6px"></i>Claude</div>
+                        <div style="font-size:11px;color:var(--text-muted)">Anthropic — clé dans .env</div>
+                    </div>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;padding:12px 20px;border:1px solid {{ ai_provider == 'gemini' ? 'rgba(66,133,244,.5)' : 'rgba(255,255,255,.1)' }};border-radius:10px;cursor:pointer;flex:1;min-width:160px;background:{{ ai_provider == 'gemini' ? 'rgba(66,133,244,.08)' : 'transparent' }}">
+                    <input type="radio" name="ai_provider" value="gemini" {{ ai_provider == 'gemini' ? 'checked' : '' }} onchange="toggleGeminiKey(this.value)">
+                    <div>
+                        <div style="font-weight:600;font-size:14px"><i class="fab fa-google" style="color:#93c5fd;margin-right:6px"></i>Gemini</div>
+                        <div style="font-size:11px;color:var(--text-muted)">Google — clé configurée ici</div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <div id="geminiKeyField" style="margin-bottom:20px;{{ ai_provider != 'gemini' ? 'display:none' : '' }}">
+            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
+                Clé API Gemini
+            </label>
+            <input
+                type="password"
+                name="gemini_api_key"
+                class="form-control"
+                autocomplete="new-password"
+                placeholder="{{ gemini_api_key ? '••••••••••••••••••••••••••••••••' : 'AIza…' }}"
+                style="font-family:monospace"
+            >
+            {% if gemini_api_key %}
+            <span class="help-text">Clé enregistrée. Laisser vide pour la conserver.</span>
+            {% else %}
+            <span class="help-text">Obtenez votre clé sur <strong>Google AI Studio</strong> → <em>Get API key</em>.</span>
+            {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Enregistrer
+        </button>
+    </form>
+
+    <div style="margin-top:20px;padding:14px;background:rgba(255,255,255,.03);border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.8">
+        <strong style="color:var(--text-secondary)">Correspondance des niveaux</strong><br>
+        Fast → <code>claude-haiku-4-5</code> / <code>gemini-2.0-flash</code><br>
+        Balanced → <code>claude-sonnet-4-6</code> / <code>gemini-1.5-pro</code><br>
+        Full → <code>claude-sonnet-4-20250514</code> / <code>gemini-2.5-pro</code>
+    </div>
+</div>
+
+<script>
+function toggleGeminiKey(val) {
+    document.getElementById('geminiKeyField').style.display = val === 'gemini' ? '' : 'none';
+}
+</script>
 {% endblock %}
