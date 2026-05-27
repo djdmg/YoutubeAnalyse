@@ -148,5 +148,48 @@
 function toggleGeminiKey(val) {
     document.getElementById('geminiKeyField').style.display = val === 'gemini' ? '' : 'none';
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('form[action="{{ path('admin_settings_save') }}"]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var btn = form.querySelector('button[type=submit]');
+            var orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement…';
+
+            var body = new URLSearchParams(new FormData(form)).toString();
+
+            fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                if (window.showToast) {
+                    window.showToast(data.message || 'Enregistré.', data.success ? 'success' : 'error');
+                } else {
+                    var el = document.createElement('div');
+                    el.className = 'alert alert-' + (data.success ? 'success' : 'danger');
+                    el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;min-width:260px';
+                    el.innerHTML = '<i class="fas fa-check-circle"></i> ' + (data.message || 'Enregistré.');
+                    document.body.appendChild(el);
+                    setTimeout(function() { el.remove(); }, 3500);
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                alert('Erreur réseau.');
+            });
+        });
+    });
+});
 </script>
 {% endblock %}

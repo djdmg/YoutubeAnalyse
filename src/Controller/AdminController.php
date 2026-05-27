@@ -172,6 +172,10 @@ class AdminController extends AbstractController
             }
         }
 
+        if ($request->isXmlHttpRequest()) {
+            return new \Symfony\Component\HttpFoundation\JsonResponse(['success' => true, 'message' => 'Paramètres sauvegardés.']);
+        }
+
         $this->addFlash('success', 'Paramètres sauvegardés.');
         return $this->redirectToRoute('admin_settings');
     }
