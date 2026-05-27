@@ -68,7 +68,7 @@ class AnthropicService implements AiProviderInterface
         if ($forceRefresh) {
             $this->cache->delete('anthropic_models');
         }
-        return $this->cache->get('anthropic_models', function (ItemInterface $item) {
+        $models = $this->cache->get('anthropic_models', function (ItemInterface $item) {
             $item->expiresAfter(86400);
             try {
                 $response = $this->httpClient->request('GET', 'https://api.anthropic.com/v1/models', [
@@ -86,12 +86,21 @@ class AnthropicService implements AiProviderInterface
                     $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => $this->getPricing($id)];
                 }
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
-                return $models ?: $this->defaultModels();
+                // Never cache an empty list — keeps the cache cold so next load retries
+                if (empty($models)) {
+                    $item->expiresAfter(0);
+                    return [];
+                }
+                return $models;
             } catch (\Throwable $e) {
                 $this->logger->warning('Could not fetch Anthropic models: ' . $e->getMessage());
-                return $this->defaultModels();
+                $item->expiresAfter(0);
+                return [];
             }
         });
+
+        // Stale [] in cache (from before this fix) → fall back to defaults so the UI never shows nothing
+        return $models ?: $this->defaultModels();
     }
 
     /**

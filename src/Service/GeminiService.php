@@ -196,7 +196,7 @@ class GeminiService implements AiProviderInterface
             $this->cache->delete('gemini_models');
         }
 
-        return $this->cache->get('gemini_models', function (ItemInterface $item) use ($apiKey) {
+        $models = $this->cache->get('gemini_models', function (ItemInterface $item) use ($apiKey) {
             $item->expiresAfter(86400);
             try {
                 $response = $this->httpClient->request('GET',
@@ -207,19 +207,26 @@ class GeminiService implements AiProviderInterface
                 foreach ($data['models'] ?? [] as $m) {
                     $methods = $m['supportedGenerationMethods'] ?? [];
                     if (!in_array('generateContent', $methods, true)) continue;
-                    $rawId = $m['name'] ?? '';                     // "models/gemini-2.0-flash"
-                    $id    = preg_replace('#^models/#', '', $rawId); // "gemini-2.0-flash"
+                    $rawId = $m['name'] ?? '';
+                    $id    = preg_replace('#^models/#', '', $rawId);
                     $name  = $m['displayName'] ?? $id;
                     $tier  = $this->detectTier($id);
                     $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => $this->getPricing($id)];
                 }
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
-                return $models ?: $this->defaultModels();
+                if (empty($models)) {
+                    $item->expiresAfter(0);
+                    return [];
+                }
+                return $models;
             } catch (\Throwable $e) {
                 $this->logger->warning('Could not fetch Gemini models: ' . $e->getMessage());
-                return $this->defaultModels();
+                $item->expiresAfter(0);
+                return [];
             }
         });
+
+        return $models ?: $this->defaultModels();
     }
 
     public function validateApiKey(string $key): bool
