@@ -17,6 +17,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 #[Route('/admin')]
 #[IsGranted('ROLE_ADMIN')]
@@ -27,6 +29,8 @@ class AdminController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly AppSettingRepository   $settingRepo,
         private readonly AiProviderFactory      $aiFactory,
+        private readonly CacheInterface         $cache,
+        private readonly HttpClientInterface    $httpClient,
     ) {}
 
     #[Route('', name: 'admin_users')]
@@ -203,19 +207,47 @@ class AdminController extends AbstractController
             if (!in_array($provider, [AiProviderFactory::PROVIDER_CLAUDE, AiProviderFactory::PROVIDER_GEMINI], true)) {
                 $provider = AiProviderFactory::PROVIDER_CLAUDE;
             }
-            $this->settingRepo->set(AiProviderFactory::SETTING_PROVIDER, $provider);
 
             $geminiKey = trim((string) $request->request->get('gemini_api_key', ''));
             if ($geminiKey !== '') {
+                if (!$this->testGeminiKey($geminiKey)) {
+                    if ($request->isXmlHttpRequest()) {
+                        return new JsonResponse(['success' => false, 'message' => 'Clé API Gemini invalide ou inaccessible.']);
+                    }
+                    $this->addFlash('danger', 'Clé API Gemini invalide ou inaccessible.');
+                    return $this->redirectToRoute('admin_settings');
+                }
                 $this->settingRepo->set(GeminiService::SETTING_API_KEY, $geminiKey);
+                $this->cache->delete('gemini_models');
             }
+
+            $this->settingRepo->set(AiProviderFactory::SETTING_PROVIDER, $provider);
+            $this->cache->delete('gemini_models');
         }
 
         if ($request->isXmlHttpRequest()) {
-            return new \Symfony\Component\HttpFoundation\JsonResponse(['success' => true, 'message' => 'Paramètres sauvegardés.']);
+            return new JsonResponse([
+                'success'       => true,
+                'message'       => 'Paramètres sauvegardés.',
+                'reload_models' => in_array($section, ['ai', 'models'], true),
+            ]);
         }
 
         $this->addFlash('success', 'Paramètres sauvegardés.');
         return $this->redirectToRoute('admin_settings');
+    }
+
+    private function testGeminiKey(string $key): bool
+    {
+        try {
+            $response = $this->httpClient->request('GET',
+                'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($key),
+                ['timeout' => 6]
+            );
+            $data = $response->toArray();
+            return !empty($data['models']);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
