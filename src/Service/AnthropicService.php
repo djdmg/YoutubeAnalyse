@@ -20,7 +20,7 @@ class AnthropicService implements AiProviderInterface
         AiProviderInterface::TIER_FULL     => 'claude-sonnet-4-20250514',
     ];
 
-    // Pricing per 1M tokens (input / output) in USD — exact IDs take precedence, then pattern matching
+    // Exact pricing per 1M tokens (input / output) in USD — only exact model IDs, no pattern guessing
     private const PRICING = [
         // Claude 4 family
         'claude-haiku-4-5-20251001'  => ['in' => 0.80,  'out' => 4.00],
@@ -83,7 +83,7 @@ class AnthropicService implements AiProviderInterface
                     $id   = $m['id'] ?? '';
                     $name = $m['display_name'] ?? $id;
                     $tier = $this->detectTier($id);
-                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => $this->getPricing($id)];
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'type' => 'text', 'pricing' => $this->getPricing($id)];
                 }
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
                 // Never cache an empty list — keeps the cache cold so next load retries
@@ -287,12 +287,7 @@ class AnthropicService implements AiProviderInterface
 
     private function getPricing(string $id): ?array
     {
-        if (isset(self::PRICING[$id])) return self::PRICING[$id];
-        $lower = strtolower($id);
-        if (str_contains($lower, 'haiku'))  return ['in' => 0.80,  'out' => 4.00];
-        if (str_contains($lower, 'opus'))   return ['in' => 15.00, 'out' => 75.00];
-        if (str_contains($lower, 'sonnet')) return ['in' => 3.00,  'out' => 15.00];
-        return null;
+        return self::PRICING[$id] ?? null;
     }
 
     private function detectTier(string $id): ?string
@@ -317,9 +312,9 @@ class AnthropicService implements AiProviderInterface
     private function defaultModels(): array
     {
         return [
-            ['id' => 'fast',     'name' => 'Fast (Haiku)',      'tier' => AiProviderInterface::TIER_FAST,     'pricing' => ['in' => 0.80,  'out' => 4.00]],
-            ['id' => 'balanced', 'name' => 'Balanced (Sonnet)', 'tier' => AiProviderInterface::TIER_BALANCED, 'pricing' => ['in' => 3.00,  'out' => 15.00]],
-            ['id' => 'full',     'name' => 'Full (Sonnet)',     'tier' => AiProviderInterface::TIER_FULL,     'pricing' => ['in' => 3.00,  'out' => 15.00]],
+            ['id' => 'fast',     'name' => 'Fast (Haiku)',      'tier' => AiProviderInterface::TIER_FAST,     'type' => 'text', 'pricing' => ['in' => 0.80,  'out' => 4.00]],
+            ['id' => 'balanced', 'name' => 'Balanced (Sonnet)', 'tier' => AiProviderInterface::TIER_BALANCED, 'type' => 'text', 'pricing' => ['in' => 3.00,  'out' => 15.00]],
+            ['id' => 'full',     'name' => 'Full (Sonnet)',     'tier' => AiProviderInterface::TIER_FULL,     'type' => 'text', 'pricing' => ['in' => 3.00,  'out' => 15.00]],
         ];
     }
 }

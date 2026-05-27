@@ -22,15 +22,22 @@ class GeminiService implements AiProviderInterface
         AiProviderInterface::TIER_FULL     => 'gemini-2.5-pro',
     ];
 
-    // Pricing per 1M tokens (input / output) in USD
+    // Exact pricing per 1M tokens (input / output) in USD — only stable, non-preview model IDs
+    // Preview/versioned models (e.g. gemini-2.5-flash-preview-05-20) are intentionally omitted;
+    // their pricing changes — check Google AI Studio for current rates.
     private const PRICING = [
-        'gemini-2.0-flash'          => ['in' => 0.10,  'out' => 0.40],
-        'gemini-2.0-flash-lite'     => ['in' => 0.075, 'out' => 0.30],
-        'gemini-1.5-flash'          => ['in' => 0.075, 'out' => 0.30],
-        'gemini-1.5-flash-8b'       => ['in' => 0.0375,'out' => 0.15],
-        'gemini-1.5-pro'            => ['in' => 1.25,  'out' => 5.00],
-        'gemini-2.5-pro'            => ['in' => 1.25,  'out' => 10.00],
-        'gemini-2.5-flash'          => ['in' => 0.15,  'out' => 0.60],
+        'gemini-2.0-flash'      => ['in' => 0.10,   'out' => 0.40],
+        'gemini-2.0-flash-lite' => ['in' => 0.075,  'out' => 0.30],
+        'gemini-2.0-flash-exp'  => ['in' => 0.00,   'out' => 0.00],
+        'gemini-1.5-flash'      => ['in' => 0.075,  'out' => 0.30],
+        'gemini-1.5-flash-8b'   => ['in' => 0.0375, 'out' => 0.15],
+        'gemini-1.5-pro'        => ['in' => 1.25,   'out' => 5.00],
+    ];
+
+    // Hardcoded image generation models (use /predict, not /generateContent — not in API model list)
+    private const IMAGE_MODELS = [
+        ['id' => 'imagen-3.0-generate-001',      'name' => 'Imagen 3',      'tier' => null, 'type' => 'image', 'pricing' => ['label' => '$0.04/image']],
+        ['id' => 'imagen-3.0-fast-generate-001', 'name' => 'Imagen 3 Fast', 'tier' => null, 'type' => 'image', 'pricing' => ['label' => '$0.02/image']],
     ];
 
     private const MAX_TOKENS = 2048;
@@ -211,9 +218,13 @@ class GeminiService implements AiProviderInterface
                     $id    = preg_replace('#^models/#', '', $rawId);
                     $name  = $m['displayName'] ?? $id;
                     $tier  = $this->detectTier($id);
-                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => $this->getPricing($id)];
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'type' => $this->detectType($id), 'pricing' => $this->getPricing($id)];
                 }
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
+                // Append hardcoded image generation models
+                foreach (self::IMAGE_MODELS as $im) {
+                    $models[] = $im;
+                }
                 if (empty($models)) {
                     $item->expiresAfter(0);
                     return [];
@@ -227,6 +238,22 @@ class GeminiService implements AiProviderInterface
         });
 
         return $models ?: $this->defaultModels();
+    }
+
+    public function generateImage(string $prompt, string $model = 'imagen-3.0-generate-001'): ?string
+    {
+        $url = self::BASE_URL . $model . ':predict?key=' . urlencode($this->apiKey());
+
+        $response = $this->httpClient->request('POST', $url, [
+            'json'    => [
+                'instances'  => [['prompt' => $prompt]],
+                'parameters' => ['sampleCount' => 1, 'aspectRatio' => '16:9'],
+            ],
+            'timeout' => 30,
+        ]);
+
+        $data = $response->toArray();
+        return $data['predictions'][0]['bytesBase64Encoded'] ?? null;
     }
 
     public function validateApiKey(string $key): bool
@@ -284,16 +311,16 @@ class GeminiService implements AiProviderInterface
 
     private function getPricing(string $id): ?array
     {
-        if (isset(self::PRICING[$id])) return self::PRICING[$id];
+        // Only return exact-match pricing — no pattern guessing to avoid showing wrong prices
+        return self::PRICING[$id] ?? null;
+    }
+
+    private function detectType(string $id): string
+    {
         $lower = strtolower($id);
-        if (str_contains($lower, 'flash-lite') || str_contains($lower, 'flash-8b'))
-            return ['in' => 0.075, 'out' => 0.30];
-        if (str_contains($lower, '2.5') && str_contains($lower, 'flash'))
-            return ['in' => 0.15, 'out' => 0.60];
-        if (str_contains($lower, 'flash'))  return ['in' => 0.10,  'out' => 0.40];
-        if (str_contains($lower, '2.5'))    return ['in' => 1.25,  'out' => 10.00];
-        if (str_contains($lower, 'pro'))    return ['in' => 1.25,  'out' => 5.00];
-        return null;
+        if (str_contains($lower, 'imagen')) return 'image';
+        if (str_contains($lower, 'embedding') || str_contains($lower, 'retrieval')) return 'embedding';
+        return 'text';
     }
 
     private function detectTier(string $id): ?string

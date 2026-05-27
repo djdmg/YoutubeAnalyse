@@ -231,7 +231,7 @@ function makePrice(pricing) {
     if (!pricing) return null;
     var el = document.createElement('span');
     el.className = 'cs-price';
-    el.textContent = '$' + pricing.in + ' / $' + pricing.out + ' /1M';
+    el.textContent = pricing.label ? pricing.label : ('$' + pricing.in + ' / $' + pricing.out + ' /1M');
     return el;
 }
 
@@ -347,9 +347,10 @@ function renderTaskModels(data) {
     data.tiers.forEach(function(t) {
         allOptions.push({ id: t.id, name: t.name, tier: t.tier, pricing: null, group: 'Alias universels' });
     });
-    // Filter out fallback models whose IDs are the same as tier aliases (avoids confusing duplicates)
+    // Filter tier-alias IDs, then group by model type
     data.models.filter(function(m) { return tierIds.indexOf(m.id) === -1; }).forEach(function(m) {
-        allOptions.push({ id: m.id, name: m.name, tier: m.tier, pricing: m.pricing, group: 'Modèles ' + data.provider });
+        var typeLabel = m.type === 'image' ? 'Image' : (m.type === 'embedding' ? 'Embedding' : 'Texte');
+        allOptions.push({ id: m.id, name: m.name, tier: m.tier, pricing: m.pricing, type: m.type, group: typeLabel + ' — ' + data.provider });
     });
 
     var tasks = {{ ai_tasks_json|raw }};
@@ -411,8 +412,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.body.appendChild(el);
                     setTimeout(function() { el.remove(); }, 3500);
                 }
-                if (data.success && data.reload_models) {
-                    loadModels(true);
+                if (data.success) {
+                    // Sync in-memory saved models from hidden inputs so re-render shows correct selections
+                    form.querySelectorAll('input[type="hidden"][name^="ai_model_"]').forEach(function(inp) {
+                        _savedTaskModels[inp.name.replace('ai_model_', '')] = inp.value;
+                    });
+                    if (data.reload_models) {
+                        loadModels(true);
+                    }
                 }
             })
             .catch(function() {

@@ -237,7 +237,7 @@ class AdminController extends AbstractController
             return new JsonResponse([
                 'success'       => true,
                 'message'       => $message,
-                'reload_models' => in_array($section, ['ai', 'models'], true),
+                'reload_models' => $section === 'ai',
             ]);
         }
 
