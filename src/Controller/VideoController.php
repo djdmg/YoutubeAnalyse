@@ -314,18 +314,44 @@ class VideoController extends AbstractController
                 mkdir($dir, 0755, true);
             }
 
-            $filename = $youtubeId . '_' . time() . '.png';
-            file_put_contents($dir . $filename, base64_decode($base64));
+            // Save as preview (not applied to video yet)
+            $previewFile = $youtubeId . '_preview.png';
+            file_put_contents($dir . $previewFile, base64_decode($base64));
 
-            $url = '/uploads/thumbnails/' . $filename;
-            $video->setThumbnailUrl($url);
-            $this->em->flush();
-
-            return new JsonResponse(['success' => true, 'url' => $url, 'message' => 'Miniature générée avec succès.']);
+            return new JsonResponse(['success' => true, 'url' => '/uploads/thumbnails/' . $previewFile . '?t=' . time()]);
 
         } catch (\Throwable $e) {
             return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()]);
         }
+    }
+
+    #[Route('/videos/{youtubeId}/apply-thumbnail', name: 'analytics_video_apply_thumbnail', methods: ['POST'])]
+    public function applyThumbnail(string $youtubeId): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['success' => false, 'message' => 'Vidéo introuvable.'], 404);
+        }
+
+        $dir         = $this->projectDir . '/public/uploads/thumbnails/';
+        $previewFile = $dir . $youtubeId . '_preview.png';
+
+        if (!file_exists($previewFile)) {
+            return new JsonResponse(['success' => false, 'message' => 'Aucune prévisualisation à appliquer. Générez d\'abord une miniature.']);
+        }
+
+        // Rename preview → permanent file with timestamp
+        $finalFile = $youtubeId . '_' . time() . '.png';
+        rename($previewFile, $dir . $finalFile);
+
+        $url = '/uploads/thumbnails/' . $finalFile;
+        $video->setThumbnailUrl($url);
+        $this->em->flush();
+
+        return new JsonResponse(['success' => true, 'url' => $url, 'message' => 'Miniature appliquée avec succès.']);
     }
 
     #[Route('/videos/{youtubeId}', name: 'analytics_video_detail')]

@@ -7,7 +7,7 @@
     <div>
         <h1>
             {% if video.thumbnailUrl %}
-            <img src="{{ video.thumbnailUrl }}" alt="" class="video-thumb-header">
+            <img src="{{ video.thumbnailUrl }}" alt="" class="video-thumb-header" id="headerThumbnail">
             {% endif %}
             {{ video.title|length > 60 ? video.title|slice(0,60) ~ '…' : video.title }}
         </h1>
@@ -392,40 +392,6 @@ switchTab(_activeTab);
         </div>
         {% endif %}
 
-        {# Thumbnail Generation — Imagen 3 #}
-        <div class="ai-block">
-            <div class="ai-block-header">
-                <i class="fas fa-wand-magic-sparkles" style="color:#f59e0b"></i>
-                <h3>Générer une miniature (Imagen 3)</h3>
-                <span class="ai-model" style="background:rgba(245,158,11,.1);color:#fcd34d">Google Imagen</span>
-            </div>
-            <p style="color:var(--text-secondary);font-size:13px;margin:0 0 12px">
-                Générez une miniature originale avec <strong>Imagen 3</strong>. Nécessite une clé API Gemini.
-                La miniature générée remplace l'actuelle (la sync YouTube la restaurera si besoin).
-            </p>
-            <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">
-                <input type="text" id="imagenPrompt" class="form-control"
-                       style="flex:1;min-width:180px;font-size:13px"
-                       placeholder="Prompt (optionnel — sinon généré depuis le titre)">
-                <button id="imagenBtn" class="btn btn-primary" onclick="generateThumbnailImagen()">
-                    <i class="fas fa-wand-magic-sparkles"></i> Générer
-                </button>
-            </div>
-            <div id="imagenResult" style="margin-top:14px;display:none">
-                <img id="imagenPreview" src="" alt="Miniature générée"
-                     style="max-width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.1);display:block;margin-bottom:10px">
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <button class="btn btn-outline btn-sm" onclick="generateThumbnailImagen()">
-                        <i class="fas fa-redo"></i> Regénérer
-                    </button>
-                    <button class="btn btn-outline btn-sm" onclick="document.querySelector('.video-thumb-header') && (document.querySelector('.video-thumb-header').src = document.getElementById('imagenPreview').src)">
-                        <i class="fas fa-check"></i> Aperçu appliqué dans l'en-tête
-                    </button>
-                </div>
-            </div>
-            <div id="imagenError" style="margin-top:8px;display:none;color:#f87171;font-size:13px"></div>
-        </div>
-
         {# Description Optimization #}
         {% if description_report is defined and description_report and description_report.payload %}
         {% set dp = description_report.payload %}
@@ -542,6 +508,59 @@ switchTab(_activeTab);
     </div>
     {% endif %}
 
+    {# Imagen Thumbnail Generation #}
+    <div class="section-card" style="border-left:3px solid #f59e0b;margin-bottom:20px">
+        <div class="section-header">
+            <h3><i class="fas fa-image" style="color:#f59e0b"></i> Générer une miniature — Imagen 3</h3>
+            <span style="font-size:11px;background:rgba(245,158,11,.15);color:#f59e0b;padding:2px 8px;border-radius:12px">Gemini Imagen 3</span>
+        </div>
+        <div style="background:rgba(245,158,11,.08);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:12px;color:var(--text-muted)">
+            <i class="fas fa-info-circle" style="color:#f59e0b"></i>
+            Générez une miniature IA, prévisualisez-la, puis appliquez-la si elle vous convient.
+        </div>
+
+        {# Comparison: current vs generated #}
+        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Miniature actuelle</div>
+                {% if video.thumbnailUrl %}
+                <img src="{{ video.thumbnailUrl }}" alt="Miniature actuelle" style="width:100%;border-radius:8px;display:block">
+                {% else %}
+                <div style="width:100%;aspect-ratio:16/9;background:var(--bg-secondary);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">Aucune miniature</div>
+                {% endif %}
+            </div>
+            <div style="flex:1;min-width:200px" id="imagenPreviewCol" style="display:none">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Miniature générée</div>
+                <img id="imagenPreviewImg" src="" alt="Miniature générée" style="width:100%;border-radius:8px;display:none">
+                <div id="imagenPreviewPlaceholder" style="width:100%;aspect-ratio:16/9;background:var(--bg-secondary);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">
+                    <span><i class="fas fa-wand-magic-sparkles" style="margin-right:6px;color:#f59e0b"></i>Aperçu ici</span>
+                </div>
+            </div>
+        </div>
+
+        {# Prompt + controls #}
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <input type="text" id="imagenPrompt"
+                   placeholder="Ex: dynamic gaming thumbnail, neon colors, epic scene…"
+                   style="flex:1;min-width:200px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text-primary);font-size:13px;outline:none">
+            <button id="imagenBtn" onclick="generateThumbnailImagen()" class="btn btn-primary" style="background:#f59e0b;border-color:#f59e0b;white-space:nowrap">
+                <i class="fas fa-wand-magic-sparkles"></i> Générer
+            </button>
+        </div>
+
+        <div id="imagenError" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:8px 12px;font-size:13px;color:#f87171;margin-bottom:10px"></div>
+
+        <div id="imagenActions" style="display:none;gap:8px;flex-wrap:wrap">
+            <button onclick="applyThumbnailImagen()" class="btn btn-primary" id="imagenApplyBtn">
+                <i class="fas fa-check"></i> Appliquer comme miniature
+            </button>
+            <button onclick="generateThumbnailImagen()" class="btn btn-secondary" id="imagenRegenBtn">
+                <i class="fas fa-redo"></i> Regénérer
+            </button>
+        </div>
+        <div id="imagenSuccess" style="display:none;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:8px 12px;font-size:13px;color:#4ade80;margin-top:10px"></div>
+    </div>
+
     {# Meta History #}
     {% if meta_history|length > 1 %}
     <div class="section-card">
@@ -603,16 +622,23 @@ switchTab(_activeTab);
     {{ encore_entry_script_tags('video_detail') }}
     <script>
     function generateThumbnailImagen() {
-        var btn      = document.getElementById('imagenBtn');
-        var prompt   = document.getElementById('imagenPrompt').value;
-        var result   = document.getElementById('imagenResult');
-        var errorDiv = document.getElementById('imagenError');
-        var preview  = document.getElementById('imagenPreview');
+        var btn         = document.getElementById('imagenBtn');
+        var regenBtn    = document.getElementById('imagenRegenBtn');
+        var prompt      = document.getElementById('imagenPrompt').value;
+        var errorDiv    = document.getElementById('imagenError');
+        var previewImg  = document.getElementById('imagenPreviewImg');
+        var placeholder = document.getElementById('imagenPreviewPlaceholder');
+        var actions     = document.getElementById('imagenActions');
+        var successDiv  = document.getElementById('imagenSuccess');
 
         btn.disabled = true;
+        if (regenBtn) regenBtn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération…';
-        result.style.display   = 'none';
-        errorDiv.style.display = 'none';
+        errorDiv.style.display   = 'none';
+        successDiv.style.display = 'none';
+        actions.style.display    = 'none';
+        previewImg.style.display = 'none';
+        placeholder.style.display = '';
 
         fetch('{{ path('analytics_video_generate_thumbnail', {youtubeId: video.youtubeId}) }}', {
             method: 'POST',
@@ -622,11 +648,13 @@ switchTab(_activeTab);
         .then(function(r) { return r.json(); })
         .then(function(data) {
             btn.disabled = false;
+            if (regenBtn) regenBtn.disabled = false;
             btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer';
             if (data.success) {
-                preview.src = data.url + '?t=' + Date.now();
-                result.style.display = '';
-                if (window.showToast) window.showToast(data.message, 'success');
+                previewImg.src = data.url + '?t=' + Date.now();
+                previewImg.style.display  = '';
+                placeholder.style.display = 'none';
+                actions.style.display     = 'flex';
             } else {
                 errorDiv.textContent   = data.message || 'Erreur inconnue.';
                 errorDiv.style.display = '';
@@ -634,7 +662,46 @@ switchTab(_activeTab);
         })
         .catch(function() {
             btn.disabled = false;
+            if (regenBtn) regenBtn.disabled = false;
             btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer';
+            errorDiv.textContent   = 'Erreur réseau.';
+            errorDiv.style.display = '';
+        });
+    }
+
+    function applyThumbnailImagen() {
+        var applyBtn   = document.getElementById('imagenApplyBtn');
+        var errorDiv   = document.getElementById('imagenError');
+        var successDiv = document.getElementById('imagenSuccess');
+
+        applyBtn.disabled = true;
+        applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Application…';
+        errorDiv.style.display   = 'none';
+        successDiv.style.display = 'none';
+
+        fetch('{{ path('analytics_video_apply_thumbnail', {youtubeId: video.youtubeId}) }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            applyBtn.disabled = false;
+            applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature';
+            if (data.success) {
+                // Update header thumbnail
+                var headerThumb = document.getElementById('headerThumbnail');
+                if (headerThumb) headerThumb.src = data.url + '?t=' + Date.now();
+                successDiv.textContent   = data.message || 'Miniature appliquée.';
+                successDiv.style.display = '';
+                if (window.showToast) window.showToast(data.message, 'success');
+            } else {
+                errorDiv.textContent   = data.message || 'Erreur inconnue.';
+                errorDiv.style.display = '';
+            }
+        })
+        .catch(function() {
+            applyBtn.disabled = false;
+            applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature';
             errorDiv.textContent   = 'Erreur réseau.';
             errorDiv.style.display = '';
         });
