@@ -138,9 +138,9 @@
 
     <div style="margin-top:20px;padding:14px;background:rgba(255,255,255,.03);border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.8">
         <strong style="color:var(--text-secondary)">Correspondance des niveaux</strong><br>
-        Fast → <code>claude-haiku-4-5</code> / <code>gemini-2.0-flash</code><br>
-        Balanced → <code>claude-sonnet-4-6</code> / <code>gemini-1.5-pro</code><br>
-        Full → <code>claude-sonnet-4-20250514</code> / <code>gemini-2.5-pro</code>
+        Fast → <code>claude-haiku-4-5</code> ($0.80/$4 /1M) / <code>gemini-2.0-flash</code> ($0.10/$0.40 /1M)<br>
+        Balanced → <code>claude-sonnet-4-6</code> ($3/$15 /1M) / <code>gemini-1.5-pro</code> ($1.25/$5 /1M)<br>
+        Full → <code>claude-sonnet-4-20250514</code> ($3/$15 /1M) / <code>gemini-2.5-pro</code> ($1.25/$10 /1M)
     </div>
 </div>
 
@@ -206,6 +206,11 @@ function renderTaskModels(data) {
     var providerLabel = data.provider === 'gemini' ? '(Gemini)' : '(Claude)';
     var allOptions = [];
 
+    function pricingLabel(p) {
+        if (!p) return '';
+        return ' — $' + p.in + '/$' + p.out + ' /1M';
+    }
+
     // Tier options first
     data.tiers.forEach(function(t) {
         allOptions.push({ id: t.id, label: t.name, group: 'Alias universels' });
@@ -213,7 +218,7 @@ function renderTaskModels(data) {
     // Real models
     data.models.forEach(function(m) {
         var tierBadge = m.tier ? ' [' + m.tier + ']' : '';
-        allOptions.push({ id: m.id, label: m.name + tierBadge + ' ' + providerLabel, group: 'Modèles ' + data.provider });
+        allOptions.push({ id: m.id, label: m.name + tierBadge + ' ' + providerLabel + pricingLabel(m.pricing), group: 'Modèles ' + data.provider });
     });
 
     var tasks = {{ ai_tasks_json|raw }};

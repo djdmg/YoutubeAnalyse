@@ -17,8 +17,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 #[Route('/admin')]
 #[IsGranted('ROLE_ADMIN')]
@@ -29,8 +27,7 @@ class AdminController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly AppSettingRepository   $settingRepo,
         private readonly AiProviderFactory      $aiFactory,
-        private readonly CacheInterface         $cache,
-        private readonly HttpClientInterface    $httpClient,
+        private readonly GeminiService          $gemini,
     ) {}
 
     #[Route('', name: 'admin_users')]
@@ -209,45 +206,35 @@ class AdminController extends AbstractController
             }
 
             $geminiKey = trim((string) $request->request->get('gemini_api_key', ''));
+            $keyMessage = '';
             if ($geminiKey !== '') {
-                if (!$this->testGeminiKey($geminiKey)) {
+                if (!$this->gemini->validateApiKey($geminiKey)) {
                     if ($request->isXmlHttpRequest()) {
-                        return new JsonResponse(['success' => false, 'message' => 'Clé API Gemini invalide ou inaccessible.']);
+                        return new JsonResponse(['success' => false, 'message' => 'Clé API Gemini invalide ou inaccessible. Vérifiez votre clé sur Google AI Studio.']);
                     }
                     $this->addFlash('danger', 'Clé API Gemini invalide ou inaccessible.');
                     return $this->redirectToRoute('admin_settings');
                 }
                 $this->settingRepo->set(GeminiService::SETTING_API_KEY, $geminiKey);
-                $this->cache->delete('gemini_models');
+                $this->gemini->clearModelsCache();
+                $keyMessage = ' Clé Gemini validée ✓';
             }
 
             $this->settingRepo->set(AiProviderFactory::SETTING_PROVIDER, $provider);
-            $this->cache->delete('gemini_models');
+            $this->gemini->clearModelsCache();
         }
+
+        $message = 'Paramètres sauvegardés.' . ($keyMessage ?? '');
 
         if ($request->isXmlHttpRequest()) {
             return new JsonResponse([
                 'success'       => true,
-                'message'       => 'Paramètres sauvegardés.',
+                'message'       => $message,
                 'reload_models' => in_array($section, ['ai', 'models'], true),
             ]);
         }
 
-        $this->addFlash('success', 'Paramètres sauvegardés.');
+        $this->addFlash('success', $message);
         return $this->redirectToRoute('admin_settings');
-    }
-
-    private function testGeminiKey(string $key): bool
-    {
-        try {
-            $response = $this->httpClient->request('GET',
-                'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($key),
-                ['timeout' => 6]
-            );
-            $data = $response->toArray();
-            return !empty($data['models']);
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }
