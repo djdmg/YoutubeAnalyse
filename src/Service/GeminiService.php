@@ -211,7 +211,7 @@ class GeminiService implements AiProviderInterface
                     $id    = preg_replace('#^models/#', '', $rawId); // "gemini-2.0-flash"
                     $name  = $m['displayName'] ?? $id;
                     $tier  = $this->detectTier($id);
-                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => self::PRICING[$id] ?? null];
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => $this->getPricing($id)];
                 }
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
                 return $models ?: $this->defaultModels();
@@ -273,6 +273,20 @@ class GeminiService implements AiProviderInterface
         $text = preg_replace('/^```(?:json)?\s*/i', '', trim($text));
         $text = preg_replace('/\s*```$/i', '', $text);
         return json_decode($text, true);
+    }
+
+    private function getPricing(string $id): ?array
+    {
+        if (isset(self::PRICING[$id])) return self::PRICING[$id];
+        $lower = strtolower($id);
+        if (str_contains($lower, 'flash-lite') || str_contains($lower, 'flash-8b'))
+            return ['in' => 0.075, 'out' => 0.30];
+        if (str_contains($lower, '2.5') && str_contains($lower, 'flash'))
+            return ['in' => 0.15, 'out' => 0.60];
+        if (str_contains($lower, 'flash'))  return ['in' => 0.10,  'out' => 0.40];
+        if (str_contains($lower, '2.5'))    return ['in' => 1.25,  'out' => 10.00];
+        if (str_contains($lower, 'pro'))    return ['in' => 1.25,  'out' => 5.00];
+        return null;
     }
 
     private function detectTier(string $id): ?string

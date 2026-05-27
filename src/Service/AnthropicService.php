@@ -20,14 +20,23 @@ class AnthropicService implements AiProviderInterface
         AiProviderInterface::TIER_FULL     => 'claude-sonnet-4-20250514',
     ];
 
-    // Pricing per 1M tokens (input / output) in USD
+    // Pricing per 1M tokens (input / output) in USD — exact IDs take precedence, then pattern matching
     private const PRICING = [
-        'claude-haiku-4-5-20251001' => ['in' => 0.80,  'out' => 4.00],
-        'claude-haiku-4-5'          => ['in' => 0.80,  'out' => 4.00],
-        'claude-sonnet-4-6'         => ['in' => 3.00,  'out' => 15.00],
-        'claude-sonnet-4-20250514'  => ['in' => 3.00,  'out' => 15.00],
-        'claude-opus-4-5'           => ['in' => 15.00, 'out' => 75.00],
-        'claude-opus-4-7'           => ['in' => 15.00, 'out' => 75.00],
+        // Claude 4 family
+        'claude-haiku-4-5-20251001'  => ['in' => 0.80,  'out' => 4.00],
+        'claude-haiku-4-5'           => ['in' => 0.80,  'out' => 4.00],
+        'claude-sonnet-4-6'          => ['in' => 3.00,  'out' => 15.00],
+        'claude-sonnet-4-20250514'   => ['in' => 3.00,  'out' => 15.00],
+        'claude-opus-4-5'            => ['in' => 15.00, 'out' => 75.00],
+        'claude-opus-4-7'            => ['in' => 15.00, 'out' => 75.00],
+        // Claude 3.5 family
+        'claude-3-5-haiku-20241022'  => ['in' => 0.80,  'out' => 4.00],
+        'claude-3-5-sonnet-20241022' => ['in' => 3.00,  'out' => 15.00],
+        'claude-3-5-sonnet-20240620' => ['in' => 3.00,  'out' => 15.00],
+        // Claude 3 family
+        'claude-3-haiku-20240307'    => ['in' => 0.25,  'out' => 1.25],
+        'claude-3-sonnet-20240229'   => ['in' => 3.00,  'out' => 15.00],
+        'claude-3-opus-20240229'     => ['in' => 15.00, 'out' => 75.00],
     ];
 
     // Keep for legacy call-sites that might still use these directly
@@ -74,11 +83,10 @@ class AnthropicService implements AiProviderInterface
                     $id   = $m['id'] ?? '';
                     $name = $m['display_name'] ?? $id;
                     $tier = $this->detectTier($id);
-                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => self::PRICING[$id] ?? null];
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => $this->getPricing($id)];
                 }
-                // Sort: fast first, then balanced, then full, then null
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
-                return $models;
+                return $models ?: $this->defaultModels();
             } catch (\Throwable $e) {
                 $this->logger->warning('Could not fetch Anthropic models: ' . $e->getMessage());
                 return $this->defaultModels();
@@ -266,6 +274,16 @@ class AnthropicService implements AiProviderInterface
             $this->logger->error('callVision failed', ['error' => $e->getMessage(), 'url' => $imageUrl]);
             return null;
         }
+    }
+
+    private function getPricing(string $id): ?array
+    {
+        if (isset(self::PRICING[$id])) return self::PRICING[$id];
+        $lower = strtolower($id);
+        if (str_contains($lower, 'haiku'))  return ['in' => 0.80,  'out' => 4.00];
+        if (str_contains($lower, 'opus'))   return ['in' => 15.00, 'out' => 75.00];
+        if (str_contains($lower, 'sonnet')) return ['in' => 3.00,  'out' => 15.00];
+        return null;
     }
 
     private function detectTier(string $id): ?string
