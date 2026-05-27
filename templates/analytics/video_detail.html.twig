@@ -19,6 +19,9 @@
         <a href="{{ path('analytics_videos') }}" class="btn btn-outline">
             <i class="fas fa-arrow-left"></i> Retour
         </a>
+        <a href="{{ path('analytics_video_export', {youtubeId: video.youtubeId}) }}" class="btn btn-outline">
+            <i class="fas fa-download"></i> Export CSV
+        </a>
         <a href="https://youtube.com/watch?v={{ video.youtubeId }}" target="_blank" class="btn btn-outline">
             <i class="fab fa-youtube"></i> Voir sur YouTube
         </a>

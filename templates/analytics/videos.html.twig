@@ -16,6 +16,9 @@
         <a href="{{ path('analytics_best_time') }}" class="btn btn-outline btn-sm">
             <i class="fas fa-clock"></i> Meilleur moment
         </a>
+        <a href="{{ path('analytics_videos_export') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-download"></i> Export CSV
+        </a>
         <button id="compareBtn" class="btn btn-outline btn-sm" disabled title="Coche 2 à 4 vidéos pour les comparer" onclick="openCompare()">
             <i class="fas fa-exchange-alt"></i> Comparer <span id="compareCount" style="background:rgba(59,130,246,.2);color:var(--blue);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;margin-left:2px">0</span>
         </button>
@@ -57,14 +60,22 @@
             <span class="video-card-select-icon"><i class="fas fa-check"></i></span>
         </label>
             <div class="video-card-health">
-                <div class="health-ring" title="Score : {{ score }}/100" style="--score:{{ score }};--color:{{ scoreColor }}">
-                    <svg width="32" height="32" viewBox="0 0 36 36">
-                        <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3"/>
-                        <circle cx="18" cy="18" r="15" fill="none" stroke="{{ scoreColor }}" stroke-width="3"
-                            stroke-dasharray="{{ (score / 100 * 94.25)|round(1) }} 94.25"
-                            stroke-linecap="round" transform="rotate(-90 18 18)"/>
-                    </svg>
-                    <span class="health-ring-label" style="color:{{ scoreColor }};font-size:8px">{{ score }}</span>
+                <div class="score-tip">
+                    <div class="health-ring" style="--score:{{ score }};--color:{{ scoreColor }}">
+                        <svg width="32" height="32" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3"/>
+                            <circle cx="18" cy="18" r="15" fill="none" stroke="{{ scoreColor }}" stroke-width="3"
+                                stroke-dasharray="{{ (score / 100 * 94.25)|round(1) }} 94.25"
+                                stroke-linecap="round" transform="rotate(-90 18 18)"/>
+                        </svg>
+                        <span class="health-ring-label" style="color:{{ scoreColor }};font-size:8px">{{ score }}</span>
+                    </div>
+                    <div class="score-tip-box">
+                        <strong style="color:var(--text-primary)">Score {{ score }}/100</strong>
+                        <div class="score-tip-row"><span>CTR (×40)</span><strong>{{ item.health_detail.ctr_pts }}/40</strong></div>
+                        <div class="score-tip-row"><span>Watch time (×30)</span><strong>{{ item.health_detail.watch_pts }}/30</strong></div>
+                        <div class="score-tip-row"><span>Volume (×30)</span><strong>{{ item.health_detail.scale_pts }}/30</strong></div>
+                    </div>
                 </div>
             </div>
             {% if video.thumbnailUrl %}
@@ -180,14 +191,22 @@
                     </td>
                     <td>
                         {% set scoreColor = score >= 70 ? 'var(--green)' : (score >= 40 ? 'var(--yellow)' : '#ef4444') %}
-                        <div class="health-ring" title="Score de santé : {{ score }}/100">
-                            <svg width="36" height="36" viewBox="0 0 36 36">
-                                <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
-                                <circle cx="18" cy="18" r="15" fill="none" stroke="{{ scoreColor }}" stroke-width="3"
-                                    stroke-dasharray="{{ (score / 100 * 94.25)|round(1) }} 94.25"
-                                    stroke-linecap="round" transform="rotate(-90 18 18)"/>
-                            </svg>
-                            <span class="health-ring-label" style="color:{{ scoreColor }}">{{ score }}</span>
+                        <div class="score-tip">
+                            <div class="health-ring">
+                                <svg width="36" height="36" viewBox="0 0 36 36">
+                                    <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
+                                    <circle cx="18" cy="18" r="15" fill="none" stroke="{{ scoreColor }}" stroke-width="3"
+                                        stroke-dasharray="{{ (score / 100 * 94.25)|round(1) }} 94.25"
+                                        stroke-linecap="round" transform="rotate(-90 18 18)"/>
+                                </svg>
+                                <span class="health-ring-label" style="color:{{ scoreColor }}">{{ score }}</span>
+                            </div>
+                            <div class="score-tip-box">
+                                <strong style="color:var(--text-primary)">Score {{ score }}/100</strong>
+                                <div class="score-tip-row"><span>CTR (×40)</span><strong>{{ item.health_detail.ctr_pts }}/40</strong></div>
+                                <div class="score-tip-row"><span>Watch time (×30)</span><strong>{{ item.health_detail.watch_pts }}/30</strong></div>
+                                <div class="score-tip-row"><span>Volume (×30)</span><strong>{{ item.health_detail.scale_pts }}/30</strong></div>
+                            </div>
                         </div>
                     </td>
                     <td>
