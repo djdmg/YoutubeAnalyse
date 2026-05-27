@@ -1059,7 +1059,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 /* =============================================
    Tabs (video detail)
    ============================================= */
-.tab-nav { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 24px; overflow-x: auto; }
+.tab-nav { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 24px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.tab-nav::-webkit-scrollbar { display: none; }
 .tab-btn { background: none; border: none; color: var(--text-secondary); font-size: 14px; font-weight: 500; padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: color .15s; }
 .tab-btn:hover { color: var(--text-primary); }
 .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
