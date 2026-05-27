@@ -1,0 +1,13 @@
+#!/bin/sh
+# Rebuild webpack assets if any source asset files are staged
+
+if git diff --cached --name-only | grep -qE '^(app/)?assets/'; then
+    echo "→ Fichiers assets modifiés — rebuild Webpack..."
+    npx encore production
+    if [ $? -ne 0 ]; then
+        echo "✗ Webpack build échoué. Commit annulé."
+        exit 1
+    fi
+    git add public/build/
+    echo "✓ Assets recompilés et ajoutés au commit."
+fi

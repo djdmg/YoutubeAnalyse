@@ -14,6 +14,7 @@ use App\Repository\VideoSearchTermRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -52,8 +53,9 @@ class VideoController extends AbstractController
             $videosData[] = [
                 'video'        => $video,
                 'stats'        => $stats,
-                'health_score' => self::computeHealthScore($stats),
-                'sparkline'    => $sparklines[$video->getId()] ?? [],
+                'health_score'  => self::computeHealthScore($stats),
+                'health_detail' => self::computeHealthDetail($stats),
+                'sparkline'     => $sparklines[$video->getId()] ?? [],
                 'anomaly'      => $anomaly,
                 'sentiment'    => $sentiment,
                 'prediction'   => $prediction,
@@ -166,21 +168,94 @@ class VideoController extends AbstractController
 
     private static function computeHealthScore(array $stats): int
     {
+        $d = self::computeHealthDetail($stats);
+        return $d['ctr_pts'] + $d['watch_pts'] + $d['scale_pts'];
+    }
+
+    private static function computeHealthDetail(array $stats): array
+    {
         $ctr      = (float) ($stats['avg_ctr'] ?? 0);
         $views    = (int)   ($stats['total_views'] ?? 0);
         $watchMin = (int)   ($stats['total_watch_time'] ?? 0);
 
-        // CTR: 0-40 pts (5% CTR = max)
-        $ctrPts = min(40.0, $ctr / 5.0 * 40.0);
-
-        // Watch quality: avg minutes per view vs 5 min target, 0-30 pts
+        $ctrPts        = (int) round(min(40.0, $ctr / 5.0 * 40.0));
         $avgMinPerView = $views > 0 ? $watchMin / $views : 0.0;
-        $watchPts = min(30.0, $avgMinPerView / 5.0 * 30.0);
+        $watchPts      = (int) round(min(30.0, $avgMinPerView / 5.0 * 30.0));
+        $scalePts      = $views > 0 ? (int) round(min(30.0, log10(max(1, $views)) / log10(50000) * 30.0)) : 0;
 
-        // Scale: logarithmic 0-30 pts (50 000 views = max)
-        $scalePts = $views > 0 ? min(30.0, log10(max(1, $views)) / log10(50000) * 30.0) : 0.0;
+        return [
+            'ctr_pts'   => $ctrPts,
+            'watch_pts' => $watchPts,
+            'scale_pts' => $scalePts,
+            'avg_min'   => round($avgMinPerView, 1),
+        ];
+    }
 
-        return (int) round($ctrPts + $watchPts + $scalePts);
+    #[Route('/videos/export', name: 'analytics_videos_export')]
+    public function exportVideos(): Response
+    {
+        /** @var User $user */
+        $user      = $this->getUser();
+        $videos    = $this->videoRepo->findForUser($user);
+        $listStats = $this->metricRepo->getListStatsForUser($user);
+
+        $rows = [['Titre', 'YouTube ID', 'Publiée le', 'Vues totales', 'CTR moyen (%)', 'Watch Time (min)', 'Score santé']];
+        foreach ($videos as $video) {
+            $s     = $listStats[$video->getId()] ?? ['total_views' => 0, 'avg_ctr' => null, 'total_watch_time' => 0];
+            $rows[] = [
+                $video->getTitle(),
+                $video->getYoutubeId(),
+                $video->getPublishedAt()?->format('Y-m-d') ?? '',
+                $s['total_views'],
+                $s['avg_ctr'] !== null ? number_format((float) $s['avg_ctr'], 2, '.', '') : '',
+                $s['total_watch_time'],
+                self::computeHealthScore($s),
+            ];
+        }
+
+        return $this->csvResponse($rows, 'videos-' . date('Y-m-d') . '.csv');
+    }
+
+    #[Route('/videos/{youtubeId}/export', name: 'analytics_video_export')]
+    public function exportVideo(string $youtubeId): Response
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+        if (!$video || $video->getUser() !== $user) {
+            throw $this->createNotFoundException();
+        }
+
+        $metrics = $this->metricRepo->findForVideo($video, 90);
+        $rows    = [['Date', 'Vues', 'CTR (%)', 'Watch Time (min)', 'Abonnés gagnés']];
+        foreach ($metrics as $m) {
+            $rows[] = [
+                $m->getDate()->format('Y-m-d'),
+                $m->getViews(),
+                $m->getCtr() !== null ? number_format((float) $m->getCtr(), 2, '.', '') : '',
+                $m->getWatchTimeMinutes() ?? 0,
+                $m->getSubscribersGained() ?? 0,
+            ];
+        }
+
+        $slug     = preg_replace('/[^a-z0-9]+/i', '-', $video->getTitle());
+        $filename = 'metrics-' . substr($slug, 0, 40) . '-' . date('Y-m-d') . '.csv';
+
+        return $this->csvResponse($rows, $filename);
+    }
+
+    private function csvResponse(array $rows, string $filename): Response
+    {
+        $escape = fn(mixed $v): string => '"' . str_replace('"', '""', (string) $v) . '"';
+        $csv    = "\xEF\xBB\xBF"; // UTF-8 BOM for Excel
+        foreach ($rows as $row) {
+            $csv .= implode(',', array_map($escape, $row)) . "\r\n";
+        }
+
+        return new Response($csv, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
     }
 
     #[Route('/videos/{youtubeId}', name: 'analytics_video_detail')]
@@ -304,11 +379,21 @@ class VideoController extends AbstractController
     {
         /** @var User $user */
         $user    = $this->getUser();
-        $reports = $this->aiReportRepo->findForUser($user, 200);
-        $anomalies = array_filter($reports, fn($r) => $r->getType() === AiReportType::Anomaly && $r->getStatus()->value === 'done');
+        $reports = $this->aiReportRepo->findForUser($user, 300);
+        $done    = array_filter($reports, fn($r) => $r->getStatus()->value === 'done');
+
+        $urgent  = array_values(array_filter($done, fn($r) => $r->getType() === AiReportType::Anomaly));
+        $conseil = array_values(array_filter($done, fn($r) => in_array($r->getType(), [
+            AiReportType::TitleOptimization,
+            AiReportType::SeoOptimization,
+            AiReportType::CommentAnalysis,
+            AiReportType::Prediction,
+        ]) && $r->getVideo() !== null));
 
         return $this->render('analytics/alerts.html.twig', [
-            'anomalies' => array_values($anomalies),
+            'urgent'  => $urgent,
+            'conseil' => $conseil,
+            'total'   => count($urgent) + count($conseil),
         ]);
     }
 
