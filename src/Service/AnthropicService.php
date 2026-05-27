@@ -142,4 +142,64 @@ class AnthropicService
             return null;
         }
     }
+
+    /**
+     * Calls Claude Vision with an image URL and prompt. Returns parsed JSON or null.
+     */
+    public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
+    {
+        $startTime = microtime(true);
+
+        try {
+            $imageData = @file_get_contents($imageUrl);
+            if ($imageData === false) {
+                $this->logger->error('callVision: failed to fetch image', ['url' => $imageUrl]);
+                return null;
+            }
+
+            $base64    = base64_encode($imageData);
+            $mediaType = 'image/jpeg';
+            if (str_starts_with($imageData, "\x89PNG")) {
+                $mediaType = 'image/png';
+            }
+
+            $response = $this->client->messages->create(
+                maxTokens: 512,
+                model:     $model,
+                messages:  [[
+                    'role'    => 'user',
+                    'content' => [
+                        [
+                            'type'   => 'image',
+                            'source' => [
+                                'type'       => 'base64',
+                                'media_type' => $mediaType,
+                                'data'       => $base64,
+                            ],
+                        ],
+                        ['type' => 'text', 'text' => $prompt],
+                    ],
+                ]],
+            );
+
+            $text   = $response->content[0]->text ?? '';
+            $parsed = json_decode($text, true);
+
+            if (!is_array($parsed)) {
+                $this->logger->error('callVision: invalid JSON', ['response' => substr($text, 0, 500)]);
+                return null;
+            }
+
+            $this->logger->info('callVision successful', [
+                'model'       => $model,
+                'duration_ms' => (int) ((microtime(true) - $startTime) * 1000),
+            ]);
+
+            return $parsed;
+
+        } catch (\Throwable $e) {
+            $this->logger->error('callVision failed', ['error' => $e->getMessage(), 'url' => $imageUrl]);
+            return null;
+        }
+    }
 }

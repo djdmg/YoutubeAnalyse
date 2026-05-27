@@ -50,17 +50,24 @@ class VideoController extends AbstractController
             $anomaly   = $this->aiReportRepo->findRecentDone($video, AiReportType::Anomaly, 168);
             $sentiment = $this->aiReportRepo->findRecentDone($video, AiReportType::CommentAnalysis, 168);
             $prediction= $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
+            $thumbnail = $this->aiReportRepo->findRecentDone($video, AiReportType::ThumbnailAnalysis, 720);
+
+            $estimatedRevenue = $stats['total_views'] > 0
+                ? round($stats['total_views'] * $user->getEstimatedRpm() / 1000, 2)
+                : null;
 
             $videosData[] = [
-                'video'         => $video,
-                'stats'         => $stats,
-                'health_score'  => self::computeHealthScore($stats),
-                'health_detail' => self::computeHealthDetail($stats),
-                'sparkline'     => $sparklines[$video->getId()] ?? [],
-                'trend'         => $trendData[$video->getId()] ?? null,
-                'anomaly'       => $anomaly,
-                'sentiment'     => $sentiment,
-                'prediction'    => $prediction,
+                'video'             => $video,
+                'stats'             => $stats,
+                'health_score'      => self::computeHealthScore($stats),
+                'health_detail'     => self::computeHealthDetail($stats),
+                'sparkline'         => $sparklines[$video->getId()] ?? [],
+                'trend'             => $trendData[$video->getId()] ?? null,
+                'anomaly'           => $anomaly,
+                'sentiment'         => $sentiment,
+                'prediction'        => $prediction,
+                'thumbnail_report'  => $thumbnail,
+                'estimated_revenue' => $estimatedRevenue,
             ];
         }
 
@@ -282,17 +289,46 @@ class VideoController extends AbstractController
             throw $this->createNotFoundException('Vidéo introuvable.');
         }
 
-        $metrics      = $this->metricRepo->findForVideo($video, 30);
-        $retention    = $this->retentionRepo->findLatestForVideo($video);
-        $comments     = $this->commentRepo->findNewForVideo($video);
-        $titleReport  = $this->aiReportRepo->findRecentDone($video, AiReportType::TitleOptimization, 168);
-        $commentReport= $this->aiReportRepo->findRecentDone($video, AiReportType::CommentAnalysis, 168);
-        $anomalyReport= $this->aiReportRepo->findRecentDone($video, AiReportType::Anomaly, 168);
-        $prediction   = $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
-        $seoReport    = $this->aiReportRepo->findRecentDone($video, AiReportType::SeoOptimization, 168);
-        $searchTerms  = $this->searchTermRepo->findTopForVideo($video, 20);
-        $snapshots    = $this->snapshotRepo->findAllForVideo($video);
-        $metaHistory  = $this->buildMetaHistory($snapshots, $metrics);
+        $metrics           = $this->metricRepo->findForVideo($video, 30);
+        $retention         = $this->retentionRepo->findLatestForVideo($video);
+        $comments          = $this->commentRepo->findNewForVideo($video);
+        $titleReport       = $this->aiReportRepo->findRecentDone($video, AiReportType::TitleOptimization, 168);
+        $commentReport     = $this->aiReportRepo->findRecentDone($video, AiReportType::CommentAnalysis, 168);
+        $anomalyReport     = $this->aiReportRepo->findRecentDone($video, AiReportType::Anomaly, 168);
+        $prediction        = $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
+        $seoReport         = $this->aiReportRepo->findRecentDone($video, AiReportType::SeoOptimization, 168);
+        $thumbnailReport   = $this->aiReportRepo->findRecentDone($video, AiReportType::ThumbnailAnalysis, 720);
+        $descriptionReport = $this->aiReportRepo->findRecentDone($video, AiReportType::DescriptionOptimization, 720);
+        $searchTerms       = $this->searchTermRepo->findTopForVideo($video, 20);
+        $snapshots         = $this->snapshotRepo->findAllForVideo($video);
+        $metaHistory       = $this->buildMetaHistory($snapshots, $metrics);
+
+        // Aggregate traffic sources over last 30 days
+        $trafficSourcesAgg = [];
+        foreach ($metrics as $m) {
+            foreach ($m->getTrafficSources() ?? [] as $source => $views) {
+                $trafficSourcesAgg[$source] = ($trafficSourcesAgg[$source] ?? 0) + $views;
+            }
+        }
+        arsort($trafficSourcesAgg);
+        $trafficSourceLabels = [
+            'YT_SEARCH'          => 'Recherche YouTube',
+            'SUGGESTED_VIDEO'    => 'Suggestions',
+            'EXTERNAL'           => 'Externe',
+            'NO_LINK_EMBEDDED'   => 'Intégré',
+            'DIRECT_OR_UNKNOWN'  => 'Direct',
+            'PLAYLIST'           => 'Playlist',
+            'YT_CHANNEL'         => 'Page chaîne',
+            'YT_OTHER_PAGE'      => 'Autre page YT',
+            'NOTIFICATION'       => 'Notification',
+            'END_SCREEN'         => 'Écran de fin',
+            'SHORTS'             => 'Shorts',
+        ];
+        $trafficTotal = array_sum($trafficSourcesAgg);
+
+        // Estimated revenue
+        $totalViews30d    = array_sum(array_column(array_map(fn($m) => ['v' => $m->getViews()], $metrics), 'v'));
+        $estimatedRevenue = $totalViews30d * $user->getEstimatedRpm() / 1000;
 
         $chartData = ['labels' => [], 'views' => [], 'ctr' => [], 'watchTime' => [], 'subscribers' => []];
         foreach ($metrics as $m) {
@@ -310,19 +346,26 @@ class VideoController extends AbstractController
         }
 
         return $this->render('analytics/video_detail.html.twig', [
-            'video'          => $video,
-            'metrics'        => $metrics,
-            'latest_metric'  => !empty($metrics) ? end($metrics) : null,
-            'chart_data'     => $chartData,
-            'retention_data' => $retentionData,
-            'comments'       => $comments,
-            'title_report'   => $titleReport,
-            'comment_report' => $commentReport,
-            'anomaly_report' => $anomalyReport,
-            'prediction'     => $prediction,
-            'seo_report'     => $seoReport,
-            'search_terms'   => $searchTerms,
-            'meta_history'   => $metaHistory,
+            'video'                => $video,
+            'metrics'              => $metrics,
+            'latest_metric'        => !empty($metrics) ? end($metrics) : null,
+            'chart_data'           => $chartData,
+            'retention_data'       => $retentionData,
+            'comments'             => $comments,
+            'title_report'         => $titleReport,
+            'comment_report'       => $commentReport,
+            'anomaly_report'       => $anomalyReport,
+            'prediction'           => $prediction,
+            'seo_report'           => $seoReport,
+            'thumbnail_report'     => $thumbnailReport,
+            'description_report'   => $descriptionReport,
+            'search_terms'         => $searchTerms,
+            'meta_history'         => $metaHistory,
+            'traffic_sources_agg'  => $trafficSourcesAgg,
+            'traffic_source_labels' => $trafficSourceLabels,
+            'traffic_total'        => $trafficTotal,
+            'estimated_revenue'    => $estimatedRevenue,
+            'estimated_rpm'        => $user->getEstimatedRpm(),
         ]);
     }
 

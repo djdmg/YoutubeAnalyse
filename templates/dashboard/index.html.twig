@@ -115,6 +115,15 @@
             <div class="kpi-label">Abonnés total</div>
         </div>
     </div>
+    {% if total_revenue is not null %}
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(34,197,94,0.15);color:var(--green)"><i class="fas fa-euro-sign"></i></div>
+        <div class="kpi-content">
+            <div class="kpi-value">{{ total_revenue|number_format(2, ',', ' ') }} €</div>
+            <div class="kpi-label">Revenu estimé (30j)</div>
+        </div>
+    </div>
+    {% endif %}
     <div class="kpi-card">
         <div class="kpi-icon videos"><i class="fas fa-video"></i></div>
         <div class="kpi-content">
@@ -207,6 +216,157 @@
     </div>
 </div>
 {% endif %}
+
+{# ── Goals ───────────────────────────────────────────────────────────── #}
+<div class="section-card" id="goalsSection" style="margin-top:28px">
+    <div class="section-header">
+        <h3><i class="fas fa-bullseye" style="color:var(--blue)"></i> Objectifs</h3>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('goalModal').style.display='flex'" type="button">
+            <i class="fas fa-plus"></i> Ajouter
+        </button>
+    </div>
+
+    {% if goals is defined and goals|length > 0 %}
+    <div class="goals-list">
+        {% for goal in goals %}
+        {% set pct = goal.progressPercent %}
+        {% set goalColor = pct >= 100 ? 'var(--green)' : (pct >= 50 ? 'var(--blue)' : 'var(--yellow)') %}
+        <div class="goal-item" id="goal-{{ goal.id }}">
+            <div class="goal-header">
+                <div class="goal-info">
+                    <span class="goal-label">{{ goal.label }}</span>
+                    <span class="goal-type-badge">
+                        {% if goal.type == 'subscribers' %}<i class="fas fa-users"></i> Abonnés
+                        {% elseif goal.type == 'views' %}<i class="fas fa-eye"></i> Vues (30j)
+                        {% else %}<i class="fas fa-clock"></i> Watch Time (30j)
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="goal-meta">
+                    <span style="font-size:13px;font-weight:600;color:{{ goalColor }}">{{ goal.currentValue|number_format(0, ',', ' ') }} / {{ goal.targetValue|number_format(0, ',', ' ') }}</span>
+                    {% if goal.deadline %}
+                    <span style="font-size:11px;color:var(--text-muted);margin-left:8px"><i class="fas fa-calendar"></i> {{ goal.deadline|date('d/m/Y') }}</span>
+                    {% endif %}
+                    <button class="btn-goal-delete" onclick="deleteGoal({{ goal.id }})" title="Supprimer" type="button">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="goal-progress-bar-wrap">
+                <div class="goal-progress-bar" style="width:{{ pct }}%;background:{{ goalColor }}"></div>
+            </div>
+            <div class="goal-pct" style="color:{{ goalColor }}">{{ pct }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:24px">
+        <i class="fas fa-bullseye fa-2x" style="color:var(--text-muted)"></i>
+        <p style="margin-top:8px;font-size:13px;color:var(--text-muted)">Aucun objectif défini. Clique sur <strong>Ajouter</strong> pour en créer un.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ── Goal Modal ──────────────────────────────────────────────────────── #}
+<div id="goalModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:340px;max-width:480px;width:90%">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h3 style="margin:0"><i class="fas fa-bullseye" style="color:var(--blue)"></i> Nouvel objectif</h3>
+            <button type="button" onclick="document.getElementById('goalModal').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px">&times;</button>
+        </div>
+        <form id="goalForm">
+            <div class="form-group" style="margin-bottom:14px">
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Nom de l'objectif</label>
+                <input type="text" id="goalLabel" placeholder="ex: 1 000 abonnés" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text-primary);font-size:14px">
+            </div>
+            <div class="form-group" style="margin-bottom:14px">
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Type</label>
+                <select id="goalType" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text-primary);font-size:14px">
+                    <option value="subscribers">Abonnés</option>
+                    <option value="views">Vues (30j)</option>
+                    <option value="watch_time">Watch Time en minutes (30j)</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:14px">
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Valeur cible</label>
+                <input type="number" id="goalTarget" placeholder="ex: 1000" min="1" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text-primary);font-size:14px">
+            </div>
+            <div class="form-group" style="margin-bottom:20px">
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Date limite (optionnel)</label>
+                <input type="date" id="goalDeadline" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text-primary);font-size:14px">
+            </div>
+            <div id="goalError" style="color:#ef4444;font-size:12px;margin-bottom:10px;display:none"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+                <button type="button" onclick="document.getElementById('goalModal').style.display='none'" class="btn btn-outline">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Créer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.goals-list { display:flex; flex-direction:column; gap:12px; }
+.goal-item { background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+.goal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.goal-info { display:flex; flex-direction:column; gap:4px; }
+.goal-label { font-weight:600; font-size:14px; color:var(--text-primary); }
+.goal-type-badge { font-size:11px; color:var(--text-muted); }
+.goal-meta { display:flex; align-items:center; gap:8px; }
+.btn-goal-delete { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px 6px; border-radius:4px; font-size:13px; }
+.btn-goal-delete:hover { color:#ef4444; background:rgba(239,68,68,.1); }
+.goal-progress-bar-wrap { background:rgba(255,255,255,.06); border-radius:4px; height:8px; overflow:hidden; }
+.goal-progress-bar { height:100%; border-radius:4px; transition:width .4s ease; }
+.goal-pct { font-size:12px; text-align:right; margin-top:4px; font-weight:600; }
+</style>
+
+<script>
+(function() {
+    var form = document.getElementById('goalForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var errEl = document.getElementById('goalError');
+            errEl.style.display = 'none';
+            var payload = {
+                label:       (document.getElementById('goalLabel').value || '').trim(),
+                type:        document.getElementById('goalType').value,
+                targetValue: document.getElementById('goalTarget').value,
+                deadline:    document.getElementById('goalDeadline').value || null,
+            };
+            if (!payload.label) { errEl.textContent = 'Le nom est obligatoire.'; errEl.style.display = 'block'; return; }
+            if (!payload.targetValue || parseInt(payload.targetValue) <= 0) { errEl.textContent = 'La valeur cible doit être positive.'; errEl.style.display = 'block'; return; }
+
+            fetch('{{ path('goal_create') }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify(payload),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+                document.getElementById('goalModal').style.display = 'none';
+                window.location.reload();
+            })
+            .catch(function() { errEl.textContent = 'Erreur réseau.'; errEl.style.display = 'block'; });
+        });
+    }
+
+    window.deleteGoal = function(id) {
+        if (!confirm('Supprimer cet objectif ?')) return;
+        fetch('/goals/' + id, {
+            method: 'DELETE',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var el = document.getElementById('goal-' + id);
+                if (el) el.remove();
+            }
+        });
+    };
+})();
+</script>
 
 {% endif %}{# end latest_stats #}
 {% endif %}{# end is_connected #}

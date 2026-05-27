@@ -8,17 +8,21 @@ enum AiReportType: string
     case Anomaly           = 'anomaly';
     case Prediction        = 'prediction';
     case UploadSchedule    = 'upload_schedule';
-    case SeoOptimization   = 'seo_optimization';
+    case SeoOptimization        = 'seo_optimization';
+    case ThumbnailAnalysis      = 'thumbnail_analysis';
+    case DescriptionOptimization = 'description_optimization';
 
     public function label(): string
     {
         return match($this) {
-            self::TitleOptimization => 'Optimisation titre',
-            self::CommentAnalysis   => 'Analyse commentaires',
-            self::Anomaly           => 'Anomalie détectée',
-            self::Prediction        => 'Prédiction J+30',
-            self::UploadSchedule    => 'Stratégie publication',
-            self::SeoOptimization   => 'SEO — Requêtes de recherche',
+            self::TitleOptimization      => 'Optimisation titre',
+            self::CommentAnalysis        => 'Analyse commentaires',
+            self::Anomaly                => 'Anomalie détectée',
+            self::Prediction             => 'Prédiction J+30',
+            self::UploadSchedule         => 'Stratégie publication',
+            self::SeoOptimization        => 'SEO — Requêtes de recherche',
+            self::ThumbnailAnalysis      => 'Analyse miniature',
+            self::DescriptionOptimization => 'Optimisation description',
         };
     }
 }

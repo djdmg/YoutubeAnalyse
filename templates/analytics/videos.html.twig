@@ -80,6 +80,8 @@
         {% set anomaly = item.anomaly %}
         {% set sentiment = item.sentiment %}
         {% set prediction = item.prediction %}
+        {% set thumbnail_report = item.thumbnail_report ?? null %}
+        {% set estimated_revenue = item.estimated_revenue ?? null %}
         {% set scoreColor = score >= 70 ? 'var(--green)' : (score >= 40 ? 'var(--yellow)' : '#ef4444') %}
         {% set trend = item.trend %}
         {% set trendPct = trend ? trend.pct : 0 %}
@@ -169,6 +171,17 @@
                     {% endif %}
                     {% if stats.avg_ctr is not null %}
                     <span class="badge {{ stats.avg_ctr >= 4 ? 'badge-green' : (stats.avg_ctr >= 2 ? 'badge-yellow' : 'badge-red') }}">CTR {{ stats.avg_ctr|number_format(1) }}%</span>
+                    {% endif %}
+                    {% if thumbnail_report and thumbnail_report.payload %}
+                    {% set ts = thumbnail_report.payload.score ?? 0 %}
+                    <span class="badge {{ ts >= 7 ? 'badge-green' : (ts >= 5 ? 'badge-yellow' : 'badge-red') }}" title="Score miniature IA">
+                        <i class="fas fa-image"></i> {{ ts }}/10
+                    </span>
+                    {% endif %}
+                    {% if estimated_revenue is not null and estimated_revenue > 0 %}
+                    <span class="badge" style="background:rgba(34,197,94,.15);color:var(--green)" title="Revenu estimé (RPM)">
+                        <i class="fas fa-euro-sign"></i> {{ estimated_revenue|number_format(2) }}
+                    </span>
                     {% endif %}
                 </div>
                 <div class="video-card-footer">
