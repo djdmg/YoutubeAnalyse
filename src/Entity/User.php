@@ -68,6 +68,12 @@ class User implements UserInterface
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $telegramChatId = null;
 
+    #[ORM\Column(type: 'float', nullable: false, options: ['default' => 2.0])]
+    private float $estimatedRpm = 2.0;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $activeChannelId = null;
+
     #[ORM\OneToMany(targetEntity: GoogleToken::class, mappedBy: 'user', cascade: ['remove'], orphanRemoval: true)]
     private Collection $googleTokens;
 
@@ -110,6 +116,12 @@ class User implements UserInterface
     public function getTelegramChatId(): ?string { return $this->telegramChatId; }
     public function setTelegramChatId(?string $v): static { $this->telegramChatId = $v; return $this; }
     public function hasTelegramConfigured(): bool { return $this->telegramChatId !== null && $this->telegramChatId !== ''; }
+
+    public function getEstimatedRpm(): float { return $this->estimatedRpm; }
+    public function setEstimatedRpm(float $estimatedRpm): static { $this->estimatedRpm = $estimatedRpm; return $this; }
+
+    public function getActiveChannelId(): ?string { return $this->activeChannelId; }
+    public function setActiveChannelId(?string $activeChannelId): static { $this->activeChannelId = $activeChannelId; return $this; }
 
     public function getGoogleTokens(): Collection { return $this->googleTokens; }
     public function isAdmin(): bool { return in_array('ROLE_ADMIN', $this->roles, true); }

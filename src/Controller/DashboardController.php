@@ -2,12 +2,16 @@
 
 namespace App\Controller;
 
+use App\Entity\Goal;
 use App\Entity\User;
 use App\Repository\ChannelStatsRepository;
+use App\Repository\DailyMetricRepository;
+use App\Repository\GoalRepository;
 use App\Repository\GoogleTokenRepository;
 use App\Repository\VideoStatsRepository;
 use App\Service\GoogleAuthService;
 use App\Service\YouTubeDataService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,6 +28,9 @@ class DashboardController extends AbstractController
         private readonly ChannelStatsRepository $channelStatsRepo,
         private readonly VideoStatsRepository $videoStatsRepo,
         private readonly GoogleTokenRepository $tokenRepo,
+        private readonly GoalRepository $goalRepo,
+        private readonly DailyMetricRepository $dailyMetricRepo,
+        private readonly EntityManagerInterface $em,
     ) {}
 
     #[Route('/', name: 'dashboard')]
@@ -68,11 +75,50 @@ class DashboardController extends AbstractController
             }
         }
 
+        // ── Goals ──────────────────────────────────────────────────────────────
+        $goals = $this->goalRepo->findActiveForUser($user);
+
+        if (!empty($goals) && $latestStats) {
+            // Compute total views over last 30 days for the user
+            $globalStats = $this->dailyMetricRepo->getGlobalStatsForUser($user, 30);
+            $totalViews30 = (int) ($globalStats['total_views'] ?? 0);
+            $totalWatchTime30 = (int) ($globalStats['total_watch_time'] ?? 0);
+            $subscriberCount = $latestStats->getSubscriberCount();
+
+            foreach ($goals as $goal) {
+                $currentVal = match($goal->getType()) {
+                    'subscribers' => $subscriberCount,
+                    'views'       => $totalViews30,
+                    'watch_time'  => $totalWatchTime30,
+                    default       => $goal->getCurrentValue(),
+                };
+                $goal->setCurrentValue($currentVal);
+
+                // Mark as achieved if reached
+                if (!$goal->isAchieved() && $currentVal >= $goal->getTargetValue()) {
+                    $goal->setIsAchieved(true);
+                    $goal->setAchievedAt(new \DateTimeImmutable());
+                }
+            }
+            $this->em->flush();
+        }
+
+        // Estimated revenue (total views 30d × RPM)
+        $globalStats30 = ($isConnected && $latestStats)
+            ? $this->dailyMetricRepo->getGlobalStatsForUser($user, 30)
+            : null;
+        $totalRevenue30 = $globalStats30
+            ? round((int)($globalStats30['total_views'] ?? 0) * $user->getEstimatedRpm() / 1000, 2)
+            : null;
+
         return $this->render('dashboard/index.html.twig', [
-            'is_connected' => $isConnected,
-            'latest_stats' => $latestStats,
-            'top_videos' => array_slice($topVideos, 0, 10),
-            'chart_data' => $chartData,
+            'is_connected'   => $isConnected,
+            'latest_stats'   => $latestStats,
+            'top_videos'     => array_slice($topVideos, 0, 10),
+            'chart_data'     => $chartData,
+            'goals'          => $goals,
+            'total_revenue'  => $totalRevenue30,
+            'estimated_rpm'  => $user->getEstimatedRpm(),
         ]);
     }
 

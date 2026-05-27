@@ -7,6 +7,7 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -60,6 +61,15 @@ class ProfileEmailSettingsType extends AbstractType
                 'label'    => 'Telegram Chat ID',
                 'required' => false,
                 'attr'     => ['placeholder' => 'ex: 123456789 — obtenez-le via @userinfobot'],
+            ])
+            ->add('estimatedRpm', NumberType::class, [
+                'label'       => 'RPM estimé (€/1 000 vues)',
+                'required'    => false,
+                'scale'       => 2,
+                'data'        => $options['data']->getEstimatedRpm() ?? 2.0,
+                'constraints' => [new Range(['min' => 0, 'max' => 1000])],
+                'attr'        => ['placeholder' => '2.00', 'step' => '0.10'],
+                'help'        => 'Revenu estimé pour 1 000 vues. Valeur par défaut : 2,00 €.',
             ]);
     }
 

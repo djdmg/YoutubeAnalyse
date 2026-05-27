@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\AppSettingRepository;
 use App\Repository\UserRepository;
+use App\Service\AiProviderFactory;
+use App\Service\GeminiService;
 use App\Service\TelegramNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -140,6 +142,8 @@ class AdminController extends AbstractController
     {
         return $this->render('admin/settings.html.twig', [
             'telegram_token' => $this->settingRepo->get(TelegramNotificationService::SETTING_KEY),
+            'ai_provider'    => $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE,
+            'gemini_api_key' => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
         ]);
     }
 
@@ -150,8 +154,27 @@ class AdminController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
-        $token = trim((string) $request->request->get('telegram_token', ''));
-        $this->settingRepo->set(TelegramNotificationService::SETTING_KEY, $token ?: null);
+        $section = $request->request->get('section', 'telegram');
+
+        if ($section === 'telegram') {
+            $token = trim((string) $request->request->get('telegram_token', ''));
+            $this->settingRepo->set(TelegramNotificationService::SETTING_KEY, $token ?: null);
+        } elseif ($section === 'ai') {
+            $provider = $request->request->get('ai_provider', AiProviderFactory::PROVIDER_CLAUDE);
+            if (!in_array($provider, [AiProviderFactory::PROVIDER_CLAUDE, AiProviderFactory::PROVIDER_GEMINI], true)) {
+                $provider = AiProviderFactory::PROVIDER_CLAUDE;
+            }
+            $this->settingRepo->set(AiProviderFactory::SETTING_PROVIDER, $provider);
+
+            $geminiKey = trim((string) $request->request->get('gemini_api_key', ''));
+            if ($geminiKey !== '') {
+                $this->settingRepo->set(GeminiService::SETTING_API_KEY, $geminiKey);
+            }
+        }
+
+        if ($request->isXmlHttpRequest()) {
+            return new \Symfony\Component\HttpFoundation\JsonResponse(['success' => true, 'message' => 'Paramètres sauvegardés.']);
+        }
 
         $this->addFlash('success', 'Paramètres sauvegardés.');
         return $this->redirectToRoute('admin_settings');

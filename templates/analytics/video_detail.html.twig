@@ -32,7 +32,7 @@
 </div>
 
 {# ── Tab nav ──────────────────────────────────────────────────────────── #}
-{% set ai_count = (prediction ? 1 : 0) + (title_report ? 1 : 0) + (comment_report ? 1 : 0) %}
+{% set ai_count = (prediction ? 1 : 0) + (title_report ? 1 : 0) + (comment_report ? 1 : 0) + (description_report ? 1 : 0) %}
 {% set opti_count = (seo_report ? 1 : 0) + (title_report ? 1 : 0) + (meta_history|length > 1 ? 1 : 0) %}
 
 <div class="tab-nav" id="detailTabs">
@@ -118,6 +118,26 @@ switchTab(_activeTab);
             </div>
         </div>
         {% endif %}
+        {% if estimated_revenue is defined and estimated_revenue > 0 %}
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background:rgba(34,197,94,0.15);color:var(--green)"><i class="fas fa-euro-sign"></i></div>
+            <div class="kpi-content">
+                <div class="kpi-value">{{ estimated_revenue|number_format(2, ',', ' ') }} €</div>
+                <div class="kpi-label">Revenu estimé (30j, {{ estimated_rpm }} €/k)</div>
+            </div>
+        </div>
+        {% endif %}
+        {% if thumbnail_report is defined and thumbnail_report and thumbnail_report.payload %}
+        {% set thumb_score = thumbnail_report.payload.score ?? 0 %}
+        {% set thumb_color = thumb_score >= 7 ? 'var(--green)' : (thumb_score >= 5 ? 'var(--yellow)' : '#ef4444') %}
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background:rgba(168,85,247,0.15);color:#a855f7"><i class="fas fa-image"></i></div>
+            <div class="kpi-content">
+                <div class="kpi-value" style="color:{{ thumb_color }}">{{ thumb_score }}/10</div>
+                <div class="kpi-label">Score miniature</div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -155,16 +175,40 @@ switchTab(_activeTab);
         {% endif %}
     </div>
 
-    {# Traffic Sources + Search Terms #}
+    {# Traffic Sources (30j) + Search Terms #}
     <div class="detail-grid" style="grid-template-columns: 1fr 1fr">
-        {% if latest_metric and latest_metric.trafficSources %}
+        {% if traffic_sources_agg is defined and traffic_sources_agg|length > 0 %}
+        <div class="section-card">
+            <div class="section-header">
+                <h3><i class="fas fa-traffic-light"></i> Sources de trafic <small style="font-size:11px;font-weight:400;color:var(--text-muted)">(30 derniers jours)</small></h3>
+            </div>
+            <div class="traffic-sources">
+                {% set total = traffic_total %}
+                {% for source, views in traffic_sources_agg %}
+                {% set label = traffic_source_labels[source] ?? source|replace({'_': ' '}) %}
+                <div class="traffic-row">
+                    <span class="traffic-source">{{ label }}</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        {% if total > 0 %}
+                        <div class="traffic-bar-wrap">
+                            <div class="traffic-bar" style="width:{{ ((views / total) * 100)|round }}%"></div>
+                        </div>
+                        <span style="font-size:11px;color:var(--text-muted);width:32px;text-align:right">{{ ((views / total) * 100)|round }}%</span>
+                        {% endif %}
+                        <span class="traffic-views">{{ views|number_format(0, ',', ' ') }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% elseif latest_metric and latest_metric.trafficSources %}
         <div class="section-card">
             <div class="section-header"><h3><i class="fas fa-traffic-light"></i> Sources de trafic</h3></div>
             <div class="traffic-sources">
                 {% set total = latest_metric.trafficSources|reduce((carry, v) => carry + v, 0) %}
                 {% for source, views in latest_metric.trafficSources %}
                 <div class="traffic-row">
-                    <span class="traffic-source">{{ source|replace({'_': ' ', 'YT ': 'YouTube '}) }}</span>
+                    <span class="traffic-source">{{ source|replace({'_': ' '}) }}</span>
                     <div style="display:flex;align-items:center;gap:8px">
                         {% if total > 0 %}
                         <div class="traffic-bar-wrap">
@@ -300,6 +344,80 @@ switchTab(_activeTab);
             {% endif %}
             {% if comment_report.payload.demandes_tracklist %}
             <div class="tracklist-notice"><i class="fas fa-music"></i> Tracklist demandée en commentaires</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# Thumbnail Analysis #}
+        {% if thumbnail_report is defined and thumbnail_report and thumbnail_report.payload %}
+        {% set tp = thumbnail_report.payload %}
+        {% set ts = tp.score ?? 0 %}
+        {% set tc = ts >= 7 ? 'var(--green)' : (ts >= 5 ? 'var(--yellow)' : '#ef4444') %}
+        <div class="ai-block">
+            <div class="ai-block-header">
+                <i class="fas fa-image" style="color:#a855f7"></i>
+                <h3>Analyse miniature</h3>
+                <span class="ai-model">{{ thumbnail_report.modelVersion }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
+                {% if video.thumbnailUrl %}
+                <img src="{{ video.thumbnailUrl }}" alt="" style="width:80px;border-radius:6px;flex-shrink:0">
+                {% endif %}
+                <div>
+                    <div style="font-size:28px;font-weight:700;color:{{ tc }}">{{ ts }}/10</div>
+                    <div style="font-size:12px;color:var(--text-muted)">Score de la miniature</div>
+                </div>
+            </div>
+            {% if tp.force is defined and tp.force|length > 0 %}
+            <div style="margin-bottom:8px">
+                <div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:4px"><i class="fas fa-check-circle"></i> Points forts</div>
+                {% for f in tp.force %}
+                <div style="font-size:13px;color:var(--text-secondary);padding:2px 0">• {{ f }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if tp.faiblesse is defined and tp.faiblesse|length > 0 %}
+            <div style="margin-bottom:10px">
+                <div style="font-size:11px;color:var(--yellow);font-weight:600;margin-bottom:4px"><i class="fas fa-exclamation-triangle"></i> Points faibles</div>
+                {% for f in tp.faiblesse %}
+                <div style="font-size:13px;color:var(--text-secondary);padding:2px 0">• {{ f }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if tp.recommandation is defined %}
+            <div style="background:rgba(168,85,247,.08);border-left:3px solid #a855f7;border-radius:0 6px 6px 0;padding:10px 12px;font-size:13px;color:var(--text-secondary)">
+                <i class="fas fa-lightbulb" style="color:var(--yellow);margin-right:6px"></i>{{ tp.recommandation }}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# Description Optimization #}
+        {% if description_report is defined and description_report and description_report.payload %}
+        {% set dp = description_report.payload %}
+        <div class="ai-block">
+            <div class="ai-block-header">
+                <i class="fas fa-file-alt" style="color:var(--blue)"></i>
+                <h3>Description optimisée</h3>
+                <span class="ai-model">{{ description_report.modelVersion }}</span>
+            </div>
+            {% if dp.description_optimisee is defined %}
+            <div id="descOptText" style="background:var(--bg-secondary);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-line;margin-bottom:10px;max-height:200px;overflow-y:auto">{{ dp.description_optimisee }}</div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="(function(){var t=document.getElementById('descOptText');if(navigator.clipboard){navigator.clipboard.writeText(t.innerText);}else{var r=document.createRange();r.selectNode(t);window.getSelection().removeAllRanges();window.getSelection().addRange(r);document.execCommand('copy');window.getSelection().removeAllRanges();}var btn=event.currentTarget;var orig=btn.innerHTML;btn.innerHTML='<i class=\"fas fa-check\"></i> Copié !';setTimeout(function(){btn.innerHTML=orig;},2000);})()">
+                <i class="fas fa-copy"></i> Copier
+            </button>
+            {% endif %}
+            {% if dp.mots_cles_integres is defined and dp.mots_cles_integres|length > 0 %}
+            <div class="ai-keywords" style="margin-top:12px">
+                {% for kw in dp.mots_cles_integres %}
+                <span class="keyword-tag"><i class="fas fa-key" style="font-size:9px;margin-right:3px"></i>{{ kw }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if dp.ameliorations is defined and dp.ameliorations|length > 0 %}
+            <ul class="ai-list" style="margin-top:10px">
+                {% for a in dp.ameliorations %}<li>{{ a }}</li>{% endfor %}
+            </ul>
             {% endif %}
         </div>
         {% endif %}
@@ -445,28 +563,8 @@ switchTab(_activeTab);
 {% block javascripts %}
     {{ parent() }}
     <script>
-        const chartData = {{ chart_data|json_encode|raw }};
-        const retentionData = {{ retention_data|json_encode|raw }};
+        var chartData = {{ chart_data|json_encode|raw }};
+        var retentionData = {{ retention_data|json_encode|raw }};
     </script>
     {{ encore_entry_script_tags('video_detail') }}
-    <script>
-    $(function() {
-        var TAB_KEY = 'yt_detail_tab_{{ video.youtubeId }}';
-        var savedTab = localStorage.getItem(TAB_KEY) || 'perf';
-
-        function activateTab(name) {
-            $('.tab-btn').removeClass('active');
-            $('.tab-panel').removeClass('active');
-            $('.tab-btn[data-tab="' + name + '"]').addClass('active');
-            $('#tab-' + name).addClass('active');
-            localStorage.setItem(TAB_KEY, name);
-        }
-
-        activateTab(savedTab);
-
-        $('#detailTabs').on('click', '.tab-btn', function() {
-            activateTab($(this).data('tab'));
-        });
-    });
-    </script>
 {% endblock %}

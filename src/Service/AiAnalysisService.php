@@ -29,7 +29,7 @@ class AiAnalysisService
     }
 
     public function __construct(
-        private readonly AnthropicService $anthropic,
+        private readonly AiProviderInterface $anthropic,
         private readonly EntityManagerInterface $em,
         private readonly AiReportRepository $aiReportRepo,
         private readonly VideoRepository $videoRepo,
@@ -50,11 +50,13 @@ class AiAnalysisService
     {
         $skipped = [];
         $counts  = [
-            'title_optimization' => $this->runTitleOptimization($user, $skipped),
-            'comment_analysis'   => $this->runCommentAnalysis($user, $skipped),
-            'anomaly'            => $this->runAnomalyDetection($user, $skipped),
-            'prediction'         => $this->runPredictions($user, $skipped),
-            'seo_optimization'   => $this->runSeoOptimization($user, $skipped),
+            'title_optimization'       => $this->runTitleOptimization($user, $skipped),
+            'comment_analysis'         => $this->runCommentAnalysis($user, $skipped),
+            'anomaly'                  => $this->runAnomalyDetection($user, $skipped),
+            'prediction'               => $this->runPredictions($user, $skipped),
+            'seo_optimization'         => $this->runSeoOptimization($user, $skipped),
+            'thumbnail_analysis'       => $this->runThumbnailAnalysis($user, $skipped),
+            'description_optimization' => $this->runDescriptionOptimization($user, $skipped),
         ];
         return ['counts' => $counts, 'skipped' => $skipped];
     }
@@ -64,12 +66,14 @@ class AiAnalysisService
     {
         $skipped = [];
         $count   = match($type) {
-            AiReportType::TitleOptimization => $this->runTitleOptimization($user, $skipped),
-            AiReportType::CommentAnalysis   => $this->runCommentAnalysis($user, $skipped),
-            AiReportType::Anomaly           => $this->runAnomalyDetection($user, $skipped),
-            AiReportType::Prediction        => $this->runPredictions($user, $skipped),
-            AiReportType::UploadSchedule    => $this->runUploadSchedule($user, $skipped),
-            AiReportType::SeoOptimization   => $this->runSeoOptimization($user, $skipped),
+            AiReportType::TitleOptimization      => $this->runTitleOptimization($user, $skipped),
+            AiReportType::CommentAnalysis        => $this->runCommentAnalysis($user, $skipped),
+            AiReportType::Anomaly                => $this->runAnomalyDetection($user, $skipped),
+            AiReportType::Prediction             => $this->runPredictions($user, $skipped),
+            AiReportType::UploadSchedule         => $this->runUploadSchedule($user, $skipped),
+            AiReportType::SeoOptimization        => $this->runSeoOptimization($user, $skipped),
+            AiReportType::ThumbnailAnalysis      => $this->runThumbnailAnalysis($user, $skipped),
+            AiReportType::DescriptionOptimization => $this->runDescriptionOptimization($user, $skipped),
         };
         return ['counts' => [$type->value => $count], 'skipped' => $skipped];
     }
@@ -112,7 +116,7 @@ class AiAnalysisService
                 'top_videos'         => $topRef,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
             $this->em->flush();
             $count++;
         }
@@ -154,7 +158,7 @@ class AiAnalysisService
                 'comments' => $commentTexts,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_FULL);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FULL);
             $this->em->flush();
             $count++;
         }
@@ -224,7 +228,7 @@ class AiAnalysisService
                 'traffic_sources' => $trafficSrc,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_FULL);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FULL);
             $this->em->flush();
             $count++;
         }
@@ -267,7 +271,7 @@ class AiAnalysisService
                 'reference_curves'   => $refCurves,
             ]);
 
-            $this->anthropic->call($report, $prompt, AnthropicService::MODEL_FAST);
+            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FAST);
             $this->em->flush();
             $count++;
         }
@@ -308,7 +312,7 @@ class AiAnalysisService
 
         $report = $this->createReport(null, AiReportType::UploadSchedule);
         $prompt = $this->anthropic->loadPrompt('upload_schedule', ['videos_data' => $videosData]);
-        $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+        $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
         $this->em->flush();
 
         return 1;
@@ -375,6 +379,112 @@ class AiAnalysisService
             $variance += ($v - $mean) ** 2;
         }
         return [$mean, $n > 1 ? sqrt($variance / ($n - 1)) : 0];
+    }
+
+    // ─── Analysis 7: Thumbnail Analysis (Vision) ────────────────────────────
+
+    public function runThumbnailAnalysis(User $user, array &$skipped = []): int
+    {
+        $videos = $this->videoRepo->findForUser($user);
+        $count  = 0;
+
+        foreach ($videos as $video) {
+            $thumbUrl = $video->getThumbnailUrl();
+            if (!$thumbUrl) {
+                $skipped[] = sprintf('[thumbnail_analysis] "%s" — pas de miniature', $video->getTitle());
+                continue;
+            }
+
+            if (!$this->force && $this->aiReportRepo->findRecentDone($video, AiReportType::ThumbnailAnalysis, 720)) {
+                $skipped[] = sprintf('[thumbnail_analysis] "%s" — rapport done < 30j', $video->getTitle());
+                continue;
+            }
+
+            $prompt = <<<PROMPT
+Tu es un expert en marketing visuel YouTube. Analyse cette miniature de vidéo YouTube et retourne UNIQUEMENT un JSON valide sans texte avant ni après :
+{
+  "score": 7,
+  "force": ["visage expressif", "couleurs vives"],
+  "faiblesse": ["texte illisible sur mobile", "trop chargée"],
+  "recommandation": "Simplifie le texte et agrandis les visages pour améliorer le CTR."
+}
+Le score est de 1 à 10 (10 = miniature parfaite). Sois concis et factuel.
+PROMPT;
+
+            $result = $this->anthropic->callVision($thumbUrl, $prompt, AiProviderInterface::MODEL_FAST);
+
+            if (!$result) {
+                $skipped[] = sprintf('[thumbnail_analysis] "%s" — appel vision échoué', $video->getTitle());
+                continue;
+            }
+
+            $report = $this->createReport($video, AiReportType::ThumbnailAnalysis);
+            $report->setPayload($result);
+            $report->setStatus(\App\Enum\AiReportStatus::Done);
+            $report->setModelVersion(AiProviderInterface::MODEL_FAST);
+            $this->em->flush();
+            $count++;
+        }
+
+        return $count;
+    }
+
+    // ─── Analysis 8: Description Optimization ───────────────────────────────
+
+    public function runDescriptionOptimization(User $user, array &$skipped = []): int
+    {
+        $videos = $this->videoRepo->findForUser($user);
+        $count  = 0;
+
+        foreach ($videos as $video) {
+            if (!$this->force && $this->aiReportRepo->findRecentDone($video, AiReportType::DescriptionOptimization, 720)) {
+                $skipped[] = sprintf('[description_optimization] "%s" — rapport done < 30j', $video->getTitle());
+                continue;
+            }
+
+            $terms        = $this->searchTermRepo->findTopForVideo($video, 20);
+            $termsList    = empty($terms) ? 'Aucune donnée de recherche disponible.' : implode("\n", array_map(
+                fn($t) => sprintf('- "%s" (%d vues)', $t->getQuery(), $t->getViews()),
+                $terms
+            ));
+            $description  = mb_substr($video->getDescription() ?? '', 0, 600);
+
+            $prompt = <<<PROMPT
+Tu es un expert en SEO YouTube. Optimise la description de cette vidéo pour maximiser la visibilité.
+
+Titre : "{$video->getTitle()}"
+Description actuelle :
+{$description}
+
+Requêtes de recherche performantes :
+{$termsList}
+
+Génère une description optimisée qui :
+- Intègre naturellement les mots-clés des requêtes
+- Commence par une accroche percutante (visible avant "Voir plus")
+- Est structurée avec des paragraphes clairs
+- Inclut un appel à l'action
+
+Réponds UNIQUEMENT en JSON valide, sans texte avant ni après :
+{
+  "description_optimisee": "...",
+  "mots_cles_integres": ["...", "..."],
+  "ameliorations": ["...", "..."]
+}
+PROMPT;
+
+            $report = $this->createReport($video, AiReportType::DescriptionOptimization);
+            $result = $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
+
+            if ($result) {
+                $this->em->flush();
+                $count++;
+            } else {
+                $this->em->flush();
+            }
+        }
+
+        return $count;
     }
 
     // ─── Analysis 6: SEO Optimization (search terms) ───────────────────────
@@ -453,7 +563,7 @@ PROMPT;
 
             $this->em->persist($report);
 
-            $result = $this->anthropic->call($report, $prompt, AnthropicService::MODEL_BALANCED);
+            $result = $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
 
             if ($result) {
                 $this->em->flush();
