@@ -55,4 +55,14 @@ class CommentRepository extends ServiceEntityRepository
 
         return (int) $qb->getQuery()->getSingleScalarResult();
     }
+
+    public function deleteOlderThan(\DateTimeImmutable $before): int
+    {
+        return (int) $this->createQueryBuilder('c')
+            ->delete()
+            ->where('c.publishedAt < :before')
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->execute();
+    }
 }

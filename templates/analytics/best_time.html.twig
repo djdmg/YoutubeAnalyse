@@ -130,6 +130,43 @@
 </div>
 {% endif %}
 
+{# Heatmap jour × créneau horaire #}
+{% if heatmap|length > 0 %}
+{% set dow_names = {1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 7: 'Dim'} %}
+{% set hour_labels = {0: '0–3h', 1: '3–6h', 2: '6–9h', 3: '9–12h', 4: '12–15h', 5: '15–18h', 6: '18–21h', 7: '21–24h'} %}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-th"></i> Heatmap : jour × créneau horaire</h3>
+        <span style="font-size:12px;color:var(--text-muted)">Moyenne vues J+7 — intensité = performance</span>
+    </div>
+    <div class="heatmap-grid">
+        {# Header row #}
+        <div></div>
+        {% for bucket in 0..7 %}
+        <div class="heatmap-col-header">{{ hour_labels[bucket] }}</div>
+        {% endfor %}
+        {# Data rows #}
+        {% for dow in 1..7 %}
+        <div class="heatmap-row-label">{{ dow_names[dow] }}</div>
+        {% for bucket in 0..7 %}
+        {% set cell = heatmap[dow][bucket] ?? null %}
+        {% if cell %}
+            {% set intensity = max_heatmap > 0 ? (cell.avg / max_heatmap) : 0 %}
+            {% set alpha = (0.08 + intensity * 0.82)|round(2) %}
+            <div class="heatmap-cell" style="background:rgba(59,130,246,{{ alpha }})"
+                 title="{{ dow_names[dow] }} {{ hour_labels[bucket] }} — ~{{ cell.avg|number_format(0,',',' ') }} vues · {{ cell.count }}v">
+                <span class="heatmap-cell-val">{{ cell.avg >= 1000 ? (cell.avg / 1000)|number_format(1) ~ 'k' : cell.avg }}</span>
+                <span class="heatmap-cell-cnt">{{ cell.count }}v</span>
+            </div>
+        {% else %}
+            <div class="heatmap-cell heatmap-empty" title="Aucune donnée"></div>
+        {% endif %}
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="section-card" style="border-color:rgba(59,130,246,0.15)">
     <div style="display:flex;gap:10px;align-items:flex-start">
         <i class="fas fa-info-circle" style="color:var(--blue);margin-top:2px;flex-shrink:0"></i>

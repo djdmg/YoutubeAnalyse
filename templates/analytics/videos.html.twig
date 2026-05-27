@@ -32,7 +32,34 @@
         <a href="?sort=ctr" class="sort-btn {{ sort_by == 'ctr' ? 'active' : '' }}"><i class="fas fa-percentage"></i> CTR</a>
         <a href="?sort=watch_time" class="sort-btn {{ sort_by == 'watch_time' ? 'active' : '' }}"><i class="fas fa-clock"></i> Watch Time</a>
         <a href="?sort=health" class="sort-btn {{ sort_by == 'health' ? 'active' : '' }}"><i class="fas fa-heartbeat"></i> Score</a>
+        <a href="?sort=trend" class="sort-btn {{ sort_by == 'trend' ? 'active' : '' }}"><i class="fas fa-chart-line"></i> Tendance</a>
         <a href="?sort=date" class="sort-btn {{ sort_by == 'date' ? 'active' : '' }}"><i class="fas fa-calendar"></i> Date</a>
+    </div>
+
+    {# ── Filters bar ──────────────────────────────────────────────────────── #}
+    <div class="video-filters" id="videoFilters">
+        <div class="video-search-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" id="videoSearch" class="video-search-input" placeholder="Rechercher une vidéo…" autocomplete="off">
+        </div>
+        <div class="video-filter-group">
+            <label for="filterMinViews">Vues min</label>
+            <input type="number" id="filterMinViews" class="video-filter-input" placeholder="ex : 1000" min="0">
+        </div>
+        <div class="video-filter-group">
+            <label for="filterMinScore">Score min</label>
+            <input type="number" id="filterMinScore" class="video-filter-input" placeholder="ex : 40" min="0" max="100">
+        </div>
+        <div class="video-filter-group">
+            <label for="filterDateFrom">Publiée après</label>
+            <input type="date" id="filterDateFrom" class="video-filter-input" style="width:130px">
+        </div>
+        <div class="video-filter-group">
+            <label for="filterDateTo">avant</label>
+            <input type="date" id="filterDateTo" class="video-filter-input" style="width:130px">
+        </div>
+        <button class="filter-reset" id="filterReset" title="Réinitialiser les filtres"><i class="fas fa-times"></i> Réinitialiser</button>
+        <span id="filterCount" style="font-size:12px;color:var(--text-muted)"></span>
     </div>
 
     {% if videos_data|length == 0 %}
@@ -54,7 +81,13 @@
         {% set sentiment = item.sentiment %}
         {% set prediction = item.prediction %}
         {% set scoreColor = score >= 70 ? 'var(--green)' : (score >= 40 ? 'var(--yellow)' : '#ef4444') %}
-        <div class="video-card {{ anomaly ? 'card-anomaly' : '' }}">
+        {% set trend = item.trend %}
+        {% set trendPct = trend ? trend.pct : 0 %}
+        <div class="video-card {{ anomaly ? 'card-anomaly' : '' }}"
+             data-title="{{ video.title|lower }}"
+             data-views="{{ stats.total_views }}"
+             data-score="{{ score }}"
+             data-date="{{ video.publishedAt ? video.publishedAt|date('Y-m-d') : '' }}">
             <label class="video-card-select-label" title="Sélectionner pour comparer">
             <input type="checkbox" class="video-compare-cb" value="{{ video.youtubeId }}">
             <span class="video-card-select-icon"><i class="fas fa-check"></i></span>
@@ -112,6 +145,13 @@
                     </div>
                 </div>
                 <div class="video-card-badges">
+                    {% if trend and (trend.recent > 0 or trend.prev > 0) %}
+                    {% set trendClass = trendPct >= 10 ? 'trend-up' : (trendPct <= -10 ? 'trend-down' : 'trend-flat') %}
+                    {% set trendIcon  = trendPct >= 10 ? '↑' : (trendPct <= -10 ? '↓' : '~') %}
+                    <span class="trend-badge {{ trendClass }}" title="Vues J-3 vs J-6 : {{ trend.recent }} vs {{ trend.prev }}">
+                        {{ trendIcon }} {{ trendPct > 0 ? '+' : '' }}{{ trendPct }}%
+                    </span>
+                    {% endif %}
                     {% if anomaly and anomaly.payload %}
                     <span class="badge {{ anomaly.payload.type == 'surperformance' ? 'badge-green' : 'badge-red' }}">
                         <i class="fas fa-{{ anomaly.payload.type == 'surperformance' ? 'arrow-up' : 'arrow-down' }}"></i>
@@ -171,7 +211,13 @@
                 {% set anomaly = item.anomaly %}
                 {% set sentiment = item.sentiment %}
                 {% set prediction = item.prediction %}
-                <tr class="{{ anomaly ? 'row-anomaly' : '' }}">
+                {% set trend = item.trend %}
+                {% set trendPct = trend ? trend.pct : 0 %}
+                <tr class="{{ anomaly ? 'row-anomaly' : '' }}"
+                    data-title="{{ video.title|lower }}"
+                    data-views="{{ stats.total_views }}"
+                    data-score="{{ score }}"
+                    data-date="{{ video.publishedAt ? video.publishedAt|date('Y-m-d') : '' }}">
                     <td><input type="checkbox" class="video-compare-cb" value="{{ video.youtubeId }}"></td>
                     <td class="rank">{{ loop.index }}</td>
                     <td class="video-cell">
@@ -222,7 +268,13 @@
                         </svg>
                         {% else %}<span class="na">—</span>{% endif %}
                     </td>
-                    <td class="num">{{ stats.total_views > 0 ? stats.total_views|number_format(0, ',', ' ') : '—' }}</td>
+                    <td class="num">
+                        {{ stats.total_views > 0 ? stats.total_views|number_format(0, ',', ' ') : '—' }}
+                        {% if trend and (trend.recent > 0 or trend.prev > 0) %}
+                        {% set trendClass = trendPct >= 10 ? 'trend-up' : (trendPct <= -10 ? 'trend-down' : 'trend-flat') %}
+                        <span class="trend-badge {{ trendClass }}">{{ trendPct > 0 ? '+' : '' }}{{ trendPct }}%</span>
+                        {% endif %}
+                    </td>
                     <td class="num">
                         {% if stats.avg_ctr is not null %}
                             <span class="badge {{ stats.avg_ctr >= 4 ? 'badge-green' : (stats.avg_ctr >= 2 ? 'badge-yellow' : 'badge-red') }}">
@@ -275,6 +327,12 @@
     {% endif %}
 </div>
 
+{# ── Load more bar ────────────────────────────────────────────────────────── #}
+<div class="load-more-bar" id="loadMoreBar" style="display:none">
+    <button onclick="loadMore()"><i class="fas fa-chevron-down"></i> Charger plus</button>
+    <div class="load-more-count" id="loadMoreCount"></div>
+</div>
+
 <style>
 .health-ring { position:relative; display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; }
 .health-ring-label { position:absolute; font-size:9px; font-weight:700; line-height:1; }
@@ -285,8 +343,12 @@
 <script>
 (function() {
     var _selected = [];
-    var VIEW_KEY = 'yt_videos_view';
+    var VIEW_KEY  = 'yt_videos_view';
+    var PAGE_SIZE = 20;
+    var _page     = 1;
+    var _filtered = [];  // all cards/rows matching current filter
 
+    /* ── View toggle ───────────────────────────────────────────────────── */
     function setView(view) {
         var cards = document.getElementById('viewCards');
         var table = document.getElementById('viewTable');
@@ -297,20 +359,119 @@
         });
         try { localStorage.setItem(VIEW_KEY, view); } catch(e) {}
     }
-
     var _savedView = 'cards';
     try { _savedView = localStorage.getItem(VIEW_KEY) || 'cards'; } catch(e) {}
     setView(_savedView);
-
     document.querySelectorAll('#viewToggle .view-toggle-btn').forEach(function(btn) {
         btn.addEventListener('click', function() { setView(this.getAttribute('data-view')); });
     });
 
+    /* ── Filter + search ───────────────────────────────────────────────── */
+    function getFilters() {
+        return {
+            q:        (document.getElementById('videoSearch')?.value || '').toLowerCase().trim(),
+            minViews: parseInt(document.getElementById('filterMinViews')?.value || '0') || 0,
+            minScore: parseInt(document.getElementById('filterMinScore')?.value || '0') || 0,
+            dateFrom: document.getElementById('filterDateFrom')?.value || '',
+            dateTo:   document.getElementById('filterDateTo')?.value || '',
+        };
+    }
+
+    function matchesFilter(el, f) {
+        var title = (el.dataset.title || '');
+        var views = parseInt(el.dataset.views || '0');
+        var score = parseInt(el.dataset.score || '0');
+        var date  = el.dataset.date || '';
+        if (f.q        && title.indexOf(f.q) === -1) return false;
+        if (f.minViews && views < f.minViews)         return false;
+        if (f.minScore && score < f.minScore)         return false;
+        if (f.dateFrom && date && date < f.dateFrom)  return false;
+        if (f.dateTo   && date && date > f.dateTo)    return false;
+        return true;
+    }
+
+    function applyFilters() {
+        var f     = getFilters();
+        var cards = Array.from(document.querySelectorAll('#viewCards .video-card'));
+        var rows  = Array.from(document.querySelectorAll('#viewTable tbody tr'));
+
+        _filtered = cards.filter(function(c) { return matchesFilter(c, f); });
+        _page = 1;
+
+        cards.forEach(function(c) { c.style.display = 'none'; });
+        rows.forEach(function(r)  { r.style.display = 'none'; });
+
+        var visible = _filtered.slice(0, PAGE_SIZE);
+        visible.forEach(function(c) { c.style.display = ''; });
+
+        // Match table rows by data-title
+        var visibleTitles = {};
+        visible.forEach(function(c) { visibleTitles[c.dataset.title] = true; });
+        rows.forEach(function(r) {
+            if (visibleTitles[r.dataset.title]) r.style.display = '';
+        });
+
+        updateLoadMore();
+
+        var count = document.getElementById('filterCount');
+        if (count) {
+            var total = cards.length;
+            count.textContent = _filtered.length < total
+                ? _filtered.length + ' / ' + total + ' vidéos'
+                : '';
+        }
+    }
+
+    function updateLoadMore() {
+        var bar  = document.getElementById('loadMoreBar');
+        var cnt  = document.getElementById('loadMoreCount');
+        var rest = _filtered.length - _page * PAGE_SIZE;
+        if (rest > 0) {
+            bar.style.display = '';
+            cnt.textContent   = rest + ' vidéo' + (rest > 1 ? 's' : '') + ' de plus';
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    window.loadMore = function() {
+        _page++;
+        var f     = getFilters();
+        var rows  = Array.from(document.querySelectorAll('#viewTable tbody tr'));
+        var slice = _filtered.slice(0, _page * PAGE_SIZE);
+        slice.forEach(function(c) { c.style.display = ''; });
+        var visibleTitles = {};
+        slice.forEach(function(c) { visibleTitles[c.dataset.title] = true; });
+        rows.forEach(function(r) {
+            if (visibleTitles[r.dataset.title]) r.style.display = '';
+        });
+        updateLoadMore();
+    };
+
+    ['videoSearch','filterMinViews','filterMinScore','filterDateFrom','filterDateTo'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', applyFilters);
+    });
+
+    var resetBtn = document.getElementById('filterReset');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            ['videoSearch','filterMinViews','filterMinScore','filterDateFrom','filterDateTo'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            applyFilters();
+        });
+    }
+
+    applyFilters(); // initial render (respect PAGE_SIZE from the start)
+
+    /* ── Compare checkboxes ────────────────────────────────────────────── */
     function updateCompareUI() {
         var count = document.getElementById('compareCount');
-        var btn = document.getElementById('compareBtn');
+        var btn   = document.getElementById('compareBtn');
         if (count) count.textContent = _selected.length;
-        if (btn) btn.disabled = _selected.length < 2;
+        if (btn)   btn.disabled = _selected.length < 2;
         document.querySelectorAll('.video-card').forEach(function(card) {
             var cb = card.querySelector('.video-compare-cb');
             if (cb) card.classList.toggle('card-selected', _selected.indexOf(cb.value) !== -1);
