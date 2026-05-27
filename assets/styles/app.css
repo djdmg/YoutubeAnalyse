@@ -1165,3 +1165,77 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     pointer-events: none; white-space: nowrap;
 }
 .sync-toast.show { opacity: 1; }
+
+/* =============================================
+   Trending badge
+   ============================================= */
+.trend-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; }
+.trend-up   { background:rgba(34,197,94,.15);  color:var(--green); }
+.trend-down { background:rgba(239,68,68,.12);  color:#ef4444; }
+.trend-flat { background:rgba(255,255,255,.06); color:var(--text-muted); }
+
+/* =============================================
+   Video filters bar
+   ============================================= */
+.video-filters { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 0 14px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+.video-filter-group { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary); }
+.video-filter-group label { white-space:nowrap; }
+.video-filter-input {
+    background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);
+    border-radius: var(--radius-sm); padding: 4px 8px; font-size: 12px; width: 110px;
+    transition: border-color .15s;
+}
+.video-filter-input:focus { outline:none; border-color:var(--blue); }
+.video-search-input {
+    background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);
+    border-radius: var(--radius-sm); padding: 5px 10px 5px 30px; font-size: 13px; width: 200px;
+    transition: border-color .15s;
+}
+.video-search-input:focus { outline:none; border-color:var(--blue); }
+.video-search-wrap { position:relative; }
+.video-search-wrap .fa-search { position:absolute; left:9px; top:50%; transform:translateY(-50%); font-size:11px; color:var(--text-muted); pointer-events:none; }
+.filter-reset { background:none; border:none; color:var(--text-muted); font-size:11px; cursor:pointer; padding:0 4px; }
+.filter-reset:hover { color:var(--text-primary); }
+
+/* =============================================
+   Load-more pagination
+   ============================================= */
+.load-more-bar { text-align:center; padding:20px 0 4px; }
+.load-more-bar button { background:var(--bg-secondary); border:1px solid var(--border); color:var(--text-secondary); padding:8px 28px; border-radius:var(--radius); font-size:13px; cursor:pointer; transition:var(--transition); }
+.load-more-bar button:hover { background:var(--bg-hover); color:var(--text-primary); }
+.load-more-count { font-size:12px; color:var(--text-muted); margin-top:6px; }
+
+/* =============================================
+   Heatmap (best_time page)
+   ============================================= */
+.heatmap-grid { display:grid; grid-template-columns: 52px repeat(8, 1fr); gap:3px; font-size:11px; }
+.heatmap-col-header { text-align:center; color:var(--text-muted); padding:4px 2px; font-size:10px; }
+.heatmap-row-label  { display:flex; align-items:center; color:var(--text-secondary); font-size:11px; font-weight:600; padding-right:6px; }
+.heatmap-cell {
+    aspect-ratio:1.4;
+    border-radius:4px;
+    background:var(--bg-secondary);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:1px; cursor:default;
+    transition:transform .1s;
+    position:relative;
+}
+.heatmap-cell:hover { transform:scale(1.08); z-index:2; }
+.heatmap-cell-val  { font-size:10px; font-weight:700; color:#fff; line-height:1; }
+.heatmap-cell-cnt  { font-size:9px; color:rgba(255,255,255,.6); line-height:1; }
+.heatmap-empty     { background:rgba(255,255,255,.03); }
+
+/* =============================================
+   Print / PDF export
+   ============================================= */
+@media print {
+    .sidebar, nav, .dashboard-header .header-actions, .tab-nav,
+    .sort-bar, .view-toggle, .btn, .btn-outline, .sync-overlay,
+    .video-filters, .load-more-bar { display:none !important; }
+    body { background:#fff !important; color:#000 !important; }
+    .tab-panel { display:block !important; }
+    .section-card { border:1px solid #ddd !important; background:#fff !important; break-inside:avoid; }
+    .kpi-value, .kpi-label { color:#000 !important; }
+    canvas { max-width:100%; }
+}

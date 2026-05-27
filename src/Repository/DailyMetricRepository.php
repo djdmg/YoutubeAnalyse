@@ -317,4 +317,99 @@ class DailyMetricRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Returns per-video momentum: views last 3 days vs previous 3 days.
+     * Result: [videoId => ['recent' => int, 'prev' => int, 'pct' => int]]
+     */
+    public function getTrendDataForUser(User $user): array
+    {
+        $since = new \DateTimeImmutable('-6 days midnight');
+        $rows  = $this->createQueryBuilder('dm')
+            ->select('IDENTITY(dm.video) as video_id, dm.date, dm.views')
+            ->join('dm.video', 'v')
+            ->where('v.user = :user')
+            ->andWhere('dm.date >= :since')
+            ->setParameter('user', $user)
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getArrayResult();
+
+        $byVideo = [];
+        foreach ($rows as $row) {
+            $d = $row['date'] instanceof \DateTimeInterface
+                ? $row['date']->format('Y-m-d')
+                : (string) $row['date'];
+            $byVideo[(int)$row['video_id']][$d] = (int)$row['views'];
+        }
+
+        $today  = new \DateTimeImmutable();
+        $result = [];
+        foreach ($byVideo as $videoId => $byDate) {
+            $recent = 0;
+            $prev   = 0;
+            for ($i = 1; $i <= 3; $i++) {
+                $recent += $byDate[$today->modify("-{$i} days")->format('Y-m-d')] ?? 0;
+            }
+            for ($i = 4; $i <= 6; $i++) {
+                $prev += $byDate[$today->modify("-{$i} days")->format('Y-m-d')] ?? 0;
+            }
+            $pct = $prev > 0
+                ? (int) round(($recent - $prev) / $prev * 100)
+                : ($recent > 0 ? 100 : 0);
+            $result[$videoId] = ['recent' => $recent, 'prev' => $prev, 'pct' => $pct];
+        }
+        return $result;
+    }
+
+    /**
+     * Returns avg first-week views per (day-of-week × 3h slot) for the heatmap.
+     * Result: [dow_iso => [hour_bucket => ['avg' => int, 'count' => int]]]
+     * dow_iso: 1=Mon … 7=Sun, hour_bucket: 0 (0–3h) … 7 (21–24h)
+     */
+    public function getHeatmapDataForUser(User $user): array
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $sql  = 'SELECT
+                     DAYOFWEEK(v.published_at)               AS dow_mysql,
+                     FLOOR(HOUR(v.published_at) / 3)         AS hour_bucket,
+                     AVG(fw.first_week_views)                AS avg_views,
+                     COUNT(*)                                AS cnt
+                 FROM videos v
+                 JOIN (
+                     SELECT dm2.video_id, SUM(dm2.views) AS first_week_views
+                     FROM daily_metrics dm2
+                     JOIN videos v2 ON dm2.video_id = v2.id
+                     WHERE v2.user_id = :userId
+                       AND v2.published_at IS NOT NULL
+                       AND dm2.date BETWEEN DATE(v2.published_at)
+                           AND DATE_ADD(DATE(v2.published_at), INTERVAL 6 DAY)
+                     GROUP BY dm2.video_id
+                 ) fw ON fw.video_id = v.id
+                 WHERE v.user_id = :userId
+                   AND v.published_at IS NOT NULL
+                 GROUP BY dow_mysql, hour_bucket';
+
+        $rows   = $conn->fetchAllAssociative($sql, ['userId' => $user->getId()]);
+        $result = [];
+        foreach ($rows as $row) {
+            $iso = ((int)$row['dow_mysql'] + 5) % 7 + 1; // MySQL 1=Sun → ISO 1=Mon
+            $result[$iso][(int)$row['hour_bucket']] = [
+                'avg'   => (int) round((float)$row['avg_views']),
+                'count' => (int) $row['cnt'],
+            ];
+        }
+        return $result;
+    }
+
+    /** Deletes daily metrics older than $before. Returns number of deleted rows. */
+    public function deleteOlderThan(\DateTimeImmutable $before): int
+    {
+        return (int) $this->createQueryBuilder('dm')
+            ->delete()
+            ->where('dm.date < :before')
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->execute();
+    }
 }

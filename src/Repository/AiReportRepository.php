@@ -154,4 +154,14 @@ class AiReportRepository extends ServiceEntityRepository
                 ->getArrayResult();
         });
     }
+
+    public function deleteOlderThan(\DateTimeImmutable $before): int
+    {
+        return (int) $this->createQueryBuilder('r')
+            ->delete()
+            ->where('r.generatedAt < :before')
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->execute();
+    }
 }

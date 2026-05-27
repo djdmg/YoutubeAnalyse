@@ -42,6 +42,7 @@ class VideoController extends AbstractController
 
         $listStats  = $this->metricRepo->getListStatsForUser($user);
         $sparklines = $this->metricRepo->getSparklineDataForUser($user, 7);
+        $trendData  = $this->metricRepo->getTrendDataForUser($user);
 
         $videosData = [];
         foreach ($videos as $video) {
@@ -51,14 +52,15 @@ class VideoController extends AbstractController
             $prediction= $this->aiReportRepo->findRecentDone($video, AiReportType::Prediction, 720);
 
             $videosData[] = [
-                'video'        => $video,
-                'stats'        => $stats,
+                'video'         => $video,
+                'stats'         => $stats,
                 'health_score'  => self::computeHealthScore($stats),
                 'health_detail' => self::computeHealthDetail($stats),
                 'sparkline'     => $sparklines[$video->getId()] ?? [],
-                'anomaly'      => $anomaly,
-                'sentiment'    => $sentiment,
-                'prediction'   => $prediction,
+                'trend'         => $trendData[$video->getId()] ?? null,
+                'anomaly'       => $anomaly,
+                'sentiment'     => $sentiment,
+                'prediction'    => $prediction,
             ];
         }
 
@@ -70,6 +72,7 @@ class VideoController extends AbstractController
                 'watch_time'   => ($sb['total_watch_time'] ?? 0) <=> ($sa['total_watch_time'] ?? 0),
                 'date'         => ($b['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')) <=> ($a['video']->getPublishedAt() ?? new \DateTimeImmutable('1970-01-01')),
                 'health'       => $b['health_score'] <=> $a['health_score'],
+                'trend'        => ($b['trend']['pct'] ?? 0) <=> ($a['trend']['pct'] ?? 0),
                 default        => ($sb['total_views'] ?? 0) <=> ($sa['total_views'] ?? 0),
             };
         });
@@ -156,6 +159,14 @@ class VideoController extends AbstractController
         $maxDowAvg  = $dowStats  ? max(array_column($dowStats,  'avg')) : 1;
         $maxHourAvg = $hourStats ? max(array_column($hourStats, 'avg')) : 1;
 
+        $heatmap    = $this->metricRepo->getHeatmapDataForUser($user);
+        $maxHeatmap = 1;
+        foreach ($heatmap as $buckets) {
+            foreach ($buckets as $cell) {
+                if ($cell['avg'] > $maxHeatmap) $maxHeatmap = $cell['avg'];
+            }
+        }
+
         return $this->render('analytics/best_time.html.twig', [
             'dow_stats'    => $dowStats,
             'hour_stats'   => $hourStats,
@@ -163,6 +174,8 @@ class VideoController extends AbstractController
             'max_hour_avg' => $maxHourAvg,
             'total_videos' => count($videos),
             'analyzed'     => count($firstWeek),
+            'heatmap'      => $heatmap,
+            'max_heatmap'  => $maxHeatmap,
         ]);
     }
 

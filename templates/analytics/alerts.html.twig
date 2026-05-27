@@ -26,7 +26,7 @@
 {% else %}
 
 <div class="action-filters" id="actionFilters">
-    <button class="action-filter-btn active" data-filter="all">Tout <strong>{{ total }}</strong></button>
+    <button class="action-filter-btn" data-filter="all">Tout <strong>{{ total }}</strong></button>
     {% if urgent|length > 0 %}
     <button class="action-filter-btn urgent" data-filter="urgent">🔴 Urgent <strong>{{ urgent|length }}</strong></button>
     {% endif %}
@@ -121,7 +121,6 @@
 <script>
 (function() {
     var dismissed = JSON.parse(localStorage.getItem('dismissed_actions') || '[]');
-
     dismissed.forEach(function(id) {
         var card = document.querySelector('[data-id="' + id + '"]');
         if (card) card.classList.add('dismissed');
@@ -138,19 +137,28 @@
         setTimeout(function() { card.remove(); }, 450);
     };
 
+    function applyFilter(filter) {
+        document.querySelectorAll('.action-filter-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.filter === filter);
+        });
+        document.querySelectorAll('.action-card').forEach(function(card) {
+            card.style.display = (filter === 'all' || card.dataset.urgency === filter) ? '' : 'none';
+        });
+        var url = new URL(window.location.href);
+        if (filter === 'all') { url.searchParams.delete('filter'); }
+        else { url.searchParams.set('filter', filter); }
+        history.replaceState(null, '', url.toString());
+    }
+
+    // Init from URL param
+    var params  = new URLSearchParams(window.location.search);
+    var initial = params.get('filter') || 'all';
+    applyFilter(initial);
+
     document.getElementById('actionFilters') && document.getElementById('actionFilters').addEventListener('click', function(e) {
         var btn = e.target.closest('.action-filter-btn');
         if (!btn) return;
-        document.querySelectorAll('.action-filter-btn').forEach(function(b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        var filter = btn.dataset.filter;
-        document.querySelectorAll('.action-card').forEach(function(card) {
-            if (filter === 'all' || card.dataset.urgency === filter) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
-        });
+        applyFilter(btn.dataset.filter);
     });
 })();
 </script>
