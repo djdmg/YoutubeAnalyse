@@ -6,6 +6,8 @@ use App\Entity\AiReport;
 use App\Enum\AiReportStatus;
 use App\Repository\AppSettingRepository;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class GeminiService implements AiProviderInterface
@@ -26,6 +28,7 @@ class GeminiService implements AiProviderInterface
         private readonly HttpClientInterface $httpClient,
         private readonly AppSettingRepository $settingRepo,
         private readonly LoggerInterface $logger,
+        private readonly CacheInterface $cache,
     ) {}
 
     public function loadPrompt(string $name, array $variables = []): string
@@ -165,9 +168,43 @@ class GeminiService implements AiProviderInterface
 
     // ─── Internals ────────────────────────────────────────────────────────────
 
-    private function resolveModel(string $tier): string
+    private function resolveModel(string $model): string
     {
-        return self::TIER_MAP[$tier] ?? self::TIER_MAP[AiProviderInterface::TIER_FULL];
+        // Tier alias → real model; otherwise pass-through (specific model ID)
+        return self::TIER_MAP[$model] ?? $model;
+    }
+
+    public function getAvailableModels(): array
+    {
+        $apiKey = $this->settingRepo->get(self::SETTING_API_KEY);
+        if (!$apiKey) {
+            return $this->defaultModels();
+        }
+
+        return $this->cache->get('gemini_models', function (ItemInterface $item) use ($apiKey) {
+            $item->expiresAfter(86400);
+            try {
+                $response = $this->httpClient->request('GET',
+                    'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($apiKey)
+                );
+                $data   = $response->toArray();
+                $models = [];
+                foreach ($data['models'] ?? [] as $m) {
+                    $methods = $m['supportedGenerationMethods'] ?? [];
+                    if (!in_array('generateContent', $methods, true)) continue;
+                    $rawId = $m['name'] ?? '';                     // "models/gemini-2.0-flash"
+                    $id    = preg_replace('#^models/#', '', $rawId); // "gemini-2.0-flash"
+                    $name  = $m['displayName'] ?? $id;
+                    $tier  = $this->detectTier($id);
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier];
+                }
+                usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
+                return $models ?: $this->defaultModels();
+            } catch (\Throwable $e) {
+                $this->logger->warning('Could not fetch Gemini models: ' . $e->getMessage());
+                return $this->defaultModels();
+            }
+        });
     }
 
     private function apiKey(): string
@@ -202,5 +239,33 @@ class GeminiService implements AiProviderInterface
         $text = preg_replace('/^```(?:json)?\s*/i', '', trim($text));
         $text = preg_replace('/\s*```$/i', '', $text);
         return json_decode($text, true);
+    }
+
+    private function detectTier(string $id): ?string
+    {
+        $id = strtolower($id);
+        if (str_contains($id, 'flash'))  return AiProviderInterface::TIER_FAST;
+        if (str_contains($id, 'pro'))    return AiProviderInterface::TIER_BALANCED;
+        if (str_contains($id, 'ultra'))  return AiProviderInterface::TIER_FULL;
+        return null;
+    }
+
+    private function tierOrder(?string $tier): int
+    {
+        return match($tier) {
+            AiProviderInterface::TIER_FAST     => 0,
+            AiProviderInterface::TIER_BALANCED => 1,
+            AiProviderInterface::TIER_FULL     => 2,
+            default                            => 3,
+        };
+    }
+
+    private function defaultModels(): array
+    {
+        return [
+            ['id' => 'fast',     'name' => 'Fast (Flash)',   'tier' => AiProviderInterface::TIER_FAST],
+            ['id' => 'balanced', 'name' => 'Balanced (Pro)', 'tier' => AiProviderInterface::TIER_BALANCED],
+            ['id' => 'full',     'name' => 'Full (2.5 Pro)', 'tier' => AiProviderInterface::TIER_FULL],
+        ];
     }
 }

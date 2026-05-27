@@ -8,6 +8,7 @@ use App\Entity\Video;
 use App\Enum\AiReportStatus;
 use App\Enum\AiReportType;
 use App\Repository\AiReportRepository;
+use App\Repository\AppSettingRepository;
 use App\Repository\CommentRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\VideoRepository;
@@ -36,6 +37,7 @@ class AiAnalysisService
         private readonly DailyMetricRepository $dailyMetricRepo,
         private readonly CommentRepository $commentRepo,
         private readonly VideoSearchTermRepository $searchTermRepo,
+        private readonly AppSettingRepository $settingRepo,
         private readonly LoggerInterface $logger,
         private readonly float $ctrThreshold = 4.0,
     ) {}
@@ -43,6 +45,12 @@ class AiAnalysisService
     public function setForce(bool $force): void
     {
         $this->force = $force;
+    }
+
+    /** Returns the configured model for a given task, falling back to the provided default tier. */
+    private function modelFor(AiReportType $type, string $default = AiProviderInterface::MODEL_BALANCED): string
+    {
+        return $this->settingRepo->get('ai_model_' . $type->value) ?? $default;
     }
 
     /** Run all analyses (except upload_schedule which is weekly-only). */
@@ -116,7 +124,7 @@ class AiAnalysisService
                 'top_videos'         => $topRef,
             ]);
 
-            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
+            $this->anthropic->call($report, $prompt, $this->modelFor(AiReportType::TitleOptimization, AiProviderInterface::MODEL_BALANCED));
             $this->em->flush();
             $count++;
         }
@@ -158,7 +166,7 @@ class AiAnalysisService
                 'comments' => $commentTexts,
             ]);
 
-            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FULL);
+            $this->anthropic->call($report, $prompt, $this->modelFor(AiReportType::CommentAnalysis, AiProviderInterface::MODEL_FULL));
             $this->em->flush();
             $count++;
         }
@@ -228,7 +236,7 @@ class AiAnalysisService
                 'traffic_sources' => $trafficSrc,
             ]);
 
-            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FULL);
+            $this->anthropic->call($report, $prompt, $this->modelFor(AiReportType::Anomaly, AiProviderInterface::MODEL_FULL));
             $this->em->flush();
             $count++;
         }
@@ -271,7 +279,7 @@ class AiAnalysisService
                 'reference_curves'   => $refCurves,
             ]);
 
-            $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_FAST);
+            $this->anthropic->call($report, $prompt, $this->modelFor(AiReportType::Prediction, AiProviderInterface::MODEL_FAST));
             $this->em->flush();
             $count++;
         }
@@ -312,7 +320,7 @@ class AiAnalysisService
 
         $report = $this->createReport(null, AiReportType::UploadSchedule);
         $prompt = $this->anthropic->loadPrompt('upload_schedule', ['videos_data' => $videosData]);
-        $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
+        $this->anthropic->call($report, $prompt, $this->modelFor(AiReportType::UploadSchedule, AiProviderInterface::MODEL_BALANCED));
         $this->em->flush();
 
         return 1;
@@ -411,7 +419,7 @@ Tu es un expert en marketing visuel YouTube. Analyse cette miniature de vidéo Y
 Le score est de 1 à 10 (10 = miniature parfaite). Sois concis et factuel.
 PROMPT;
 
-            $result = $this->anthropic->callVision($thumbUrl, $prompt, AiProviderInterface::MODEL_FAST);
+            $result = $this->anthropic->callVision($thumbUrl, $prompt, $this->modelFor(AiReportType::ThumbnailAnalysis, AiProviderInterface::MODEL_FAST));
 
             if (!$result) {
                 $skipped[] = sprintf('[thumbnail_analysis] "%s" — appel vision échoué', $video->getTitle());
@@ -421,7 +429,7 @@ PROMPT;
             $report = $this->createReport($video, AiReportType::ThumbnailAnalysis);
             $report->setPayload($result);
             $report->setStatus(\App\Enum\AiReportStatus::Done);
-            $report->setModelVersion(AiProviderInterface::MODEL_FAST);
+            $report->setModelVersion($this->modelFor(AiReportType::ThumbnailAnalysis, AiProviderInterface::MODEL_FAST));
             $this->em->flush();
             $count++;
         }
@@ -474,7 +482,7 @@ Réponds UNIQUEMENT en JSON valide, sans texte avant ni après :
 PROMPT;
 
             $report = $this->createReport($video, AiReportType::DescriptionOptimization);
-            $result = $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
+            $result = $this->anthropic->call($report, $prompt, $this->modelFor(AiReportType::DescriptionOptimization, AiProviderInterface::MODEL_BALANCED));
 
             if ($result) {
                 $this->em->flush();
@@ -563,7 +571,7 @@ PROMPT;
 
             $this->em->persist($report);
 
-            $result = $this->anthropic->call($report, $prompt, AiProviderInterface::MODEL_BALANCED);
+            $result = $this->anthropic->call($report, $prompt, $this->modelFor(AiReportType::SeoOptimization, AiProviderInterface::MODEL_BALANCED));
 
             if ($result) {
                 $this->em->flush();
