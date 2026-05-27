@@ -144,6 +144,131 @@
     </div>
 </div>
 
+{# ── Modèles par tâche ───────────────────────────────────────────────────── #}
+<div class="section-card" style="max-width:760px;margin-top:24px">
+    <div class="section-header">
+        <h3><i class="fas fa-sliders-h"></i> Modèle par tâche IA</h3>
+        <button type="button" id="refreshModelsBtn" class="btn btn-outline btn-sm" onclick="loadModels()">
+            <i class="fas fa-sync-alt" id="refreshIcon"></i> Actualiser les modèles
+        </button>
+    </div>
+    <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">
+        Choisissez un modèle spécifique pour chaque tâche. Les alias <strong>fast/balanced/full</strong> s'adaptent automatiquement au fournisseur actif.
+    </p>
+    <div id="modelsLoading" style="text-align:center;padding:20px;color:var(--text-muted)">
+        <i class="fas fa-spinner fa-spin"></i> Chargement des modèles…
+    </div>
+    <form method="post" action="{{ path('admin_settings_save') }}" id="taskModelsForm" style="display:none">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_settings') }}">
+        <input type="hidden" name="section" value="models">
+        <div id="taskModelsGrid" style="display:grid;gap:10px"></div>
+        <div style="margin-top:16px">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Enregistrer les modèles
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+var _savedTaskModels = {{ task_models|json_encode|raw }};
+var _availableModels = null;
+
+function loadModels(forceRefresh) {
+    var btn  = document.getElementById('refreshModelsBtn');
+    var icon = document.getElementById('refreshIcon');
+    icon.className = 'fas fa-spinner fa-spin';
+    btn.disabled = true;
+
+    var url = '{{ path('admin_settings_models') }}' + (forceRefresh ? '?refresh=1' : '');
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        icon.className = 'fas fa-sync-alt';
+        btn.disabled = false;
+        if (data.error) { alert('Erreur : ' + data.error); return; }
+        _availableModels = data;
+        renderTaskModels(data);
+    })
+    .catch(function(e) {
+        icon.className = 'fas fa-sync-alt';
+        btn.disabled = false;
+        alert('Erreur réseau : ' + e.message);
+    });
+}
+
+function renderTaskModels(data) {
+    var grid = document.getElementById('taskModelsGrid');
+    var form = document.getElementById('taskModelsForm');
+    document.getElementById('modelsLoading').style.display = 'none';
+    form.style.display = '';
+
+    var providerLabel = data.provider === 'gemini' ? '(Gemini)' : '(Claude)';
+    var allOptions = [];
+
+    // Tier options first
+    data.tiers.forEach(function(t) {
+        allOptions.push({ id: t.id, label: t.name, group: 'Alias universels' });
+    });
+    // Real models
+    data.models.forEach(function(m) {
+        var tierBadge = m.tier ? ' [' + m.tier + ']' : '';
+        allOptions.push({ id: m.id, label: m.name + tierBadge + ' ' + providerLabel, group: 'Modèles ' + data.provider });
+    });
+
+    var tasks = {{ ai_tasks_json|raw }};
+    grid.innerHTML = '';
+
+    tasks.forEach(function(task) {
+        var savedVal = _savedTaskModels[task.value] || '';
+        var row = document.createElement('div');
+        row.style.cssText = 'display:grid;grid-template-columns:220px 1fr;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px';
+
+        var label = document.createElement('label');
+        label.style.cssText = 'font-size:13px;font-weight:500;color:var(--text-primary)';
+        label.textContent = task.label;
+        label.setAttribute('for', 'task_model_' + task.value);
+
+        var select = document.createElement('select');
+        select.name  = 'ai_model_' + task.value;
+        select.id    = 'task_model_' + task.value;
+        select.className = 'form-control';
+        select.style.fontSize = '13px';
+
+        // Default option
+        var defOpt = document.createElement('option');
+        defOpt.value = '';
+        defOpt.textContent = '— Défaut du code —';
+        select.appendChild(defOpt);
+
+        // Group options
+        var groups = {};
+        allOptions.forEach(function(o) {
+            if (!groups[o.group]) groups[o.group] = [];
+            groups[o.group].push(o);
+        });
+        Object.keys(groups).forEach(function(groupName) {
+            var optgroup = document.createElement('optgroup');
+            optgroup.label = groupName;
+            groups[groupName].forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = o.label;
+                if (o.id === savedVal) opt.selected = true;
+                optgroup.appendChild(opt);
+            });
+            select.appendChild(optgroup);
+        });
+
+        row.appendChild(label);
+        row.appendChild(select);
+        grid.appendChild(row);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() { loadModels(); });
+</script>
+
 <script>
 function toggleGeminiKey(val) {
     document.getElementById('geminiKeyField').style.display = val === 'gemini' ? '' : 'none';

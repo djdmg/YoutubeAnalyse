@@ -46,4 +46,9 @@ class AiProviderFactory implements AiProviderInterface
     {
         return $this->active()->callVision($imageUrl, $prompt, $model);
     }
+
+    public function getAvailableModels(): array
+    {
+        return $this->active()->getAvailableModels();
+    }
 }

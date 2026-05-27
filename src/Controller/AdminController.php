@@ -5,9 +5,12 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\AppSettingRepository;
 use App\Repository\UserRepository;
+use App\Enum\AiReportType;
 use App\Service\AiProviderFactory;
+use App\Service\AiProviderInterface;
 use App\Service\GeminiService;
 use App\Service\TelegramNotificationService;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,6 +26,7 @@ class AdminController extends AbstractController
         private readonly UserRepository         $userRepository,
         private readonly EntityManagerInterface $em,
         private readonly AppSettingRepository   $settingRepo,
+        private readonly AiProviderFactory      $aiFactory,
     ) {}
 
     #[Route('', name: 'admin_users')]
@@ -140,11 +144,40 @@ class AdminController extends AbstractController
     #[Route('/settings', name: 'admin_settings')]
     public function settings(): Response
     {
+        $taskModels = [];
+        $aiTasks    = [];
+        foreach (AiReportType::cases() as $type) {
+            $taskModels[$type->value] = $this->settingRepo->get('ai_model_' . $type->value) ?? '';
+            $aiTasks[]                = ['value' => $type->value, 'label' => $type->label()];
+        }
+
         return $this->render('admin/settings.html.twig', [
             'telegram_token' => $this->settingRepo->get(TelegramNotificationService::SETTING_KEY),
             'ai_provider'    => $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE,
             'gemini_api_key' => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
+            'task_models'    => $taskModels,
+            'ai_tasks_json'  => json_encode($aiTasks),
         ]);
+    }
+
+    #[Route('/settings/models', name: 'admin_settings_models')]
+    public function modelsApi(): JsonResponse
+    {
+        try {
+            $models = $this->aiFactory->getAvailableModels();
+            $provider = $this->aiFactory->activeProvider();
+
+            // Prepend tier options (always available as universal aliases)
+            $tiers = [
+                ['id' => AiProviderInterface::TIER_FAST,     'name' => '⚡ Fast (défaut rapide)',    'tier' => 'fast'],
+                ['id' => AiProviderInterface::TIER_BALANCED, 'name' => '⚖️ Balanced (défaut équilibré)', 'tier' => 'balanced'],
+                ['id' => AiProviderInterface::TIER_FULL,     'name' => '🔬 Full (défaut complet)',   'tier' => 'full'],
+            ];
+
+            return new JsonResponse(['provider' => $provider, 'tiers' => $tiers, 'models' => $models]);
+        } catch (\Throwable $e) {
+            return new JsonResponse(['error' => $e->getMessage()], 500);
+        }
     }
 
     #[Route('/settings/save', name: 'admin_settings_save', methods: ['POST'])]
@@ -159,6 +192,11 @@ class AdminController extends AbstractController
         if ($section === 'telegram') {
             $token = trim((string) $request->request->get('telegram_token', ''));
             $this->settingRepo->set(TelegramNotificationService::SETTING_KEY, $token ?: null);
+        } elseif ($section === 'models') {
+            foreach (AiReportType::cases() as $type) {
+                $model = trim((string) $request->request->get('ai_model_' . $type->value, ''));
+                $this->settingRepo->set('ai_model_' . $type->value, $model ?: null);
+            }
         } elseif ($section === 'ai') {
             $provider = $request->request->get('ai_provider', AiProviderFactory::PROVIDER_CLAUDE);
             if (!in_array($provider, [AiProviderFactory::PROVIDER_CLAUDE, AiProviderFactory::PROVIDER_GEMINI], true)) {

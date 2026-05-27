@@ -23,4 +23,10 @@ interface AiProviderInterface
     public function callRaw(string $prompt, string $model = self::MODEL_BALANCED, int $maxTokens = 4096): ?array;
 
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array;
+
+    /**
+     * Returns the list of models available for this provider.
+     * Each entry: ['id' => string, 'name' => string, 'tier' => 'fast'|'balanced'|'full'|null]
+     */
+    public function getAvailableModels(): array;
 }
