@@ -20,6 +20,16 @@ class AnthropicService implements AiProviderInterface
         AiProviderInterface::TIER_FULL     => 'claude-sonnet-4-20250514',
     ];
 
+    // Pricing per 1M tokens (input / output) in USD
+    private const PRICING = [
+        'claude-haiku-4-5-20251001' => ['in' => 0.80,  'out' => 4.00],
+        'claude-haiku-4-5'          => ['in' => 0.80,  'out' => 4.00],
+        'claude-sonnet-4-6'         => ['in' => 3.00,  'out' => 15.00],
+        'claude-sonnet-4-20250514'  => ['in' => 3.00,  'out' => 15.00],
+        'claude-opus-4-5'           => ['in' => 15.00, 'out' => 75.00],
+        'claude-opus-4-7'           => ['in' => 15.00, 'out' => 75.00],
+    ];
+
     // Keep for legacy call-sites that might still use these directly
     public const MODEL_FAST     = AiProviderInterface::TIER_FAST;
     public const MODEL_BALANCED = AiProviderInterface::TIER_BALANCED;
@@ -64,7 +74,7 @@ class AnthropicService implements AiProviderInterface
                     $id   = $m['id'] ?? '';
                     $name = $m['display_name'] ?? $id;
                     $tier = $this->detectTier($id);
-                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier];
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => self::PRICING[$id] ?? null];
                 }
                 // Sort: fast first, then balanced, then full, then null
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
@@ -280,9 +290,9 @@ class AnthropicService implements AiProviderInterface
     private function defaultModels(): array
     {
         return [
-            ['id' => 'fast',     'name' => 'Fast (Haiku)',   'tier' => AiProviderInterface::TIER_FAST],
-            ['id' => 'balanced', 'name' => 'Balanced (Sonnet)', 'tier' => AiProviderInterface::TIER_BALANCED],
-            ['id' => 'full',     'name' => 'Full (Sonnet)',  'tier' => AiProviderInterface::TIER_FULL],
+            ['id' => 'fast',     'name' => 'Fast (Haiku)',      'tier' => AiProviderInterface::TIER_FAST,     'pricing' => ['in' => 0.80,  'out' => 4.00]],
+            ['id' => 'balanced', 'name' => 'Balanced (Sonnet)', 'tier' => AiProviderInterface::TIER_BALANCED, 'pricing' => ['in' => 3.00,  'out' => 15.00]],
+            ['id' => 'full',     'name' => 'Full (Sonnet)',     'tier' => AiProviderInterface::TIER_FULL,     'pricing' => ['in' => 3.00,  'out' => 15.00]],
         ];
     }
 }

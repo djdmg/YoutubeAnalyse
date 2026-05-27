@@ -22,6 +22,17 @@ class GeminiService implements AiProviderInterface
         AiProviderInterface::TIER_FULL     => 'gemini-2.5-pro',
     ];
 
+    // Pricing per 1M tokens (input / output) in USD
+    private const PRICING = [
+        'gemini-2.0-flash'          => ['in' => 0.10,  'out' => 0.40],
+        'gemini-2.0-flash-lite'     => ['in' => 0.075, 'out' => 0.30],
+        'gemini-1.5-flash'          => ['in' => 0.075, 'out' => 0.30],
+        'gemini-1.5-flash-8b'       => ['in' => 0.0375,'out' => 0.15],
+        'gemini-1.5-pro'            => ['in' => 1.25,  'out' => 5.00],
+        'gemini-2.5-pro'            => ['in' => 1.25,  'out' => 10.00],
+        'gemini-2.5-flash'          => ['in' => 0.15,  'out' => 0.60],
+    ];
+
     private const MAX_TOKENS = 2048;
 
     public function __construct(
@@ -200,7 +211,7 @@ class GeminiService implements AiProviderInterface
                     $id    = preg_replace('#^models/#', '', $rawId); // "gemini-2.0-flash"
                     $name  = $m['displayName'] ?? $id;
                     $tier  = $this->detectTier($id);
-                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier];
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier, 'pricing' => self::PRICING[$id] ?? null];
                 }
                 usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
                 return $models ?: $this->defaultModels();
@@ -209,6 +220,25 @@ class GeminiService implements AiProviderInterface
                 return $this->defaultModels();
             }
         });
+    }
+
+    public function validateApiKey(string $key): bool
+    {
+        try {
+            $response = $this->httpClient->request('GET',
+                'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($key),
+                ['timeout' => 6]
+            );
+            $data = $response->toArray();
+            return !empty($data['models']);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function clearModelsCache(): void
+    {
+        $this->cache->delete('gemini_models');
     }
 
     private function apiKey(): string
@@ -267,9 +297,9 @@ class GeminiService implements AiProviderInterface
     private function defaultModels(): array
     {
         return [
-            ['id' => 'fast',     'name' => 'Fast (Flash)',   'tier' => AiProviderInterface::TIER_FAST],
-            ['id' => 'balanced', 'name' => 'Balanced (Pro)', 'tier' => AiProviderInterface::TIER_BALANCED],
-            ['id' => 'full',     'name' => 'Full (2.5 Pro)', 'tier' => AiProviderInterface::TIER_FULL],
+            ['id' => 'fast',     'name' => 'Fast (Flash)',   'tier' => AiProviderInterface::TIER_FAST,     'pricing' => ['in' => 0.10, 'out' => 0.40]],
+            ['id' => 'balanced', 'name' => 'Balanced (Pro)', 'tier' => AiProviderInterface::TIER_BALANCED, 'pricing' => ['in' => 1.25, 'out' => 5.00]],
+            ['id' => 'full',     'name' => 'Full (2.5 Pro)', 'tier' => AiProviderInterface::TIER_FULL,     'pricing' => ['in' => 1.25, 'out' => 10.00]],
         ];
     }
 }
