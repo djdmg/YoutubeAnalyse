@@ -11,7 +11,11 @@ use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
 use App\Repository\VideoMetaSnapshotRepository;
 use App\Repository\VideoSearchTermRepository;
+use App\Service\GeminiService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -30,6 +34,9 @@ class VideoController extends AbstractController
         private readonly AiReportRepository $aiReportRepo,
         private readonly VideoMetaSnapshotRepository $snapshotRepo,
         private readonly VideoSearchTermRepository $searchTermRepo,
+        private readonly GeminiService $gemini,
+        private readonly EntityManagerInterface $em,
+        #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
     #[Route('/videos', name: 'analytics_videos')]
@@ -276,6 +283,49 @@ class VideoController extends AbstractController
             'Content-Type'        => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
+    }
+
+    #[Route('/videos/{youtubeId}/generate-thumbnail', name: 'analytics_video_generate_thumbnail', methods: ['POST'])]
+    public function generateThumbnail(string $youtubeId, Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['success' => false, 'message' => 'Vidéo introuvable.'], 404);
+        }
+
+        $prompt = trim($request->request->get('prompt', ''));
+        if ($prompt === '') {
+            $prompt = 'Stunning YouTube thumbnail for a video titled "' . $video->getTitle() . '". '
+                . 'High quality, eye-catching, vibrant colors, professional design, 16:9 aspect ratio, '
+                . 'clear text if included, no watermarks.';
+        }
+
+        try {
+            $base64 = $this->gemini->generateImage($prompt);
+            if (!$base64) {
+                return new JsonResponse(['success' => false, 'message' => 'Génération échouée. Vérifiez que la clé Gemini supporte Imagen 3.']);
+            }
+
+            $dir = $this->projectDir . '/public/uploads/thumbnails/';
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+
+            $filename = $youtubeId . '_' . time() . '.png';
+            file_put_contents($dir . $filename, base64_decode($base64));
+
+            $url = '/uploads/thumbnails/' . $filename;
+            $video->setThumbnailUrl($url);
+            $this->em->flush();
+
+            return new JsonResponse(['success' => true, 'url' => $url, 'message' => 'Miniature générée avec succès.']);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()]);
+        }
     }
 
     #[Route('/videos/{youtubeId}', name: 'analytics_video_detail')]
