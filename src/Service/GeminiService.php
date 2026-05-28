@@ -12,8 +12,9 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class GeminiService implements AiProviderInterface
 {
-    public const SETTING_API_KEY        = 'gemini_api_key';
-    public const SETTING_THUMBNAIL_MODEL = 'thumbnail_model';
+    public const SETTING_API_KEY          = 'gemini_api_key';
+    public const SETTING_THUMBNAIL_MODEL  = 'thumbnail_model';
+    public const SETTING_PROMPT_MODEL     = 'thumbnail_prompt_model';
 
     private const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 

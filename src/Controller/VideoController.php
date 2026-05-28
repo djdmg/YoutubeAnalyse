@@ -62,70 +62,49 @@ class VideoController extends AbstractController
             ? round(array_sum(array_map(fn($m) => $m->getAvgRetentionPercent() ?? 0, $metrics)) / count($metrics), 1)
             : null;
 
-        // Use up to 800 chars of description for richer context
         $description = $video->getDescription()
             ? mb_substr($video->getDescription(), 0, 800)
-            : null;
-
-        $contextLines = [];
-        $contextLines[] = 'Titre : ' . $video->getTitle();
-        if ($description)                $contextLines[] = 'Description : ' . $description;
-        if ($video->getGenre())          $contextLines[] = 'Catégorie : ' . $video->getGenre();
-        if ($totalViews > 0)             $contextLines[] = "Vues (30j) : {$totalViews}";
-        if ($avgCtr !== null)            $contextLines[] = "CTR moyen : {$avgCtr}%";
-        if ($avgRetention !== null)      $contextLines[] = "Rétention moyenne : {$avgRetention}%";
-        $context = implode("\n", $contextLines);
+            : '';
 
         $styles = [
             'cinematic wide shot, dramatic volumetric lighting, film grain',
             'bold geometric flat illustration, strong contrast, vibrant palette',
-            'photorealistic macro detail, vivid saturation, shallow depth of field',
+            'photorealistic detail, vivid saturation, shallow depth of field',
             'dark moody atmosphere, neon accent lights, smoke and fog',
             'explosive pop art, halftone dots, saturated complementary colors',
-            'ultra-minimalist composition, single strong graphic element, white space',
-            'glitch art aesthetic, chromatic aberration, digital distortion',
             'golden hour warm tones, lens flare, epic landscape scale',
+            'glitch art aesthetic, chromatic aberration, digital distortion',
+            'high-energy festival shot, crowd silhouettes, laser beams, fog machine',
         ];
-
-        $angles = [
-            'Show the EMOTION or FEELING the video provokes, not its subject.',
-            'Represent the concept as a metaphor or abstract symbol.',
-            'Focus on an unexpected detail or close-up that hints at the topic.',
-            'Use contrast: before/after, chaos/order, dark/light, slow/fast.',
-            'Show the energy or movement of the subject through dynamic composition.',
-            'Imagine what the viewer will FEEL after watching, and visualize that.',
-        ];
-
         $style = $styles[array_rand($styles)];
-        $angle = $angles[array_rand($angles)];
+
+        $promptModel = $this->settingRepo->get(GeminiService::SETTING_PROMPT_MODEL) ?? 'balanced';
 
         $aiPrompt = <<<PROMPT
-Tu es un directeur artistique spécialisé en miniatures YouTube à très haut CTR.
-L'objectif UNIQUE : faire cliquer l'utilisateur et lui donner envie de regarder la vidéo.
+You are a YouTube thumbnail art director. Your only goal: maximize click-through rate.
 
---- CONTENU DE LA VIDÉO ---
-{$context}
---- FIN DU CONTENU ---
+VIDEO CONTENT:
+Title: {$video->getTitle()}
+Description: {$description}
+Genre: {$video->getGenre()}
+Views (30d): {$totalViews}
+Avg CTR: {$avgCtr}%
 
-Étape 1 — Analyse (interne, ne pas écrire) :
-Lis attentivement la description. Identifie les 2-3 éléments visuels CONCRETS présents dans la vidéo (lieux, objets, ambiances, actions, instruments, sons, couleurs évoqués). Ces éléments doivent servir de base à l'image.
+TASK: Write an image generation prompt in English for this video's thumbnail.
 
-Étape 2 — Génère un prompt image en anglais basé sur ces éléments concrets, avec :
-- Style visuel : {$style}
-- Angle créatif : {$angle}
+STRICT RULES:
+1. Base the scene on SPECIFIC, REAL elements from the title and description (real places, real instruments, real events, real visual details mentioned). ZERO abstract or generic imagery.
+2. MANDATORY TEXT OVERLAY: include exactly 2-4 words as bold display typography directly in the scene. The text must come from the actual video content — a year, a genre name, a key phrase, a location. Write it as: bold text overlay "[YOUR TEXT]".
+3. No real human faces, no celebrity likenesses, no artist portraits — use silhouettes, objects, light effects, crowd shapes.
+4. Choose a composition that creates immediate visual impact and curiosity at small thumbnail size.
+5. End with: "16:9 aspect ratio, YouTube thumbnail, ultra high quality, no watermarks, no logos"
+6. Max 3 sentences. English only.
 
-Règles ABSOLUES :
-1. TEXTE INTÉGRÉ OBLIGATOIRE : 2 à 4 mots, typographie bold/display, intégré naturellement dans la composition. Le texte doit être spécifique au contenu (un mood, une info clé, une question intrigante tirée de la description) — pas un appel à l'action générique. Ex pour un mix techno : "2026 HARD TECHNO", pour un tuto : "THE SECRET METHOD", pour un vlog : "IT CHANGED EVERYTHING". Précise le texte exact entre guillemets dans le prompt.
-2. L'image DOIT être visuellement liée au contenu réel de la vidéo (pas une image générique).
-3. Aucun visage de personne réelle, célébrité ou artiste connu — silhouettes, objets, lieux, lumières.
-4. Terminer par : "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks, no logos"
-5. Maximum 3 phrases.
-
-Réponds UNIQUEMENT avec le prompt image en anglais. Zéro explication, zéro guillemet autour du prompt.
+Reply with ONLY the image prompt. No explanation, no quotes around it.
 PROMPT;
 
         try {
-            return $this->gemini->callRawText($aiPrompt, 'balanced', 450, 1.4);
+            return $this->gemini->callRawText($aiPrompt, $promptModel, 450, 1.3);
         } catch (\Throwable $e) {
             $this->logger->warning('Thumbnail prompt generation failed, using PHP fallback', ['error' => $e->getMessage()]);
             return $this->buildFallbackPrompt($video, $style);
@@ -137,23 +116,30 @@ PROMPT;
         $title = $video->getTitle();
         $desc  = $video->getDescription() ? mb_substr($video->getDescription(), 0, 300) : '';
 
-        // Extract meaningful words from title+description (skip stop words)
         $stopWords = ['the','a','an','and','or','of','in','on','at','to','for','with','by',
                       'le','la','les','de','du','des','un','une','et','ou','en','au','aux',
-                      'pour','avec','sur','dans','par','—','-','mix','vol','feat','ft'];
+                      'pour','avec','sur','dans','par','mix','vol','feat','ft'];
         $text  = strtolower($title . ' ' . $desc);
         preg_match_all('/\b[a-záàâäéèêëîïôöùûü]{4,}\b/u', $text, $matches);
-        $words = array_diff(array_unique($matches[0]), $stopWords);
-        $keywords = implode(', ', array_slice(array_values($words), 0, 6));
+        $words = array_values(array_diff(array_unique($matches[0]), $stopWords));
 
-        // Short overlay text: year if present in title, else first meaningful word uppercased
+        // Pick the 4 most distinctive words as scene elements
+        $sceneWords = implode(', ', array_slice($words, 0, 4));
+
+        // Overlay text: year from title, or first 2 meaningful words uppercased
         preg_match('/20\d\d/', $title, $yearMatch);
-        $overlayText = $yearMatch[0] ?? strtoupper(array_values($words)[0] ?? 'NOW');
+        if ($yearMatch) {
+            $overlayText = $yearMatch[0];
+        } elseif (count($words) >= 2) {
+            $overlayText = strtoupper($words[0] . ' ' . $words[1]);
+        } else {
+            $overlayText = strtoupper($words[0] ?? 'NOW');
+        }
 
-        return "Abstract visual composition inspired by {$keywords}, {$style}, "
-            . "bold text overlay \"{$overlayText}\" in large display font integrated into the design, "
-            . "no real human faces, no celebrity likenesses, no logos. "
-            . "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks.";
+        return "Visual scene featuring {$sceneWords}, {$style}, "
+            . "bold text overlay \"{$overlayText}\" in large display font, "
+            . "no real human faces, no logos. "
+            . "16:9 aspect ratio, YouTube thumbnail, ultra high quality, no watermarks.";
     }
 
     private function resolveThumbnailModelName(): string

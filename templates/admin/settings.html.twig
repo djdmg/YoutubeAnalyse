@@ -164,6 +164,32 @@
             <span class="help-text">Tous les modèles Gemini sont disponibles. Les modèles image (Imagen, *image-generation*) utilisent leur endpoint natif ; les autres utilisent generateContent avec responseModalities.</span>
         </div>
 
+        <div style="margin-bottom:20px">
+            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
+                <i class="fas fa-pen-nib" style="color:#a78bfa;margin-right:4px"></i> Modèle de génération de prompt (suggestion de miniature)
+            </label>
+            <select name="thumbnail_prompt_model" class="form-control" style="max-width:460px">
+                {% set text_models = image_models is not empty ? image_models|filter(m => (m.type ?? 'text') == 'text') : [] %}
+                {% if text_models is empty %}
+                    <option value="balanced" {{ (thumbnail_prompt_model ?? 'balanced') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced (défaut)</option>
+                    <option value="fast" {{ (thumbnail_prompt_model ?? '') == 'fast' ? 'selected' : '' }}>⚡ Fast</option>
+                    <option value="full" {{ (thumbnail_prompt_model ?? '') == 'full' ? 'selected' : '' }}>🔬 Full</option>
+                {% else %}
+                    <optgroup label="Niveaux génériques">
+                        <option value="fast"     {{ (thumbnail_prompt_model ?? '') == 'fast'     ? 'selected' : '' }}>⚡ Fast</option>
+                        <option value="balanced" {{ (thumbnail_prompt_model ?? 'balanced') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced (défaut)</option>
+                        <option value="full"     {{ (thumbnail_prompt_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
+                    </optgroup>
+                    <optgroup label="Modèles texte Gemini">
+                        {% for m in text_models %}
+                        <option value="{{ m.id }}" {{ (thumbnail_prompt_model ?? '') == m.id ? 'selected' : '' }}>{{ m.name }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% endif %}
+            </select>
+            <span class="help-text">Modèle utilisé pour générer le prompt envoyé au modèle image. Un modèle plus capable produit des suggestions plus créatives.</span>
+        </div>
+
         <button type="submit" class="btn btn-primary">
             <i class="fas fa-save"></i> Enregistrer
         </button>
