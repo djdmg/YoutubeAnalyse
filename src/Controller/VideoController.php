@@ -527,15 +527,26 @@ PROMPT;
         try {
             $this->youtubeData->uploadThumbnail($user, $youtubeId, $filePath);
         } catch (\Google\Service\Exception $e) {
-            $this->logger->error('YouTube thumbnail upload failed', ['error' => $e->getMessage(), 'youtubeId' => $youtubeId]);
+            $errors  = $e->getErrors();
+            $reason  = $errors[0]['reason']  ?? 'unknown';
+            $domain  = $errors[0]['domain']  ?? '';
+            $detail  = $errors[0]['message'] ?? $e->getMessage();
+            $this->logger->error('YouTube thumbnail upload failed', [
+                'youtubeId' => $youtubeId,
+                'httpCode'  => $e->getCode(),
+                'reason'    => $reason,
+                'domain'    => $domain,
+                'detail'    => $detail,
+                'raw'       => $e->getMessage(),
+            ]);
             if ($e->getCode() === 403) {
                 return new JsonResponse([
                     'success' => false,
-                    'message' => 'Accès refusé par YouTube (403). Reconnectez votre compte Google pour mettre à jour les permissions.',
+                    'message' => "Accès refusé par YouTube (403 / {$reason}). " . $detail,
                     'reauth'  => true,
                 ]);
             }
-            return new JsonResponse(['success' => false, 'message' => 'Erreur YouTube : ' . $e->getMessage()]);
+            return new JsonResponse(['success' => false, 'message' => "Erreur YouTube ({$reason}) : " . $detail]);
         } catch (\Throwable $e) {
             $this->logger->error('YouTube thumbnail upload failed', ['error' => $e->getMessage(), 'youtubeId' => $youtubeId]);
             return new JsonResponse(['success' => false, 'message' => 'Erreur upload YouTube : ' . $e->getMessage()]);
