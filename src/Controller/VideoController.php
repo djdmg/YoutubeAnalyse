@@ -381,9 +381,6 @@ PROMPT;
 
         try {
             $base64 = $this->gemini->generateImage($prompt, $model);
-            if (!$base64) {
-                return new JsonResponse(['success' => false, 'message' => 'Génération échouée. Vérifiez la clé Gemini et le modèle sélectionné dans les paramètres.']);
-            }
 
             $dir = $this->projectDir . '/public/uploads/thumbnails/';
             if (!is_dir($dir)) {
