@@ -340,6 +340,25 @@ PROMPT;
         ]);
     }
 
+    #[Route('/videos/{youtubeId}/suggest-prompt', name: 'analytics_video_suggest_prompt', methods: ['POST'])]
+    public function suggestPrompt(string $youtubeId): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['success' => false, 'message' => 'Vidéo introuvable.'], 404);
+        }
+
+        try {
+            $prompt = $this->generateThumbnailPrompt($video);
+            return new JsonResponse(['success' => true, 'prompt' => $prompt]);
+        } catch (\Throwable $e) {
+            return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()]);
+        }
+    }
+
     #[Route('/videos/{youtubeId}/generate-thumbnail', name: 'analytics_video_generate_thumbnail', methods: ['POST'])]
     public function generateThumbnail(string $youtubeId, Request $request): JsonResponse
     {
@@ -352,11 +371,11 @@ PROMPT;
         }
 
         $prompt = trim($request->request->get('prompt', ''));
-        $model  = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
-
         if ($prompt === '') {
-            $prompt = $this->generateThumbnailPrompt($video);
+            return new JsonResponse(['success' => false, 'message' => 'Le prompt est vide. Utilisez "Suggérer un prompt" pour en générer un.']);
         }
+
+        $model = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
 
         try {
             $base64 = $this->gemini->generateImage($prompt, $model);
