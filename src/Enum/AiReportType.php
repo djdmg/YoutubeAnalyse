@@ -8,9 +8,12 @@ enum AiReportType: string
     case Anomaly           = 'anomaly';
     case Prediction        = 'prediction';
     case UploadSchedule    = 'upload_schedule';
-    case SeoOptimization        = 'seo_optimization';
-    case ThumbnailAnalysis      = 'thumbnail_analysis';
+    case SeoOptimization         = 'seo_optimization';
+    case ThumbnailAnalysis       = 'thumbnail_analysis';
     case DescriptionOptimization = 'description_optimization';
+    case ThumbnailGeneration     = 'thumbnail_generation';
+    case ThumbnailPrompt         = 'thumbnail_prompt';
+    case GoalSuggestions         = 'goal_suggestions';
 
     public function label(): string
     {
@@ -23,6 +26,9 @@ enum AiReportType: string
             self::SeoOptimization        => 'SEO — Requêtes de recherche',
             self::ThumbnailAnalysis      => 'Analyse miniature',
             self::DescriptionOptimization => 'Optimisation description',
+            self::ThumbnailGeneration    => 'Génération miniature',
+            self::ThumbnailPrompt        => 'Génération prompt miniature',
+            self::GoalSuggestions        => 'Suggestions objectifs',
         };
     }
 }

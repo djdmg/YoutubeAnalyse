@@ -25,6 +25,14 @@ interface AiProviderInterface
     /** Returns the model's raw text response (no JSON parsing). Throws on failure. */
     public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 1024): string;
 
+    /**
+     * Returns a parsed JSON value constrained by $schema.
+     * Providers use native JSON mode (Gemini responseMimeType, Claude tool_use) so output
+     * is always valid JSON — no fence-stripping required.
+     * Optionally fills $report with token usage, model, duration.
+     */
+    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, int $maxTokens = 1024, ?AiReport $report = null): mixed;
+
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array;
 
     /**
