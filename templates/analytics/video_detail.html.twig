@@ -553,18 +553,20 @@ switchTab(_activeTab);
                    style="flex:1;min-width:200px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text-primary);font-size:13px;outline:none;resize:vertical;line-height:1.5"></textarea>
         </div>
         {# Meta-prompt viewer — hidden until a suggestion is generated #}
-        <details id="metaPromptDetails" style="display:none;margin-bottom:10px">
-            <summary style="font-size:.75rem;color:var(--text-muted);cursor:pointer;user-select:none;padding:.35rem 0;list-style:none;display:flex;align-items:center;gap:.4rem">
-                <i class="fas fa-code" style="font-size:.7em"></i> Voir la demande envoyée à l'IA
-            </summary>
-            <div style="position:relative;margin-top:.5rem">
-                <pre id="metaPromptPre" style="background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:.875rem 1rem;font-size:.72rem;color:var(--text-secondary);white-space:pre-wrap;line-height:1.55;max-height:320px;overflow-y:auto;margin:0"></pre>
-                <button id="copyMetaBtn" onclick="copyMetaPrompt()" title="Copier"
-                    style="position:absolute;top:.5rem;right:.5rem;background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--text-muted);border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.72rem;transition:.15s">
+        <div id="metaPromptDetails" style="display:none;margin-bottom:12px;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);border-radius:10px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .875rem;border-bottom:1px solid rgba(99,102,241,.15);cursor:pointer;user-select:none" onclick="var p=document.getElementById('metaPromptBody');p.style.display=p.style.display==='none'?'':'none'">
+                <span style="font-size:.75rem;font-weight:600;color:#a78bfa;display:flex;align-items:center;gap:.4rem">
+                    <i class="fas fa-code"></i> Demande envoyée à l'IA (meta-prompt)
+                </span>
+                <button id="copyMetaBtn" onclick="event.stopPropagation();copyMetaPrompt()" title="Copier"
+                    style="background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.25);color:#a78bfa;border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.72rem;transition:.15s">
                     <i class="fas fa-copy"></i> Copier
                 </button>
             </div>
-        </details>
+            <div id="metaPromptBody" style="padding:.75rem .875rem">
+                <pre id="metaPromptPre" style="background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:.75rem 1rem;font-size:.72rem;color:var(--text-secondary);white-space:pre-wrap;line-height:1.6;max-height:350px;overflow-y:auto;margin:0"></pre>
+            </div>
+        </div>
 
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
             <button id="suggestBtn" onclick="suggestPromptImagen()" class="btn btn-secondary" style="white-space:nowrap">
@@ -684,6 +686,8 @@ switchTab(_activeTab);
                 if (details && pre && data.meta_prompt) {
                     pre.textContent = data.meta_prompt;
                     details.style.display = '';
+                    var body = document.getElementById('metaPromptBody');
+                    if (body) body.style.display = '';
                 }
             } else {
                 errorDiv.textContent   = data.message || 'Erreur inconnue.';
