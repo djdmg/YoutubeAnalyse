@@ -280,6 +280,11 @@ class YouTubeDataService
             $this->logger->warning('Video pre-flight API error (continuing)', ['error' => $e->getMessage()]);
         }
 
+        $fileSize = filesize($filePath);
+        if ($fileSize > 2 * 1024 * 1024) {
+            throw new \RuntimeException(sprintf('Le fichier dépasse 2 Mo (%s Mo). Veuillez régénérer la miniature.', number_format($fileSize / 1024 / 1024, 1)));
+        }
+
         $chunkSize = 1 * 1024 * 1024;
 
         $client->setDefer(true);

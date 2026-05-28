@@ -62,7 +62,11 @@ class GenerateThumbnailHandler
             // Detect actual format from magic bytes — Gemini often returns JPEG despite PNG requests
             $ext      = str_starts_with($imageData, "\x89PNG") ? 'png' : 'jpg';
             $filename = $message->videoId . '_gen_' . $message->jobId . '.' . $ext;
-            file_put_contents($dir . $filename, $imageData);
+            $filePath = $dir . $filename;
+            file_put_contents($filePath, $imageData);
+
+            // Resize to 1280×720 (YouTube thumbnail requirement, max 2 MB)
+            $this->resizeTo1280x720($filePath, $ext);
 
             $report->setStatus(AiReportStatus::Done);
             $report->setDurationMs((int)((microtime(true) - $startTime) * 1000));
@@ -95,6 +99,43 @@ class GenerateThumbnailHandler
             $this->storeResult($cacheKey, ['status' => 'error', 'message' => $msg]);
             throw $e;
         }
+    }
+
+    private function resizeTo1280x720(string $filePath, string $ext): void
+    {
+        $src = $ext === 'png' ? imagecreatefrompng($filePath) : imagecreatefromjpeg($filePath);
+        if (!$src) {
+            return;
+        }
+
+        $srcW = imagesx($src);
+        $srcH = imagesy($src);
+
+        if ($srcW === 1280 && $srcH === 720) {
+            imagedestroy($src);
+            return;
+        }
+
+        $dst = imagecreatetruecolor(1280, 720);
+        // Black letterbox background
+        imagefill($dst, 0, 0, imagecolorallocate($dst, 0, 0, 0));
+
+        // Scale to fit inside 1280×720, preserving aspect ratio
+        $scale  = min(1280 / $srcW, 720 / $srcH);
+        $newW   = (int) round($srcW * $scale);
+        $newH   = (int) round($srcH * $scale);
+        $dstX   = (int) round((1280 - $newW) / 2);
+        $dstY   = (int) round((720 - $newH) / 2);
+
+        imagecopyresampled($dst, $src, $dstX, $dstY, 0, 0, $newW, $newH, $srcW, $srcH);
+        imagedestroy($src);
+
+        if ($ext === 'png') {
+            imagepng($dst, $filePath, 6); // compression 6 keeps quality while staying under 2 MB
+        } else {
+            imagejpeg($dst, $filePath, 90);
+        }
+        imagedestroy($dst);
     }
 
     private function storeResult(string $key, array $data): void
