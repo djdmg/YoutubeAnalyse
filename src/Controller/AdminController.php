@@ -159,7 +159,7 @@ class AdminController extends AbstractController
             'ai_provider'      => $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE,
             'gemini_api_key'   => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
             'thumbnail_model'  => $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001',
-            'image_models'     => $this->gemini->getImageModels(),
+            'image_models'     => $this->gemini->getAvailableModels(),
             'task_models'      => $taskModels,
             'ai_tasks_json'    => json_encode($aiTasks),
         ]);
