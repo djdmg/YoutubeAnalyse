@@ -227,12 +227,12 @@ class AnthropicService implements AiProviderInterface
     /**
      * Calls Claude Vision with an image URL and prompt. Returns parsed JSON or null.
      */
-    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192): string
+    public function callText(string $prompt, string $model = self::MODEL_FAST): string
     {
         $resolvedModel = $this->resolveModel($model);
         try {
             $response = $this->client->messages->create(
-                maxTokens: $maxTokens,
+                maxTokens: self::MAX_TOKENS,
                 messages:  [['role' => 'user', 'content' => $prompt]],
                 model:     $resolvedModel,
             );
@@ -247,7 +247,7 @@ class AnthropicService implements AiProviderInterface
         }
     }
 
-    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, int $maxTokens = 1024, ?\App\Entity\AiReport $report = null): mixed
+    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, ?\App\Entity\AiReport $report = null): mixed
     {
         $startTime     = microtime(true);
         $resolvedModel = $this->resolveModel($model);
@@ -261,7 +261,7 @@ class AnthropicService implements AiProviderInterface
 
         try {
             $response = $this->client->messages->create(
-                maxTokens:  $maxTokens,
+                maxTokens:  self::MAX_TOKENS,
                 messages:   [['role' => 'user', 'content' => $prompt]],
                 model:      $resolvedModel,
                 tools:      [['name' => 'output', 'description' => 'Structured JSON output', 'input_schema' => $toolSchema]],

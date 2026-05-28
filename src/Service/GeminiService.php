@@ -46,7 +46,6 @@ class GeminiService implements AiProviderInterface
         ['id' => 'imagen-3.0-fast-generate-001', 'name' => 'Imagen 3 Fast', 'tier' => null, 'type' => 'image', 'pricing' => ['label' => '$0.02/image']],
     ];
 
-    private const MAX_TOKENS = 8192;
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
@@ -77,7 +76,7 @@ class GeminiService implements AiProviderInterface
         try {
             $data = $this->request($resolvedModel, [
                 ['role' => 'user', 'parts' => [['text' => $prompt]]],
-            ], self::MAX_TOKENS);
+            ]);
 
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
@@ -147,21 +146,21 @@ class GeminiService implements AiProviderInterface
         }
     }
 
-    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192): string
+    public function callText(string $prompt, string $model = self::MODEL_FAST): string
     {
-        return $this->callRawText($prompt, $model, $maxTokens, 0.7);
+        return $this->callRawText($prompt, $model, 0.7);
     }
 
-    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192, float $temperature = 1.0): string
+    public function callRawText(string $prompt, string $model = self::MODEL_FAST, float $temperature = 1.0): string
     {
-        return $this->callRawTextFull($prompt, $model, $maxTokens, $temperature)['text'];
+        return $this->callRawTextFull($prompt, $model, $temperature)['text'];
     }
 
     /**
      * Like callRawText but also returns token counts, duration, resolved model.
      * @return array{text:string, tokensInput:int, tokensOutput:int, durationMs:int, model:string}
      */
-    public function callRawTextFull(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192, float $temperature = 1.0): array
+    public function callRawTextFull(string $prompt, string $model = self::MODEL_FAST, float $temperature = 1.0): array
     {
         $resolvedModel = $this->resolveModel($model);
         $url           = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
@@ -169,9 +168,9 @@ class GeminiService implements AiProviderInterface
         $response = $this->httpClient->request('POST', $url, [
             'json' => [
                 'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-                'generationConfig' => ['maxOutputTokens' => $maxTokens, 'temperature' => $temperature],
+                'generationConfig' => ['temperature' => $temperature],
             ],
-            'timeout' => 30,
+            'timeout' => 60,
         ]);
         $data = $response->toArray();
         $text = trim($data['candidates'][0]['content']['parts'][0]['text'] ?? '');
@@ -188,7 +187,7 @@ class GeminiService implements AiProviderInterface
         ];
     }
 
-    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, int $maxTokens = 1024, ?\App\Entity\AiReport $report = null): mixed
+    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, ?\App\Entity\AiReport $report = null): mixed
     {
         $resolvedModel = $this->resolveModel($model);
         $url           = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
@@ -197,13 +196,12 @@ class GeminiService implements AiProviderInterface
         // responseMimeType forces valid JSON output without needing a responseSchema.
         // responseSchema is intentionally omitted: it is unreliable across Gemini model
         // versions (some return empty text when an unsupported schema variant is passed).
-        // The prompt itself describes the expected structure.
+        // No maxOutputTokens: let the model generate as much as needed.
         try {
             $response = $this->httpClient->request('POST', $url, [
                 'json' => [
                     'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
                     'generationConfig' => [
-                        'maxOutputTokens'  => $maxTokens,
                         'responseMimeType' => 'application/json',
                     ],
                 ],
@@ -275,7 +273,7 @@ class GeminiService implements AiProviderInterface
                     ['inlineData' => ['mimeType' => $mediaType, 'data' => base64_encode($imageData)]],
                     ['text' => $prompt],
                 ],
-            ]], 512);
+            ]]);
 
             $text   = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
             $parsed = $this->parseJson($text);
@@ -478,17 +476,14 @@ class GeminiService implements AiProviderInterface
         return $key;
     }
 
-    private function request(string $model, array $contents, int $maxOutputTokens): array
+    private function request(string $model, array $contents): array
     {
         $url = self::BASE_URL . $model . ':generateContent?key=' . urlencode($this->apiKey());
 
         $response = $this->httpClient->request('POST', $url, [
             'json' => [
-                'contents'       => $contents,
-                'generationConfig' => [
-                    'maxOutputTokens'  => $maxOutputTokens,
-                    'responseMimeType' => 'application/json',
-                ],
+                'contents'         => $contents,
+                'generationConfig' => ['responseMimeType' => 'application/json'],
             ],
         ]);
 
