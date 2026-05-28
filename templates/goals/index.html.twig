@@ -346,6 +346,67 @@
     var aiSugg    = document.getElementById('aiSuggestions');
     var suggList  = document.getElementById('suggestionsList');
 
+    var typeLabels = { subscribers: 'Abonnés', views: 'Vues (30j)', watch_time: 'Watch time (30j)' };
+    var typeIcons  = { subscribers: 'fa-users', views: 'fa-eye', watch_time: 'fa-clock' };
+
+    function showSuggestions(suggestions) {
+        aiLoading.style.display = 'none';
+        if (!suggestions || suggestions.length === 0) {
+            aiError.textContent = "L'IA n'a pas pu générer de suggestions. Réessaie.";
+            aiError.style.display = '';
+            return;
+        }
+        suggList.innerHTML = '';
+        suggestions.forEach(function(s, i) {
+            var id = 'aisugg_' + i;
+            var dl = s.deadline ? ' · <i class="fas fa-calendar" style="margin-right:.2rem"></i>' + s.deadline : '';
+            var tl = typeLabels[s.type] || s.type;
+            var ti = typeIcons[s.type] || 'fa-chart-line';
+            suggList.insertAdjacentHTML('beforeend',
+                '<label for="' + id + '" style="display:flex;align-items:flex-start;gap:.75rem;padding:.875rem 1rem;background:var(--bg-primary);border:1px solid var(--border);border-radius:10px;cursor:pointer">'
+                + '<input type="checkbox" id="' + id + '" checked data-idx="' + i + '" style="margin-top:.2rem;flex-shrink:0;accent-color:#6366f1">'
+                + '<div style="min-width:0">'
+                + '<div style="font-weight:600;font-size:.9rem;color:var(--text-primary);margin-bottom:.2rem">' + s.label + '</div>'
+                + '<div style="font-size:.75rem;color:var(--text-muted)">'
+                + '<i class="fas ' + ti + '" style="margin-right:.3rem"></i>' + tl
+                + ' · <b style="color:var(--text-secondary)">' + s.targetValue.toLocaleString('fr-FR') + '</b>'
+                + dl + '</div></div></label>'
+            );
+        });
+        window._aiSuggestions = suggestions;
+        aiSugg.style.display = '';
+    }
+
+    function pollStatus(jobId, attempts) {
+        attempts = attempts || 0;
+        if (attempts > 60) { // 2 min max
+            aiLoading.style.display = 'none';
+            aiError.textContent = 'Délai dépassé. Le worker est-il démarré ?';
+            aiError.style.display = '';
+            return;
+        }
+        fetch('{{ path('goal_generate_status', {jobId: '__JOB__'}) }}'.replace('__JOB__', jobId))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'pending') {
+                    setTimeout(function() { pollStatus(jobId, attempts + 1); }, 2000);
+                    return;
+                }
+                if (data.status === 'error') {
+                    aiLoading.style.display = 'none';
+                    aiError.textContent = 'Erreur IA : ' + (data.message || 'inconnue');
+                    aiError.style.display = '';
+                    return;
+                }
+                showSuggestions(data.suggestions);
+            })
+            .catch(function() {
+                aiLoading.style.display = 'none';
+                aiError.textContent = 'Erreur réseau. Vérifie ta connexion.';
+                aiError.style.display = '';
+            });
+    }
+
     function openAiModal() {
         aiModal.style.display = 'flex';
         aiLoading.style.display = '';
@@ -359,33 +420,13 @@
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            aiLoading.style.display = 'none';
-            if (data.error) { aiError.textContent = data.error; aiError.style.display = ''; return; }
-            if (!data.suggestions || data.suggestions.length === 0) {
-                aiError.textContent = 'L\'IA n\'a pas pu générer de suggestions. Réessaie.';
+            if (data.error) {
+                aiLoading.style.display = 'none';
+                aiError.textContent = data.error;
                 aiError.style.display = '';
                 return;
             }
-            var typeLabels = { subscribers: 'Abonnés', views: 'Vues (30j)', watch_time: 'Watch time (30j)' };
-            var typeIcons  = { subscribers: 'fa-users', views: 'fa-eye', watch_time: 'fa-clock' };
-            data.suggestions.forEach(function(s, i) {
-                var id = 'aisugg_' + i;
-                var dl = s.deadline ? ' · <i class="fas fa-calendar" style="margin-right:.2rem"></i>' + s.deadline : '';
-                var tl = typeLabels[s.type] || s.type;
-                var ti = typeIcons[s.type] || 'fa-chart-line';
-                var html = '<label for="' + id + '" style="display:flex;align-items:flex-start;gap:.75rem;padding:.875rem 1rem;background:var(--bg-primary);border:1px solid var(--border);border-radius:10px;cursor:pointer">'
-                    + '<input type="checkbox" id="' + id + '" checked data-idx="' + i + '" style="margin-top:.2rem;flex-shrink:0;accent-color:#6366f1">'
-                    + '<div style="min-width:0">'
-                    + '<div style="font-weight:600;font-size:.9rem;color:var(--text-primary);margin-bottom:.2rem">' + s.label + '</div>'
-                    + '<div style="font-size:.75rem;color:var(--text-muted)">'
-                    + '<i class="fas ' + ti + '" style="margin-right:.3rem"></i>' + tl
-                    + ' · <b style="color:var(--text-secondary)">' + s.targetValue.toLocaleString('fr-FR') + '</b>'
-                    + dl + '</div>'
-                    + '</div></label>';
-                suggList.insertAdjacentHTML('beforeend', html);
-            });
-            aiSugg.style.display = '';
-            window._aiSuggestions = data.suggestions;
+            pollStatus(data.jobId, 0);
         })
         .catch(function() {
             aiLoading.style.display = 'none';
