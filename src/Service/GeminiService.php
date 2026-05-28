@@ -476,14 +476,19 @@ class GeminiService implements AiProviderInterface
         return $key;
     }
 
-    private function request(string $model, array $contents): array
+    private function request(string $model, array $contents, ?int $maxOutputTokens = null): array
     {
         $url = self::BASE_URL . $model . ':generateContent?key=' . urlencode($this->apiKey());
+
+        $generationConfig = ['responseMimeType' => 'application/json'];
+        if ($maxOutputTokens !== null) {
+            $generationConfig['maxOutputTokens'] = $maxOutputTokens;
+        }
 
         $response = $this->httpClient->request('POST', $url, [
             'json' => [
                 'contents'         => $contents,
-                'generationConfig' => ['responseMimeType' => 'application/json'],
+                'generationConfig' => $generationConfig,
             ],
         ]);
 

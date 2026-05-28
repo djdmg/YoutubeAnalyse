@@ -1,0 +1,301 @@
+{% extends 'base.html.twig' %}
+{% block title %}Logs — {{ logFile }}{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-file-alt" style="color:#a78bfa"></i> Logs serveur</h1>
+        <span class="last-sync" id="logMeta">
+            {{ logFile }} · {{ exists ? (size / 1024)|round ~ ' Ko' : 'fichier absent' }}
+        </span>
+    </div>
+    <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+        <select id="linesSelect" class="btn btn-outline btn-sm" style="padding:.35rem .75rem;cursor:pointer">
+            <option value="100">100 lignes</option>
+            <option value="500" selected>500 lignes</option>
+            <option value="1000">1 000 lignes</option>
+            <option value="2000">2 000 lignes</option>
+        </select>
+        <span id="refreshStatus" style="font-size:.75em;color:var(--text-muted)"></span>
+        <button onclick="logsRefresh()" class="btn btn-outline btn-sm" id="btnRefresh">
+            <i class="fas fa-sync-alt"></i> Actualiser
+        </button>
+        <button onclick="openClearModal()" class="btn btn-sm" style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3)">
+            <i class="fas fa-trash-alt"></i> Vider les logs
+        </button>
+        <a href="{{ path('admin_messenger') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-paper-plane"></i> Messenger
+        </a>
+    </div>
+</div>
+
+{# ── Filter bar ───────────────────────────────────────────────────────────── #}
+<div style="display:flex;gap:.6rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
+    <input id="filterInput" type="text" placeholder="Filtrer… (ex: error, search terms, thumbnail)"
+        style="flex:1;min-width:200px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:.5rem .875rem;color:var(--text-primary);font-size:.85rem;outline:none">
+    <div style="display:flex;gap:.4rem">
+        <button onclick="setLevel('all')"   class="lvl-btn lvl-active" data-lvl="all">Tout</button>
+        <button onclick="setLevel('error')" class="lvl-btn" data-lvl="error" style="color:#ef4444">ERROR</button>
+        <button onclick="setLevel('warn')"  class="lvl-btn" data-lvl="warn"  style="color:#f59e0b">WARN</button>
+        <button onclick="setLevel('info')"  class="lvl-btn" data-lvl="info"  style="color:#60a5fa">INFO</button>
+        <button onclick="setLevel('debug')" class="lvl-btn" data-lvl="debug" style="color:#94a3b8">DEBUG</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-muted);cursor:pointer">
+        <input type="checkbox" id="autoScrollCb" checked> Auto-scroll
+    </label>
+</div>
+
+{# ── Log viewer ───────────────────────────────────────────────────────────── #}
+<div class="section-card" style="padding:0;overflow:hidden">
+    <div id="logWrap" style="background:#0d0d1a;font-family:monospace;font-size:.75rem;line-height:1.5;overflow-y:auto;max-height:calc(100vh - 240px);padding:.75rem 1rem">
+        {% if not exists %}
+        <div style="color:var(--text-muted);padding:2rem;text-align:center">Fichier de log absent.</div>
+        {% elseif lines is empty %}
+        <div style="color:var(--text-muted);padding:2rem;text-align:center">Fichier vide.</div>
+        {% else %}
+        <div id="logContent">
+        {% for line in lines %}{{ _self.logLine(line) }}{% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div style="padding:.5rem 1rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:.75em;color:var(--text-muted)">
+        <span id="visibleCount">{{ lines|length }} lignes affichées</span>
+        <span id="sizeInfo">{{ exists ? (size / 1024)|round ~ ' Ko' : '' }}</span>
+    </div>
+</div>
+
+{% macro logLine(line) %}
+{% set lc = line|lower %}
+{% if 'critical' in lc or 'emergency' in lc %}
+<div class="log-line log-critical" style="color:#ff6b6b;background:rgba(239,68,68,.06);padding:.05rem .25rem;border-left:2px solid #ef4444;margin:.05rem 0">{{ line }}</div>
+{% elseif 'error' in lc %}
+<div class="log-line log-error" style="color:#f87171;padding:.05rem .25rem;border-left:2px solid rgba(239,68,68,.4);margin:.05rem 0">{{ line }}</div>
+{% elseif 'warning' in lc %}
+<div class="log-line log-warn" style="color:#fbbf24;padding:.05rem .25rem;border-left:2px solid rgba(245,158,11,.4);margin:.05rem 0">{{ line }}</div>
+{% elseif 'info' in lc %}
+<div class="log-line log-info" style="color:#93c5fd;padding:.05rem .25rem">{{ line }}</div>
+{% elseif 'debug' in lc %}
+<div class="log-line log-debug" style="color:#64748b;padding:.05rem .25rem">{{ line }}</div>
+{% else %}
+<div class="log-line log-other" style="color:#94a3b8;padding:.05rem .25rem">{{ line }}</div>
+{% endif %}
+{% endmacro %}
+
+{# ── Clear modal ──────────────────────────────────────────────────────────── #}
+<div id="clearModalOverlay" style="display:none" onclick="if(event.target===this)closeClearModal()">
+    <div id="clearModal" role="dialog" aria-modal="true">
+        <div class="cm-icon-wrap"><i class="fas fa-trash-alt"></i></div>
+        <h2>Vider les logs</h2>
+        <p>Le contenu de <code>{{ logFile }}</code> sera effacé définitivement.</p>
+        <div class="cm-actions">
+            <button id="clearModalCancel" class="cm-btn cm-btn-cancel" onclick="closeClearModal()">Annuler</button>
+            <button id="clearModalConfirm" class="cm-btn cm-btn-danger" onclick="confirmClear()">
+                <i class="fas fa-trash-alt"></i> Vider
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.lvl-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .25rem .65rem;
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: .15s;
+}
+.lvl-btn:hover, .lvl-btn.lvl-active { background: rgba(167,139,250,.15); border-color: rgba(167,139,250,.4); color: #a78bfa; }
+
+#clearModalOverlay {
+    position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);
+    display:flex;align-items:center;justify-content:center;z-index:9999;
+    opacity:0;transition:opacity .2s ease;
+}
+#clearModalOverlay.cm-visible { opacity:1; }
+#clearModalOverlay.cm-visible #clearModal { transform:translateY(0) scale(1); opacity:1; }
+#clearModal {
+    background:#13131f;border:1px solid rgba(239,68,68,.25);border-radius:16px;
+    padding:36px 32px 28px;max-width:400px;width:calc(100% - 32px);text-align:center;
+    box-shadow:0 24px 64px rgba(0,0,0,.7);
+    transform:translateY(24px) scale(.97);opacity:0;
+    transition:transform .25s cubic-bezier(.34,1.56,.64,1),opacity .2s ease;
+}
+.cm-icon-wrap { width:64px;height:64px;border-radius:50%;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:24px;color:#f87171;animation:cm-pulse 2s ease-in-out infinite; }
+@keyframes cm-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.25)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)} }
+#clearModal h2 { margin:0 0 10px;font-size:18px;font-weight:700;color:#f1f5f9; }
+#clearModal p  { margin:0 0 28px;font-size:13px;color:#94a3b8;line-height:1.6; }
+#clearModal code { background:rgba(0,0,0,.35);padding:.1rem .4rem;border-radius:4px; }
+.cm-actions { display:flex;gap:10px;justify-content:center; }
+.cm-btn { padding:9px 22px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:.15s; }
+.cm-btn:active { transform:scale(.97); }
+.cm-btn:disabled { opacity:.55;cursor:not-allowed; }
+.cm-btn-cancel { background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:#cbd5e1; }
+.cm-btn-cancel:hover:not(:disabled) { background:rgba(255,255,255,.1); }
+.cm-btn-danger { background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.4);color:#f87171; }
+.cm-btn-danger:hover:not(:disabled) { background:rgba(239,68,68,.3); }
+</style>
+
+<script>
+var DATA_URL  = '{{ path('admin_logs_data') }}';
+var CLEAR_URL = '{{ path('admin_logs_clear') }}';
+var currentLevel = 'all';
+var currentFilter = '';
+var refreshTimer = null;
+
+function levelOf(line) {
+    var l = line.toLowerCase();
+    if (l.includes('critical') || l.includes('emergency')) return 'critical';
+    if (l.includes('error'))   return 'error';
+    if (l.includes('warning')) return 'warn';
+    if (l.includes('info'))    return 'info';
+    if (l.includes('debug'))   return 'debug';
+    return 'other';
+}
+
+function levelColor(lvl) {
+    return {critical:'#ff6b6b',error:'#f87171',warn:'#fbbf24',info:'#93c5fd',debug:'#64748b',other:'#94a3b8'}[lvl] || '#94a3b8';
+}
+
+function levelBorder(lvl) {
+    return {critical:'2px solid #ef4444',error:'2px solid rgba(239,68,68,.4)',warn:'2px solid rgba(245,158,11,.4)'}[lvl] || 'none';
+}
+
+function buildLine(text) {
+    var lvl = levelOf(text);
+    var div = document.createElement('div');
+    div.className = 'log-line log-' + lvl;
+    div.style.cssText = 'color:' + levelColor(lvl) + ';padding:.05rem .25rem;border-left:' + levelBorder(lvl) + ';margin:.05rem 0;white-space:pre-wrap;word-break:break-all';
+    div.textContent = text;
+    return div;
+}
+
+function applyFilter() {
+    var els = document.querySelectorAll('#logContent .log-line');
+    var text = currentFilter.toLowerCase();
+    var shown = 0;
+    els.forEach(function(el) {
+        var content = (el.textContent || '').toLowerCase();
+        var lvl = el.className.replace('log-line log-', '');
+        var levelOk = currentLevel === 'all'
+            || (currentLevel === 'error' && (lvl === 'error' || lvl === 'critical'))
+            || (currentLevel === 'warn'  && lvl === 'warn')
+            || (currentLevel === 'info'  && lvl === 'info')
+            || (currentLevel === 'debug' && lvl === 'debug');
+        var textOk = !text || content.includes(text);
+        var visible = levelOk && textOk;
+        el.style.display = visible ? '' : 'none';
+        if (visible) shown++;
+    });
+    document.getElementById('visibleCount').textContent = shown + ' lignes affichées';
+}
+
+window.setLevel = function(lvl) {
+    currentLevel = lvl;
+    document.querySelectorAll('.lvl-btn').forEach(function(b) {
+        b.classList.toggle('lvl-active', b.getAttribute('data-lvl') === lvl);
+    });
+    applyFilter();
+};
+
+document.getElementById('filterInput').addEventListener('input', function() {
+    currentFilter = this.value;
+    applyFilter();
+});
+
+function renderLines(lines) {
+    var wrap = document.getElementById('logContent');
+    if (!wrap) {
+        var logWrap = document.getElementById('logWrap');
+        logWrap.innerHTML = '<div id="logContent"></div>';
+        wrap = document.getElementById('logContent');
+    }
+    wrap.innerHTML = '';
+    lines.forEach(function(l) { wrap.appendChild(buildLine(l)); });
+    applyFilter();
+    if (document.getElementById('autoScrollCb').checked) {
+        document.getElementById('logWrap').scrollTop = 9999999;
+    }
+}
+
+window.logsRefresh = function() {
+    clearTimeout(refreshTimer);
+    var btn = document.getElementById('btnRefresh');
+    if (btn) btn.querySelector('i').className = 'fas fa-spinner fa-spin';
+    var lines = document.getElementById('linesSelect').value;
+
+    fetch(DATA_URL + '?lines=' + lines, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (btn) btn.querySelector('i').className = 'fas fa-sync-alt';
+            renderLines(data.lines || []);
+            var sz = data.size ? Math.round(data.size / 1024) + ' Ko' : '0 Ko';
+            var meta = document.getElementById('logMeta');
+            if (meta) meta.textContent = '{{ logFile }} · ' + sz;
+            var si = document.getElementById('sizeInfo');
+            if (si) si.textContent = sz;
+            scheduleRefresh();
+        })
+        .catch(function() {
+            if (btn) btn.querySelector('i').className = 'fas fa-sync-alt';
+            scheduleRefresh();
+        });
+};
+
+function scheduleRefresh() {
+    var cd = 15;
+    var el = document.getElementById('refreshStatus');
+    clearInterval(window._cdInterval);
+    window._cdInterval = setInterval(function() {
+        cd--;
+        if (el) el.textContent = 'Actualisation dans ' + cd + 's';
+        if (cd <= 0) { clearInterval(window._cdInterval); logsRefresh(); }
+    }, 1000);
+}
+
+document.getElementById('linesSelect').addEventListener('change', logsRefresh);
+
+// Clear modal
+function openClearModal() {
+    var o = document.getElementById('clearModalOverlay');
+    o.style.display = 'flex';
+    requestAnimationFrame(function() { o.classList.add('cm-visible'); });
+    document.getElementById('clearModalCancel').focus();
+}
+function closeClearModal() {
+    var o = document.getElementById('clearModalOverlay');
+    o.classList.remove('cm-visible');
+    o.addEventListener('transitionend', function h() { o.style.display='none'; o.removeEventListener('transitionend',h); });
+}
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var o = document.getElementById('clearModalOverlay');
+        if (o && o.classList.contains('cm-visible')) closeClearModal();
+    }
+});
+function confirmClear() {
+    var cb = document.getElementById('clearModalConfirm');
+    var cn = document.getElementById('clearModalCancel');
+    cb.disabled = cn.disabled = true;
+    cb.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vidage…';
+    fetch(CLEAR_URL, { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','Content-Type':'application/json'} })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+            closeClearModal();
+            renderLines([]);
+            cb.disabled = cn.disabled = false;
+            cb.innerHTML = '<i class="fas fa-trash-alt"></i> Vider';
+        });
+}
+
+// Initial scroll to bottom
+(function() {
+    var wrap = document.getElementById('logWrap');
+    if (wrap) wrap.scrollTop = 9999999;
+    scheduleRefresh();
+})();
+</script>
+{% endblock %}

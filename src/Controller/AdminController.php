@@ -330,8 +330,53 @@ class AdminController extends AbstractController
     #[Route('/messenger/{id}/retry', name: 'admin_messenger_retry', methods: ['POST'])]
     public function messengerRetry(int $id): Response
     {
-        // Instruct user to use CLI — retrying failed messages requires the console worker
         $this->addFlash('info', 'Pour rejouer les messages échoués : php bin/console messenger:failed:retry');
         return $this->redirectToRoute('admin_messenger');
+    }
+
+    #[Route('/logs', name: 'admin_logs')]
+    public function logs(Request $request): Response
+    {
+        $logFile = $this->getParameter('kernel.logs_dir') . '/prod.log';
+        $lines   = [];
+        $size    = 0;
+        $exists  = file_exists($logFile);
+
+        if ($exists) {
+            $size  = filesize($logFile);
+            $limit = (int) $request->query->get('lines', 500);
+            $all   = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+            $lines = array_slice($all, -$limit);
+        }
+
+        return $this->render('admin/logs.html.twig', [
+            'lines'   => $lines,
+            'size'    => $size,
+            'exists'  => $exists,
+            'logFile' => basename((string) $logFile),
+        ]);
+    }
+
+    #[Route('/logs/data', name: 'admin_logs_data')]
+    public function logsData(Request $request): JsonResponse
+    {
+        $logFile = $this->getParameter('kernel.logs_dir') . '/prod.log';
+        if (!file_exists($logFile)) {
+            return new JsonResponse(['lines' => [], 'size' => 0]);
+        }
+        $limit = (int) $request->query->get('lines', 500);
+        $all   = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        $lines = array_slice($all, -$limit);
+        return new JsonResponse(['lines' => $lines, 'size' => filesize($logFile)]);
+    }
+
+    #[Route('/logs/clear', name: 'admin_logs_clear', methods: ['POST'])]
+    public function logsClear(): JsonResponse
+    {
+        $logFile = $this->getParameter('kernel.logs_dir') . '/prod.log';
+        if (file_exists($logFile)) {
+            file_put_contents($logFile, '');
+        }
+        return new JsonResponse(['success' => true]);
     }
 }
