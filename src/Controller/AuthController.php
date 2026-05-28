@@ -16,9 +16,10 @@ class AuthController extends AbstractController
     public function __construct(private readonly GoogleAuthService $authService) {}
 
     #[Route('/google', name: 'auth_google')]
-    public function connect(): Response
+    public function connect(Request $request): Response
     {
-        return $this->redirect($this->authService->getAuthUrl());
+        $forceConsent = (bool) $request->query->get('force_consent', false);
+        return $this->redirect($this->authService->getAuthUrl($forceConsent));
     }
 
     // The callback is handled by GoogleAuthenticator (security system)

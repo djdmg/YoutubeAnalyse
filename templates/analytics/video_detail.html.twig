@@ -868,7 +868,7 @@ switchTab(_activeTab);
             } else {
                 if (data.reauth) {
                     errorDiv.innerHTML = (data.message || 'Erreur inconnue.')
-                        + ' <a href="{{ path('admin_settings') }}" style="color:#f87171;text-decoration:underline">Reconnecter le compte</a>';
+                        + ' <a href="{{ path('auth_google') }}?force_consent=1" style="color:#f87171;text-decoration:underline;font-weight:600">→ Reconnecter maintenant</a>';
                 } else {
                     errorDiv.textContent = data.message || 'Erreur inconnue.';
                 }

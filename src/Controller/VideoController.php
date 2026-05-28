@@ -520,9 +520,7 @@ PROMPT;
             if ($e->getCode() === 403) {
                 return new JsonResponse([
                     'success' => false,
-                    'message' => 'Accès refusé par YouTube (403). Deux causes possibles : '
-                        . '(1) La chaîne YouTube n\'est pas vérifiée — vérifiez-la sur youtube.com/verify ; '
-                        . '(2) Le token OAuth est trop ancien et manque de permissions — reconnectez votre compte Google dans les paramètres.',
+                    'message' => 'Accès refusé par YouTube (403). Reconnectez votre compte Google pour mettre à jour les permissions.',
                     'reauth' => true,
                 ]);
             }

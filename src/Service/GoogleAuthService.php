@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Repository\GoogleTokenRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Google\Client;
+use Psr\Log\LoggerInterface;
 
 class GoogleAuthService
 {
@@ -16,6 +17,7 @@ class GoogleAuthService
         private readonly string $redirectUri,
         private readonly EntityManagerInterface $em,
         private readonly GoogleTokenRepository $tokenRepository,
+        private readonly LoggerInterface $logger,
     ) {}
 
     public function createClient(): Client
@@ -35,13 +37,16 @@ class GoogleAuthService
         return $client;
     }
 
-    public function getAuthUrl(): string
+    public function getAuthUrl(bool $forceConsent = false): string
     {
         $client = $this->createClient();
-        // 'consent' only on first auth — once the token is stored, renewals use the refresh token silently.
-        // If the user has no stored token yet, Google will ask for consent anyway (offline + first time).
-        // Using 'select_account' lets the user switch Google accounts without forcing re-consent.
-        $client->setPrompt('select_account');
+        // 'consent' forces Google to re-ask for all scopes — use when new scopes were added
+        // 'select_account' only prompts account selection, skips consent if already granted
+        $client->setPrompt($forceConsent ? 'consent' : 'select_account');
+        if ($forceConsent) {
+            $client->setAccessType('offline');
+            $client->setIncludeGrantedScopes(true);
+        }
         return $client->createAuthUrl();
     }
 
@@ -129,16 +134,42 @@ class GoogleAuthService
         $rawToken = json_decode($token->getRawToken(), true);
         $client->setAccessToken($rawToken);
 
-        if ($client->isAccessTokenExpired() && $token->getRefreshToken()) {
-            $newToken = $client->fetchAccessTokenWithRefreshToken($token->getRefreshToken());
-            if (!isset($newToken['error'])) {
-                $token->setAccessToken($newToken['access_token'])
-                    ->setExpiresAt(new \DateTimeImmutable('@' . ($newToken['created'] + $newToken['expires_in'])))
-                    ->setRawToken(json_encode(array_merge($rawToken, $newToken)))
-                    ->setUpdatedAt(new \DateTimeImmutable());
-                $this->em->flush();
-                $client->setAccessToken($newToken);
+        if ($client->isAccessTokenExpired()) {
+            $refreshToken = $token->getRefreshToken();
+            if (!$refreshToken) {
+                $this->logger->warning('GoogleAuthService: token expired, no refresh_token stored — user must re-authenticate', [
+                    'user' => $user->getId(),
+                    'expiresAt' => $token->getExpiresAt()?->format('c'),
+                ]);
+                return null;
             }
+
+            $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+
+            if (isset($newToken['error'])) {
+                $this->logger->warning('GoogleAuthService: token refresh failed', [
+                    'user'  => $user->getId(),
+                    'error' => $newToken['error'],
+                    'desc'  => $newToken['error_description'] ?? '',
+                ]);
+                return null;
+            }
+
+            // Let the client library normalize the token (adds 'created' timestamp)
+            $client->setAccessToken($newToken);
+            $normalized = $client->getAccessToken();
+
+            $expiresAt = isset($normalized['created'], $normalized['expires_in'])
+                ? new \DateTimeImmutable('@' . ($normalized['created'] + $normalized['expires_in']))
+                : new \DateTimeImmutable('+1 hour');
+
+            $token->setAccessToken($normalized['access_token'])
+                ->setExpiresAt($expiresAt)
+                ->setRawToken(json_encode(array_merge($rawToken, $normalized)))
+                ->setUpdatedAt(new \DateTimeImmutable());
+            $this->em->flush();
+
+            $this->logger->info('GoogleAuthService: token refreshed successfully', ['user' => $user->getId()]);
         }
 
         return $client->isAccessTokenExpired() ? null : $client;
