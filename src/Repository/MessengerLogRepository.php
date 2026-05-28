@@ -33,12 +33,10 @@ class MessengerLogRepository extends ServiceEntityRepository
             ->getQuery()
             ->getArrayResult();
 
-        $result = ['processing' => 0, 'pending' => 0, 'success' => 0, 'failed' => 0, 'retry' => 0];
+        $result = ['pending' => 0, 'processing' => 0, 'success' => 0, 'failed' => 0, 'retry' => 0];
         foreach ($rows as $row) {
             $result[$row['status']] = (int) $row['cnt'];
         }
-        // Merge legacy 'pending' into 'processing' so old records appear in the right KPI card
-        $result['processing'] += $result['pending'];
         return $result;
     }
 

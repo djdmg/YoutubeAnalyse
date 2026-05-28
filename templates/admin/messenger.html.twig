@@ -26,12 +26,13 @@
 {# ── KPI cards ───────────────────────────────────────────────────────────── #}
 {% set total = counts.processing + counts.pending + counts.success + counts.failed + counts.retry %}
 {% set cards = [
-    {label: 'En traitement', key: 'processing', icon: 'fa-spinner',       color: '#a78bfa', glow: 'rgba(167,139,250,.15)'},
-    {label: 'Réussis',       key: 'success',    icon: 'fa-check-circle',  color: '#22c55e', glow: 'rgba(34,197,94,.15)'},
-    {label: 'En retry',      key: 'retry',      icon: 'fa-redo',          color: '#f59e0b', glow: 'rgba(245,158,11,.15)'},
-    {label: 'Échoués',       key: 'failed',     icon: 'fa-times-circle',  color: '#ef4444', glow: 'rgba(239,68,68,.15)'},
+    {label: 'En attente',    key: 'pending',    icon: 'fa-hourglass-half', color: '#94a3b8', glow: 'rgba(148,163,184,.15)'},
+    {label: 'En traitement', key: 'processing', icon: 'fa-spinner',        color: '#a78bfa', glow: 'rgba(167,139,250,.15)'},
+    {label: 'Réussis',       key: 'success',    icon: 'fa-check-circle',   color: '#22c55e', glow: 'rgba(34,197,94,.15)'},
+    {label: 'En retry',      key: 'retry',      icon: 'fa-redo',           color: '#f59e0b', glow: 'rgba(245,158,11,.15)'},
+    {label: 'Échoués',       key: 'failed',     icon: 'fa-times-circle',   color: '#ef4444', glow: 'rgba(239,68,68,.15)'},
 ] %}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem" id="kpiGrid">
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem" id="kpiGrid">
 {% for c in cards %}
 {% set val = attribute(counts, c.key) %}
 <div data-kpi="{{ c.key }}" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.25rem 1rem;position:relative;overflow:hidden">
@@ -173,6 +174,7 @@ var STATUS_COLOR = { processing:'#a78bfa', pending:'#94a3b8', success:'#22c55e',
 var STATUS_ICON  = { processing:'fa-circle-notch fa-spin', pending:'fa-hourglass-half', success:'fa-check', failed:'fa-times', retry:'fa-redo' };
 var STATUS_LABEL = { processing:'En traitement', pending:'En attente', success:'Réussi', failed:'Échoué', retry:'Retry' };
 var KPI_META = {
+    pending:    { label:'En attente',    color:'#94a3b8' },
     processing: { label:'En traitement', color:'#a78bfa' },
     success:    { label:'Réussis',       color:'#22c55e' },
     retry:      { label:'En retry',      color:'#f59e0b' },
