@@ -142,23 +142,24 @@ class GeminiService implements AiProviderInterface
         }
     }
 
-    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): ?string
+    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): string
     {
         $resolvedModel = $this->resolveModel($model);
-        try {
-            $url      = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
-            $response = $this->httpClient->request('POST', $url, [
-                'json' => [
-                    'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-                    'generationConfig' => ['maxOutputTokens' => $maxTokens, 'temperature' => $temperature],
-                ],
-            ]);
-            $data = $response->toArray();
-            return trim($data['candidates'][0]['content']['parts'][0]['text'] ?? '') ?: null;
-        } catch (\Throwable $e) {
-            $this->logger->error('Gemini callRawText failed', ['error' => $e->getMessage()]);
-            return null;
+        $url      = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
+        $response = $this->httpClient->request('POST', $url, [
+            'json' => [
+                'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                'generationConfig' => ['maxOutputTokens' => $maxTokens, 'temperature' => $temperature],
+            ],
+            'timeout' => 30,
+        ]);
+        $data = $response->toArray();
+        $text = trim($data['candidates'][0]['content']['parts'][0]['text'] ?? '');
+        if ($text === '') {
+            $reason = $data['candidates'][0]['finishReason'] ?? ($data['promptFeedback']['blockReason'] ?? 'unknown');
+            throw new \RuntimeException("Gemini returned empty text (reason: {$reason}).");
         }
+        return $text;
     }
 
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array

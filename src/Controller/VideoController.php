@@ -23,6 +23,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Message\GenerateThumbnailMessage;
 use App\Message\RunAiAnalysisMessage;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -45,6 +46,7 @@ class VideoController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly CacheInterface $cache,
         private readonly MessageBusInterface $bus,
+        private readonly LoggerInterface $logger,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
@@ -122,11 +124,35 @@ Règles ABSOLUES :
 Réponds UNIQUEMENT avec le prompt image en anglais. Zéro explication, zéro guillemet autour du prompt.
 PROMPT;
 
-        $generated = $this->gemini->callRawText($aiPrompt, 'balanced', 450, 1.4);
+        try {
+            return $this->gemini->callRawText($aiPrompt, 'balanced', 450, 1.4);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Thumbnail prompt generation failed, using PHP fallback', ['error' => $e->getMessage()]);
+            return $this->buildFallbackPrompt($video, $style);
+        }
+    }
 
-        return $generated
-            ?? "Abstract visual metaphor, {$style}, bold text overlay \"2026\" in large display font, dynamic composition, intense atmosphere. "
-            . "No real faces, no logos. "
+    private function buildFallbackPrompt(mixed $video, string $style): string
+    {
+        $title = $video->getTitle();
+        $desc  = $video->getDescription() ? mb_substr($video->getDescription(), 0, 300) : '';
+
+        // Extract meaningful words from title+description (skip stop words)
+        $stopWords = ['the','a','an','and','or','of','in','on','at','to','for','with','by',
+                      'le','la','les','de','du','des','un','une','et','ou','en','au','aux',
+                      'pour','avec','sur','dans','par','—','-','mix','vol','feat','ft'];
+        $text  = strtolower($title . ' ' . $desc);
+        preg_match_all('/\b[a-záàâäéèêëîïôöùûü]{4,}\b/u', $text, $matches);
+        $words = array_diff(array_unique($matches[0]), $stopWords);
+        $keywords = implode(', ', array_slice(array_values($words), 0, 6));
+
+        // Short overlay text: year if present in title, else first meaningful word uppercased
+        preg_match('/20\d\d/', $title, $yearMatch);
+        $overlayText = $yearMatch[0] ?? strtoupper(array_values($words)[0] ?? 'NOW');
+
+        return "Abstract visual composition inspired by {$keywords}, {$style}, "
+            . "bold text overlay \"{$overlayText}\" in large display font integrated into the design, "
+            . "no real human faces, no celebrity likenesses, no logos. "
             . "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks.";
     }
 
