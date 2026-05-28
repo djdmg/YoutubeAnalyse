@@ -142,6 +142,26 @@ class GeminiService implements AiProviderInterface
         }
     }
 
+    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512): ?string
+    {
+        $resolvedModel = $this->resolveModel($model);
+        try {
+            // Use httpClient directly to skip the responseMimeType:application/json constraint
+            $url      = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
+            $response = $this->httpClient->request('POST', $url, [
+                'json' => [
+                    'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                    'generationConfig' => ['maxOutputTokens' => $maxTokens],
+                ],
+            ]);
+            $data = $response->toArray();
+            return trim($data['candidates'][0]['content']['parts'][0]['text'] ?? '') ?: null;
+        } catch (\Throwable $e) {
+            $this->logger->error('Gemini callRawText failed', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
     {
         $resolvedModel = $this->resolveModel($model);
