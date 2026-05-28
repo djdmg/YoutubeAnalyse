@@ -135,20 +135,33 @@
             <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
                 <i class="fas fa-image" style="color:#f59e0b;margin-right:4px"></i> Modèle de génération de miniatures
             </label>
-            <select name="thumbnail_model" class="form-control" style="max-width:400px">
-                {% set image_models_list = image_models %}
-                {% if image_models_list is empty %}
+            <select name="thumbnail_model" class="form-control" style="max-width:460px">
+                {% if image_models is empty %}
                     <option value="imagen-3.0-generate-001">Imagen 3 (défaut)</option>
                     <option value="imagen-3.0-fast-generate-001">Imagen 3 Fast</option>
                 {% else %}
-                    {% for m in image_models_list %}
-                    <option value="{{ m.id }}" {{ thumbnail_model == m.id ? 'selected' : '' }}>
-                        {{ m.name }}{% if m.pricing is defined and m.pricing.label is defined %} — {{ m.pricing.label }}{% endif %}
-                    </option>
-                    {% endfor %}
+                    {# Image models first #}
+                    {% set has_image = image_models|filter(m => (m.type ?? 'text') == 'image')|length > 0 %}
+                    {% if has_image %}
+                    <optgroup label="🖼 Génération d'images">
+                        {% for m in image_models %}{% if (m.type ?? 'text') == 'image' %}
+                        <option value="{{ m.id }}" {{ thumbnail_model == m.id ? 'selected' : '' }}>
+                            {{ m.name }}{% if m.pricing.label is defined %} — {{ m.pricing.label }}{% endif %}
+                        </option>
+                        {% endif %}{% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {# Text / multimodal models #}
+                    <optgroup label="💬 Modèles texte (multimodal)">
+                        {% for m in image_models %}{% if (m.type ?? 'text') == 'text' %}
+                        <option value="{{ m.id }}" {{ thumbnail_model == m.id ? 'selected' : '' }}>
+                            {{ m.name }}
+                        </option>
+                        {% endif %}{% endfor %}
+                    </optgroup>
                 {% endif %}
             </select>
-            <span class="help-text">Modèle Gemini utilisé pour la génération de miniatures via Imagen.</span>
+            <span class="help-text">Tous les modèles Gemini sont disponibles. Les modèles image (Imagen, *image-generation*) utilisent leur endpoint natif ; les autres utilisent generateContent avec responseModalities.</span>
         </div>
 
         <button type="submit" class="btn btn-primary">
