@@ -409,9 +409,9 @@ PROMPT;
         } catch (\Throwable $e) {
             $msg = $e->getMessage();
             if (str_contains($msg, 'messenger_messages') || str_contains($msg, "doesn't exist") || str_contains($msg, 'Base table')) {
-                return new JsonResponse(['success' => false, 'message' => 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate'], 500);
+                $msg = 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate';
             }
-            return new JsonResponse(['success' => false, 'message' => 'Erreur interne : ' . $msg], 500);
+            return new JsonResponse(['success' => false, 'message' => $msg]);
         }
 
         return new JsonResponse(['success' => true, 'jobId' => $jobId]);
@@ -496,9 +496,9 @@ PROMPT;
         } catch (\Throwable $e) {
             $msg = $e->getMessage();
             if (str_contains($msg, 'messenger_messages') || str_contains($msg, "doesn't exist") || str_contains($msg, 'Base table')) {
-                return new JsonResponse(['success' => false, 'message' => 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate'], 500);
+                $msg = 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate';
             }
-            return new JsonResponse(['success' => false, 'message' => 'Erreur interne : ' . $msg], 500);
+            return new JsonResponse(['success' => false, 'message' => $msg]);
         }
 
         return new JsonResponse(['success' => true, 'jobId' => $jobId]);
