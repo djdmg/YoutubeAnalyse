@@ -866,7 +866,12 @@ switchTab(_activeTab);
                 successDiv.style.display = '';
                 if (window.showToast) window.showToast(data.message, 'success');
             } else {
-                errorDiv.textContent   = data.message || 'Erreur inconnue.';
+                if (data.reauth) {
+                    errorDiv.innerHTML = (data.message || 'Erreur inconnue.')
+                        + ' <a href="{{ path('admin_settings') }}" style="color:#f87171;text-decoration:underline">Reconnecter le compte</a>';
+                } else {
+                    errorDiv.textContent = data.message || 'Erreur inconnue.';
+                }
                 errorDiv.style.display = '';
             }
         })

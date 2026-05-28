@@ -515,6 +515,18 @@ PROMPT;
         // Upload thumbnail to YouTube first
         try {
             $this->youtubeData->uploadThumbnail($user, $youtubeId, $previewFile);
+        } catch (\Google\Service\Exception $e) {
+            $this->logger->error('YouTube thumbnail upload failed', ['error' => $e->getMessage(), 'youtubeId' => $youtubeId]);
+            if ($e->getCode() === 403) {
+                return new JsonResponse([
+                    'success' => false,
+                    'message' => 'Accès refusé par YouTube (403). Deux causes possibles : '
+                        . '(1) La chaîne YouTube n\'est pas vérifiée — vérifiez-la sur youtube.com/verify ; '
+                        . '(2) Le token OAuth est trop ancien et manque de permissions — reconnectez votre compte Google dans les paramètres.',
+                    'reauth' => true,
+                ]);
+            }
+            return new JsonResponse(['success' => false, 'message' => 'Erreur YouTube : ' . $e->getMessage()]);
         } catch (\Throwable $e) {
             $this->logger->error('YouTube thumbnail upload failed', ['error' => $e->getMessage(), 'youtubeId' => $youtubeId]);
             return new JsonResponse(['success' => false, 'message' => 'Erreur upload YouTube : ' . $e->getMessage()]);
