@@ -749,8 +749,13 @@ PROMPT;
 
         // Mark the best performing period by avg_views_day
         if (!empty($history)) {
-            $best = array_keys($history, max(array_column($history, 'avg_views_day')))[0];
-            $history[$best]['is_best'] = true;
+            $maxViews = max(array_column($history, 'avg_views_day'));
+            foreach ($history as $i => $period) {
+                if ($period['avg_views_day'] === $maxViews) {
+                    $history[$i]['is_best'] = true;
+                    break;
+                }
+            }
         }
 
         return array_reverse($history); // most recent first
