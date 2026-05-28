@@ -1,159 +1,192 @@
 {% extends 'base.html.twig' %}
-{% block title %}Admin — Messenger{% endblock %}
+{% block title %}Messenger — File de messages{% endblock %}
 
 {% block body %}
+
+{# ── Header ──────────────────────────────────────────────────────────────── #}
 <div class="dashboard-header">
     <div>
-        <h1><i class="fas fa-paper-plane"></i> Messenger — File de messages</h1>
-        <span class="last-sync">Derniers 200 messages</span>
+        <h1><i class="fas fa-paper-plane" style="color:#a78bfa"></i> Messenger</h1>
+        <span class="last-sync">File de traitement asynchrone · {{ logs|length }} entrées</span>
     </div>
-    <div style="display:flex;gap:.75rem;align-items:center">
-        <a href="{{ path('admin_users') }}" class="btn btn-secondary btn-sm"><i class="fas fa-users"></i> Utilisateurs</a>
-        <a href="{{ path('admin_settings') }}" class="btn btn-secondary btn-sm"><i class="fas fa-cog"></i> Paramètres</a>
-    </div>
-</div>
-
-{# Stats bar #}
-<div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:1.5rem">
-    <div class="metric-card">
-        <div class="metric-value" style="color:var(--text-muted)">{{ counts.pending }}</div>
-        <div class="metric-label">En attente</div>
-    </div>
-    <div class="metric-card">
-        <div class="metric-value" style="color:#22c55e">{{ counts.success }}</div>
-        <div class="metric-label">Réussis</div>
-    </div>
-    <div class="metric-card">
-        <div class="metric-value" style="color:#f59e0b">{{ counts.retry }}</div>
-        <div class="metric-label">En retry</div>
-    </div>
-    <div class="metric-card">
-        <div class="metric-value" style="color:#ef4444">{{ counts.failed }}</div>
-        <div class="metric-label">Échoués</div>
+    <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+        <button onclick="location.reload()" class="btn btn-outline btn-sm">
+            <i class="fas fa-sync-alt"></i> Actualiser
+        </button>
+        <a href="{{ path('admin_settings') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-cog"></i> Paramètres
+        </a>
     </div>
 </div>
 
-{# CLI hint #}
-<div class="alert alert-info" style="margin-bottom:1.5rem;padding:.75rem 1rem;background:rgba(99,102,241,.1);border-left:3px solid #6366f1;border-radius:6px">
-    <strong>Worker :</strong>
-    <code style="background:rgba(0,0,0,.3);padding:.2rem .5rem;border-radius:4px;font-size:.85em">php bin/console messenger:consume async --time-limit=3600</code>
-    &nbsp;·&nbsp; Rejeter les échoués : <code style="background:rgba(0,0,0,.3);padding:.2rem .5rem;border-radius:4px;font-size:.85em">messenger:failed:retry</code>
+{# ── KPI cards ───────────────────────────────────────────────────────────── #}
+{% set total = counts.pending + counts.success + counts.failed + counts.retry %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
+    {% set cards = [
+        {label: 'En attente', key: 'pending', icon: 'fa-hourglass-half',  color: '#94a3b8', bg: 'rgba(148,163,184,.1)'},
+        {label: 'Réussis',    key: 'success', icon: 'fa-check-circle',    color: '#22c55e', bg: 'rgba(34,197,94,.1)'},
+        {label: 'En retry',   key: 'retry',   icon: 'fa-redo',            color: '#f59e0b', bg: 'rgba(245,158,11,.1)'},
+        {label: 'Échoués',    key: 'failed',  icon: 'fa-times-circle',    color: '#ef4444', bg: 'rgba(239,68,68,.1)'},
+    ] %}
+    {% for c in cards %}
+    <div class="metric-card" style="border-color:{{ c.color }}33;background:{{ c.bg }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+            <span style="font-size:.75em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">{{ c.label }}</span>
+            <i class="fas {{ c.icon }}" style="color:{{ c.color }};font-size:.9em;opacity:.7"></i>
+        </div>
+        <div class="metric-value" style="color:{{ c.color }};font-size:2rem">{{ attribute(counts, c.key) }}</div>
+        {% if total > 0 %}
+        <div style="margin-top:.5rem;height:3px;background:var(--bg-secondary);border-radius:2px">
+            <div style="height:3px;width:{{ total > 0 ? ((attribute(counts, c.key) / total * 100)|round) : 0 }}%;background:{{ c.color }};border-radius:2px;transition:width .3s"></div>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
 </div>
 
-<div class="card" style="overflow:hidden">
+{# ── Worker hint ─────────────────────────────────────────────────────────── #}
+<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.75rem 1rem;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:8px;margin-bottom:1.5rem;font-size:.82em">
+    <i class="fas fa-terminal" style="color:#a78bfa;flex-shrink:0"></i>
+    <div>
+        <span style="color:var(--text-secondary)">Worker :</span>
+        <code style="background:rgba(0,0,0,.35);padding:.15rem .5rem;border-radius:4px;margin:0 .4rem">php bin/console messenger:consume async --time-limit=3600</code>
+        <span style="color:var(--text-muted)">·</span>
+        <span style="color:var(--text-secondary);margin-left:.4rem">Rejouer les échoués :</span>
+        <code style="background:rgba(0,0,0,.35);padding:.15rem .5rem;border-radius:4px;margin-left:.4rem">messenger:failed:retry</code>
+    </div>
+    {% if counts.pending + counts.retry > 0 %}
+    <span style="margin-left:auto;background:rgba(245,158,11,.15);color:#f59e0b;padding:.2rem .6rem;border-radius:20px;font-size:.9em;font-weight:600;white-space:nowrap">
+        <i class="fas fa-circle-notch fa-spin" style="margin-right:.3rem"></i>{{ counts.pending + counts.retry }} en cours
+    </span>
+    {% endif %}
+</div>
+
+{# ── Table ───────────────────────────────────────────────────────────────── #}
+<div class="section-card" style="padding:0;overflow:hidden">
+    <div style="padding:.875rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <h3 style="margin:0;font-size:.95rem"><i class="fas fa-list-ul" style="color:var(--text-muted);margin-right:.5rem"></i>Journal des messages</h3>
+        <span style="font-size:.75em;color:var(--text-muted)">200 derniers · {% if counts.pending + counts.retry > 0 %}actualisation auto 10s{% else %}à jour{% endif %}</span>
+    </div>
+
+    {% if logs is empty %}
+    <div class="empty-state" style="padding:3rem">
+        <i class="fas fa-inbox fa-2x"></i>
+        <h3>Aucun message</h3>
+        <p>Les jobs apparaîtront ici dès qu'un message sera dispatché.</p>
+    </div>
+    {% else %}
     <div style="overflow-x:auto">
-        <table class="data-table" style="width:100%;border-collapse:collapse">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Message</th>
-                    <th>Payload</th>
-                    <th>Statut</th>
-                    <th>Durée</th>
-                    <th>Créé</th>
-                    <th>Terminé</th>
-                    <th>Erreur</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for log in logs %}
-                {% set statusColor = {
-                    'pending': '#94a3b8',
-                    'success': '#22c55e',
-                    'failed':  '#ef4444',
-                    'retry':   '#f59e0b'
-                }[log.status] ?? '#94a3b8' %}
-                <tr>
-                    <td style="color:var(--text-muted);font-size:.8em">{{ log.id }}</td>
-                    <td style="font-size:.8em;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.messageClass }}">
-                        {{ log.messageClass|split('\\')|last }}
-                    </td>
-                    <td style="font-size:.75em;max-width:240px">
-                        <details>
-                            <summary style="cursor:pointer;color:var(--text-muted)">voir</summary>
-                            <pre style="margin:.25rem 0;white-space:pre-wrap;font-size:.85em;color:var(--text-secondary)">{{ log.payload|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_UNICODE')) }}</pre>
-                        </details>
-                    </td>
-                    <td>
-                        <span style="background:{{ statusColor }}22;color:{{ statusColor }};padding:.15rem .5rem;border-radius:20px;font-size:.75em;font-weight:600">
-                            {{ log.status|upper }}
+    <table style="width:100%;border-collapse:collapse;font-size:.83em">
+        <thead>
+            <tr style="background:var(--bg-secondary)">
+                <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">#</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em">Type</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em">Statut</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em">Durée</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em">Créé</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em">Terminé</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em">Détails</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for log in logs %}
+            {% set sc = {pending:'#94a3b8',success:'#22c55e',failed:'#ef4444',retry:'#f59e0b'}[log.status] ?? '#94a3b8' %}
+            {% set typeIcons = {
+                'GenerateThumbnailMessage': 'fa-image',
+                'SyncYouTubeMessage':       'fa-sync',
+                'RunAiAnalysisMessage':     'fa-robot',
+                'SyncSearchTermsMessage':   'fa-search'
+            } %}
+            {% set shortName = log.messageClass|split('\\')|last %}
+            {% set icon = typeIcons[shortName] ?? 'fa-envelope' %}
+            <tr style="border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
+                <td style="padding:.65rem 1rem;color:var(--text-muted);font-variant-numeric:tabular-nums">{{ log.id }}</td>
+                <td style="padding:.65rem 1rem">
+                    <div style="display:flex;align-items:center;gap:.5rem">
+                        <span style="width:26px;height:26px;border-radius:6px;background:rgba(167,139,250,.12);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="fas {{ icon }}" style="color:#a78bfa;font-size:.7em"></i>
                         </span>
-                        {% if log.retryCount %}
-                            <span style="font-size:.7em;color:var(--text-muted)">({{ log.retryCount }}x)</span>
-                        {% endif %}
-                    </td>
-                    <td style="font-size:.8em;white-space:nowrap">
-                        {% if log.durationMs %}
-                            {% if log.durationMs >= 1000 %}
-                                {{ (log.durationMs / 1000)|number_format(1) }}s
-                            {% else %}
-                                {{ log.durationMs }}ms
-                            {% endif %}
-                        {% else %}
-                            —
-                        {% endif %}
-                    </td>
-                    <td style="font-size:.75em;white-space:nowrap;color:var(--text-muted)">{{ log.createdAt|date('d/m H:i:s') }}</td>
-                    <td style="font-size:.75em;white-space:nowrap;color:var(--text-muted)">{{ log.finishedAt ? log.finishedAt|date('d/m H:i:s') : '—' }}</td>
-                    <td style="font-size:.75em;max-width:280px">
-                        {% if log.error %}
-                            <div style="display:flex;align-items:flex-start;gap:.4rem">
-                                <span style="color:#ef4444;flex:1" title="{{ log.error }}">{{ log.error|slice(0,80) }}{% if log.error|length > 80 %}…{% endif %}</span>
-                                <button onclick="copyError(this)" data-error="{{ log.error|e('html_attr') }}"
-                                    title="Copier l'erreur complète"
-                                    style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;border-radius:4px;padding:.1rem .35rem;cursor:pointer;font-size:.8em;flex-shrink:0;line-height:1.4">
-                                    <i class="fas fa-copy"></i>
-                                </button>
+                        <div>
+                            <div style="font-weight:500;color:var(--text-primary)">{{ shortName|replace({'Message': ''}) }}</div>
+                            <div style="font-size:.75em;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                                {% for k,v in log.payload %}{% if loop.index <= 2 %}<span>{{ k }}:<b>{{ v|slice(0,20) }}</b></span>{% if not loop.last and loop.index < 2 %} · {% endif %}{% endif %}{% endfor %}
                             </div>
-                        {% else %}
-                            —
+                        </div>
+                    </div>
+                </td>
+                <td style="padding:.65rem 1rem">
+                    <span style="display:inline-flex;align-items:center;gap:.3rem;background:{{ sc }}18;color:{{ sc }};padding:.2rem .65rem;border-radius:20px;font-size:.75em;font-weight:700;white-space:nowrap">
+                        {% if log.status == 'pending' %}<i class="fas fa-circle-notch fa-spin" style="font-size:.7em"></i>
+                        {% elseif log.status == 'success' %}<i class="fas fa-check" style="font-size:.7em"></i>
+                        {% elseif log.status == 'failed' %}<i class="fas fa-times" style="font-size:.7em"></i>
+                        {% elseif log.status == 'retry' %}<i class="fas fa-redo" style="font-size:.7em"></i>
                         {% endif %}
-                    </td>
-                </tr>
-            {% else %}
-                <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted)">Aucun message enregistré</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
+                        {{ log.status|upper }}
+                    </span>
+                    {% if log.retryCount %}<span style="font-size:.7em;color:var(--text-muted);margin-left:.25rem">×{{ log.retryCount }}</span>{% endif %}
+                </td>
+                <td style="padding:.65rem 1rem;white-space:nowrap;font-variant-numeric:tabular-nums">
+                    {% if log.durationMs %}
+                        {% if log.durationMs >= 60000 %}
+                            <span style="color:#f59e0b">{{ (log.durationMs / 60000)|number_format(1) }}min</span>
+                        {% elseif log.durationMs >= 1000 %}
+                            {{ (log.durationMs / 1000)|number_format(1) }}s
+                        {% else %}
+                            <span style="color:var(--text-muted)">{{ log.durationMs }}ms</span>
+                        {% endif %}
+                    {% else %}—{% endif %}
+                </td>
+                <td style="padding:.65rem 1rem;white-space:nowrap;color:var(--text-muted)">{{ log.createdAt|date('d/m H:i:s') }}</td>
+                <td style="padding:.65rem 1rem;white-space:nowrap;color:var(--text-muted)">{{ log.finishedAt ? log.finishedAt|date('d/m H:i:s') : '—' }}</td>
+                <td style="padding:.65rem 1rem;max-width:320px">
+                    {% if log.error %}
+                    <div style="display:flex;align-items:flex-start;gap:.4rem">
+                        <span style="color:#ef4444;flex:1;line-height:1.4" title="{{ log.error }}">{{ log.error|slice(0,100) }}{% if log.error|length > 100 %}…{% endif %}</span>
+                        <button onclick="copyError(this)" data-error="{{ log.error|e('html_attr') }}"
+                            title="Copier l'erreur complète"
+                            style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:5px;padding:.2rem .45rem;cursor:pointer;font-size:.8em;flex-shrink:0;transition:.15s">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    {% elseif log.status == 'success' %}
+                        <span style="color:var(--text-muted);font-size:.85em">—</span>
+                    {% else %}
+                        <span style="color:var(--text-muted)">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
     </div>
+    {% endif %}
 </div>
 
 <script>
-// Auto-refresh every 10s if there are pending/retry messages
 const hasPending = {{ (counts.pending + counts.retry) > 0 ? 'true' : 'false' }};
 if (hasPending) {
-    setTimeout(() => location.reload(), 10000);
-    const banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;bottom:1rem;right:1rem;background:#6366f1;color:#fff;padding:.5rem 1rem;border-radius:6px;font-size:.8em;opacity:.8';
-    banner.textContent = 'Actualisation auto dans 10s…';
+    var t = 10, banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;bottom:1.25rem;right:1.25rem;background:#6366f1;color:#fff;padding:.5rem .9rem;border-radius:8px;font-size:.78em;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:999';
+    banner.innerHTML = '<i class="fas fa-sync-alt fa-spin" style="margin-right:.4rem"></i><span id="cntdn">' + t + '</span>s…';
     document.body.appendChild(banner);
+    var iv = setInterval(function() { t--; var el = document.getElementById('cntdn'); if(el) el.textContent = t; if(t<=0){clearInterval(iv);location.reload();} }, 1000);
 }
 
 function copyError(btn) {
     var text = btn.getAttribute('data-error');
-    navigator.clipboard.writeText(text).then(function() {
+    var done = function() {
         var orig = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-check"></i>';
-        btn.style.color = '#22c55e';
-        btn.style.borderColor = 'rgba(34,197,94,.3)';
-        setTimeout(function() {
-            btn.innerHTML = orig;
-            btn.style.color = '';
-            btn.style.borderColor = '';
-        }, 1500);
-    }).catch(function() {
-        // Fallback for older browsers
+        btn.style.color = '#22c55e'; btn.style.borderColor = 'rgba(34,197,94,.3)';
+        setTimeout(function() { btn.innerHTML = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 1500);
+    };
+    if (navigator.clipboard) { navigator.clipboard.writeText(text).then(done); }
+    else {
         var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        btn.innerHTML = '<i class="fas fa-check"></i>';
-        setTimeout(function() { btn.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
-    });
+        ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta); done();
+    }
 }
 </script>
 {% endblock %}

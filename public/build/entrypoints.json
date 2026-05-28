@@ -13,24 +13,23 @@
     "dashboard": {
       "js": [
         "/build/runtime.544b3ba4.js",
-        "/build/177.ccb8eeaf.js",
-        "/build/541.a35f6d5a.js",
-        "/build/dashboard.389fe3ca.js"
+        "/build/284.38a4b0b5.js",
+        "/build/292.04f9ed40.js",
+        "/build/dashboard.d254b287.js"
       ]
     },
     "video_detail": {
       "js": [
         "/build/runtime.544b3ba4.js",
-        "/build/177.ccb8eeaf.js",
-        "/build/541.a35f6d5a.js",
-        "/build/video_detail.43e9fe62.js"
+        "/build/284.38a4b0b5.js",
+        "/build/video_detail.912d01ec.js"
       ]
     },
     "compare": {
       "js": [
         "/build/runtime.544b3ba4.js",
-        "/build/177.ccb8eeaf.js",
-        "/build/compare.358e9b4c.js"
+        "/build/284.38a4b0b5.js",
+        "/build/compare.2893cdd6.js"
       ]
     }
   }

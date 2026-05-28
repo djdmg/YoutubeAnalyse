@@ -13,26 +13,33 @@ const COLORS = [
 
 const canvas = document.getElementById('compareChart');
 if (canvas && typeof compareDatasets !== 'undefined' && compareDatasets.length > 0) {
-    const allDates = [...new Set(compareDatasets.flatMap(d => d.dates))].sort();
+    // Build sorted union of all day offsets across every video
+    const allDays = [...new Set(compareDatasets.flatMap(d => d.days))].sort((a, b) => a - b);
 
-    const datasets = compareDatasets.map((d, i) => ({
-        label: d.title,
-        data: allDates.map(date => {
-            const idx = d.dates.indexOf(date);
-            return idx >= 0 ? d.views[idx] : 0;
-        }),
-        borderColor: COLORS[i % COLORS.length],
-        backgroundColor: COLORS[i % COLORS.length].replace(')', ', 0.06)').replace('rgb', 'rgba'),
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-        pointHoverRadius: 6,
-    }));
+    const datasets = compareDatasets.map((d, i) => {
+        // Build a map of day => views for O(1) lookup
+        const byDay = {};
+        d.days.forEach((day, idx) => { byDay[day] = d.views[idx]; });
+
+        return {
+            label: d.title,
+            data: allDays.map(day => byDay[day] ?? 0),
+            borderColor: COLORS[i % COLORS.length],
+            backgroundColor: COLORS[i % COLORS.length].replace(')', ', 0.06)').replace('rgb', 'rgba'),
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+        };
+    });
 
     new Chart(canvas, {
         type: 'line',
-        data: { labels: allDates.map(d => d.slice(5).replace('-', '/')), datasets },
+        data: {
+            labels: allDays.map(d => 'J+' + d),
+            datasets,
+        },
         options: {
             responsive: true,
             interaction: { mode: 'index', intersect: false },
@@ -51,7 +58,11 @@ if (canvas && typeof compareDatasets !== 'undefined' && compareDatasets.length >
                 },
             },
             scales: {
-                x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 10 } },
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: tickColor, maxTicksLimit: 20 },
+                    title: { display: true, text: 'Jours depuis la sortie', color: tickColor, font: { size: 11 } },
+                },
                 y: { grid: { color: gridColor }, ticks: { color: tickColor }, beginAtZero: true },
             },
         },

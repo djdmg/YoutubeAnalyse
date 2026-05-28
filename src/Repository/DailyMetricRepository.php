@@ -196,27 +196,43 @@ class DailyMetricRepository extends ServiceEntityRepository
     }
 
     /**
-     * Returns per-video daily views for a set of videos (comparison chart).
-     * Result: [videoId => [['date' => 'Y-m-d', 'views' => int], ...]]
+     * Returns per-video daily views indexed by day-since-publication.
+     * Result: [videoId => [['day' => int, 'views' => int], ...]]
      */
-    public function getCompareDataForVideos(array $videos, int $days = 30): array
+    public function getCompareDataForVideos(array $videos, int $maxDays = 365): array
     {
         if (empty($videos)) return [];
-        $since = new \DateTimeImmutable("-{$days} days midnight");
-        $rows  = $this->createQueryBuilder('dm')
+
+        $rows = $this->createQueryBuilder('dm')
             ->select('IDENTITY(dm.video) as video_id, dm.date, dm.views')
             ->where('dm.video IN (:videos)')
-            ->andWhere('dm.date >= :since')
             ->setParameter('videos', $videos)
-            ->setParameter('since', $since)
             ->orderBy('dm.date', 'ASC')
             ->getQuery()
             ->getArrayResult();
 
+        $origins = [];
+        foreach ($videos as $video) {
+            $pub = $video->getPublishedAt();
+            if ($pub) {
+                $origins[$video->getId()] = \DateTimeImmutable::createFromInterface($pub)->setTime(0, 0, 0);
+            }
+        }
+
         $result = [];
         foreach ($rows as $row) {
-            $d = $row['date'] instanceof \DateTimeInterface ? $row['date']->format('Y-m-d') : (string) $row['date'];
-            $result[(int)$row['video_id']][] = ['date' => $d, 'views' => (int)$row['views']];
+            $videoId = (int) $row['video_id'];
+            $date    = $row['date'] instanceof \DateTimeInterface
+                ? \DateTimeImmutable::createFromInterface($row['date'])->setTime(0, 0, 0)
+                : new \DateTimeImmutable((string) $row['date']);
+
+            if (!isset($origins[$videoId])) {
+                continue;
+            }
+            $day = (int) $origins[$videoId]->diff($date)->days;
+            if ($day <= $maxDays) {
+                $result[$videoId][] = ['day' => $day, 'views' => (int) $row['views']];
+            }
         }
         return $result;
     }

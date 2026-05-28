@@ -6,7 +6,7 @@
 <div class="dashboard-header">
     <div>
         <h1><i class="fas fa-exchange-alt"></i> Comparaison vidéos</h1>
-        <span class="last-sync">{{ compare_data|length }} vidéo(s) · 30 derniers jours</span>
+        <span class="last-sync">{{ compare_data|length }} vidéo(s) · jours depuis la sortie</span>
     </div>
     <div class="header-actions">
         <a href="{{ path('analytics_videos') }}" class="btn btn-outline btn-sm">
@@ -46,7 +46,7 @@
                 </div>
                 {% if item.video.publishedAt %}
                 <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
-                    {{ item.video.publishedAt|date('d/m/Y') }}
+                    Sortie le {{ item.video.publishedAt|date('d/m/Y') }}
                 </div>
                 {% endif %}
                 <div style="font-size:11px;color:var(--text-muted)">{{ item.daily_data|length }} jours de données</div>
@@ -59,7 +59,7 @@
 {# ── Chart ─────────────────────────────────────────────────────────────────── #}
 <div class="section-card">
     <div class="section-header">
-        <h3><i class="fas fa-chart-line"></i> Vues quotidiennes</h3>
+        <h3><i class="fas fa-chart-line"></i> Vues quotidiennes depuis la sortie</h3>
     </div>
     <div style="position:relative;height:320px">
         <canvas id="compareChart"></canvas>
@@ -69,7 +69,7 @@
 {# ── Stats table ───────────────────────────────────────────────────────────── #}
 <div class="section-card">
     <div class="section-header">
-        <h3><i class="fas fa-table"></i> Récapitulatif (30 jours)</h3>
+        <h3><i class="fas fa-table"></i> Récapitulatif (depuis la sortie)</h3>
     </div>
     <table class="videos-table">
         <thead>
@@ -79,6 +79,7 @@
                 <th><i class="fas fa-chart-line"></i> Pic (1 jour)</th>
                 <th><i class="fas fa-calendar-check"></i> Jours actifs</th>
                 <th><i class="fas fa-calculator"></i> Moy/jour</th>
+                <th><i class="fas fa-trophy"></i> Pic à J+</th>
             </tr>
         </thead>
         <tbody>
@@ -86,10 +87,14 @@
             {% set color = palette[loop.index0] %}
             {% set totalViews = 0 %}
             {% set peakViews = 0 %}
+            {% set peakDay = 0 %}
             {% set activeDays = 0 %}
             {% for row in item.daily_data %}
                 {% set totalViews = totalViews + row.views %}
-                {% if row.views > peakViews %}{% set peakViews = row.views %}{% endif %}
+                {% if row.views > peakViews %}
+                    {% set peakViews = row.views %}
+                    {% set peakDay = row.day %}
+                {% endif %}
                 {% if row.views > 0 %}{% set activeDays = activeDays + 1 %}{% endif %}
             {% endfor %}
             {% set avgViews = activeDays > 0 ? (totalViews / activeDays)|round : 0 %}
@@ -102,19 +107,20 @@
                 <td class="num">{{ peakViews|number_format(0, ',', ' ') }}</td>
                 <td class="num">{{ activeDays }}</td>
                 <td class="num">{{ avgViews|number_format(0, ',', ' ') }}</td>
+                <td class="num">J+{{ peakDay }}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
 
-{# ── Chart data (global var consumed by compare.js webpack entry) ─────────── #}
+{# ── Chart data ────────────────────────────────────────────────────────────── #}
 <script>
 var compareDatasets = [
 {% for item in compare_data %}
     {
         title: {{ item.video.title|json_encode|raw }},
-        dates: [{% for row in item.daily_data %}"{{ row.date }}"{% if not loop.last %},{% endif %}{% endfor %}],
+        days:  [{% for row in item.daily_data %}{{ row.day }}{% if not loop.last %},{% endif %}{% endfor %}],
         views: [{% for row in item.daily_data %}{{ row.views }}{% if not loop.last %},{% endif %}{% endfor %}]
     }{{ not loop.last ? ',' : '' }}
 {% endfor %}
