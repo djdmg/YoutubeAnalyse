@@ -44,7 +44,13 @@ class AnthropicService implements AiProviderInterface
     public const MODEL_BALANCED = AiProviderInterface::TIER_BALANCED;
     public const MODEL_FULL     = AiProviderInterface::TIER_FULL;
 
-    private const MAX_TOKENS = 8192;
+    // Per-model output token limits (Anthropic hard caps)
+    private const MODEL_MAX_TOKENS = [
+        'claude-3-haiku-20240307'    => 4096,
+        'claude-3-sonnet-20240229'   => 4096,
+        'claude-3-opus-20240229'     => 4096,
+    ];
+    private const DEFAULT_MAX_TOKENS = 8192;
 
     private readonly Client $client;
 
@@ -59,8 +65,12 @@ class AnthropicService implements AiProviderInterface
 
     private function resolveModel(string $model): string
     {
-        // Tier alias → real model; otherwise pass-through (specific model ID)
         return self::TIER_MAP[$model] ?? $model;
+    }
+
+    private function maxTokensFor(string $resolvedModel): int
+    {
+        return self::MODEL_MAX_TOKENS[$resolvedModel] ?? self::DEFAULT_MAX_TOKENS;
     }
 
     public function getAvailableModels(bool $forceRefresh = false): array
@@ -170,7 +180,7 @@ class AnthropicService implements AiProviderInterface
 
         try {
             $response = $this->client->messages->create(
-                maxTokens: self::MAX_TOKENS,
+                maxTokens: $this->maxTokensFor($resolvedModel),
                 messages:  [['role' => 'user', 'content' => $prompt]],
                 model:     $resolvedModel,
             );
@@ -232,7 +242,7 @@ class AnthropicService implements AiProviderInterface
         $resolvedModel = $this->resolveModel($model);
         try {
             $response = $this->client->messages->create(
-                maxTokens: self::MAX_TOKENS,
+                maxTokens: $this->maxTokensFor($resolvedModel),
                 messages:  [['role' => 'user', 'content' => $prompt]],
                 model:     $resolvedModel,
             );

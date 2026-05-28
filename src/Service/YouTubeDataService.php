@@ -13,6 +13,7 @@ use Google\Service\YouTube;
 use Google\Service\YouTubeAnalytics;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class YouTubeDataService
 {
@@ -23,6 +24,7 @@ class YouTubeDataService
         private readonly VideoStatsRepository $videoStatsRepo,
         private readonly GoogleTokenRepository $tokenRepo,
         private readonly CacheInterface $cache,
+        private readonly HttpClientInterface $httpClient,
     ) {}
 
     public function syncAll(User $user): array
@@ -211,24 +213,27 @@ class YouTubeDataService
             throw new \RuntimeException('Non authentifié avec Google.');
         }
 
-        $client->setDefer(true);
-        $youtube = new YouTube($client);
-        $request = $youtube->thumbnails->set($youtubeId);
+        $accessToken = $client->getAccessToken()['access_token'] ?? null;
+        if (!$accessToken) {
+            throw new \RuntimeException('Access token manquant — reconnectez votre compte Google.');
+        }
 
-        $chunkSize = 1 * 1024 * 1024;
-        $media     = new \Google\Http\MediaFileUpload($client, $request, 'image/png', null, true, $chunkSize);
-        $media->setFileSize(filesize($filePath));
+        $response = $this->httpClient->request('POST',
+            'https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' . urlencode($youtubeId) . '&uploadType=media',
+            [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $accessToken,
+                    'Content-Type'  => 'image/png',
+                ],
+                'body' => fopen($filePath, 'rb'),
+                'timeout' => 60,
+            ]
+        );
 
-        $status = false;
-        $handle = fopen($filePath, 'rb');
-        try {
-            while (!$status && !feof($handle)) {
-                $chunk  = fread($handle, $chunkSize);
-                $status = $media->nextChunk($chunk);
-            }
-        } finally {
-            fclose($handle);
-            $client->setDefer(false);
+        $status = $response->getStatusCode();
+        if ($status < 200 || $status >= 300) {
+            $body = $response->getContent(false);
+            throw new \Google\Service\Exception($body, $status);
         }
     }
 
