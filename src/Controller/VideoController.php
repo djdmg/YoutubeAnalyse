@@ -64,25 +64,37 @@ class VideoController extends AbstractController
         if ($avgCtr !== null)       $context .= "CTR moyen : {$avgCtr}%\n";
         if ($avgRetention !== null)  $context .= "Rétention moyenne : {$avgRetention}%\n";
 
+        $styles = [
+            'cinematic, dramatic lighting, film still',
+            'bold flat illustration, graphic design',
+            'photorealistic, vibrant colors, high contrast',
+            'dark moody atmosphere, neon accents',
+            'bright energetic, pop art style',
+            'minimalist, clean, strong typography focus',
+        ];
+        $style = $styles[array_rand($styles)];
+
         $aiPrompt = <<<PROMPT
 Tu es un expert en miniatures YouTube optimisées pour le CTR.
 Voici les données d'une vidéo :
 
 {$context}
 
-Génère un prompt en anglais pour un modèle de génération d'images (style Imagen/Gemini) qui produira une miniature YouTube percutante, cohérente avec le sujet de la vidéo.
-Le prompt doit :
-- Décrire précisément la scène visuelle, les couleurs dominantes, l'ambiance
-- Mentionner le style (réaliste, illustré, cinématique, etc.)
-- Préciser "16:9 aspect ratio, YouTube thumbnail, high quality, no watermarks"
-- Être concis (max 3 phrases)
+Génère un prompt créatif et original en anglais pour un modèle de génération d'images qui produira une miniature YouTube percutante.
+Style imposé cette fois : {$style}
 
-Réponds UNIQUEMENT avec le prompt en anglais, sans explication ni guillemets.
+Le prompt doit :
+- Décrire une scène visuelle précise et originale en lien direct avec le sujet
+- Intégrer le style imposé
+- Se terminer par : "16:9 aspect ratio, YouTube thumbnail, high quality, no watermarks, no text overlay"
+- Tenir en 2-3 phrases maximum
+
+Réponds UNIQUEMENT avec le prompt en anglais, sans explication, sans guillemets, sans tirets.
 PROMPT;
 
-        return $this->gemini->callRawText($aiPrompt, 'fast', 256)
-            ?? 'Stunning YouTube thumbnail for "' . $video->getTitle() . '". '
-            . 'Vibrant colors, professional design, 16:9 aspect ratio, high quality, no watermarks.';
+        return $this->gemini->callRawText($aiPrompt, 'fast', 300, 1.4)
+            ?? 'Stunning YouTube thumbnail for "' . $video->getTitle() . '", ' . $style . '. '
+            . '16:9 aspect ratio, high quality, no watermarks.';
     }
 
     private function resolveThumbnailModelName(): string

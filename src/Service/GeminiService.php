@@ -142,16 +142,15 @@ class GeminiService implements AiProviderInterface
         }
     }
 
-    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512): ?string
+    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): ?string
     {
         $resolvedModel = $this->resolveModel($model);
         try {
-            // Use httpClient directly to skip the responseMimeType:application/json constraint
             $url      = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
             $response = $this->httpClient->request('POST', $url, [
                 'json' => [
                     'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-                    'generationConfig' => ['maxOutputTokens' => $maxTokens],
+                    'generationConfig' => ['maxOutputTokens' => $maxTokens, 'temperature' => $temperature],
                 ],
             ]);
             $data = $response->toArray();
