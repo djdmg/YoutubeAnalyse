@@ -181,10 +181,38 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                btn.disabled = false;
-                btn.innerHTML = orig;
-                window.showToast(data.message, data.success ? 'success' : 'error');
-                if (data.success) setTimeout(function() { window.location.reload(); }, 2500);
+                if (!data.success) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    window.showToast(data.message || 'Erreur', 'error');
+                    return;
+                }
+                if (!data.jobId) {
+                    // Legacy fallback: direct success response
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    window.showToast(data.message || 'Synchronisé', 'success');
+                    setTimeout(function() { window.location.reload(); }, 2000);
+                    return;
+                }
+                // Async: poll until done
+                var attempts = 0;
+                var statusUrl = '/sync-status/' + data.jobId;
+                var poll = setInterval(function() {
+                    attempts++;
+                    fetch(statusUrl)
+                        .then(function(r) { return r.json(); })
+                        .then(function(status) {
+                            if (status.status === 'pending' && attempts < 90) return;
+                            clearInterval(poll);
+                            btn.disabled = false;
+                            btn.innerHTML = orig;
+                            var ok = status.status === 'done';
+                            window.showToast(status.message || (ok ? 'Synchronisé' : 'Erreur'), ok ? 'success' : 'error');
+                            if (ok) setTimeout(function() { window.location.reload(); }, 2000);
+                        })
+                        .catch(function() { if (attempts >= 90) { clearInterval(poll); btn.disabled = false; btn.innerHTML = orig; } });
+                }, 2000);
             })
             .catch(function() {
                 btn.disabled = false;
