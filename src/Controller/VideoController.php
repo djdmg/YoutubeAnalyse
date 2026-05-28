@@ -330,7 +330,7 @@ class VideoController extends AbstractController
             $previewFile = $youtubeId . '_preview.png';
             file_put_contents($dir . $previewFile, base64_decode($base64));
 
-            return new JsonResponse(['success' => true, 'url' => '/uploads/thumbnails/' . $previewFile . '?t=' . time()]);
+            return new JsonResponse(['success' => true, 'url' => '/uploads/thumbnails/' . $previewFile . '?t=' . time(), 'prompt' => $prompt]);
 
         } catch (\Throwable $e) {
             $msg = $e->getMessage();
