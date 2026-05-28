@@ -11,6 +11,7 @@ use App\Repository\VideoStatsRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Google\Service\YouTube;
 use Google\Service\YouTubeAnalytics;
+use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -25,6 +26,7 @@ class YouTubeDataService
         private readonly GoogleTokenRepository $tokenRepo,
         private readonly CacheInterface $cache,
         private readonly HttpClientInterface $httpClient,
+        private readonly LoggerInterface $logger,
     ) {}
 
     public function syncAll(User $user): array
@@ -213,12 +215,53 @@ class YouTubeDataService
             throw new \RuntimeException('Non authentifié avec Google.');
         }
 
-        $mimeType  = mime_content_type($filePath) ?: 'image/png';
-        $chunkSize = 1 * 1024 * 1024; // 1 MB
+        $youtube  = new YouTube($client);
+        $mimeType = mime_content_type($filePath) ?: 'image/png';
 
-        $youtube = new YouTube($client);
+        // Log token scopes and enforce youtube full scope
+        $tokenData     = $client->getAccessToken();
+        $grantedScopes = $tokenData['scope'] ?? '';
+        $this->logger->info('Thumbnail upload attempt', [
+            'youtubeId' => $youtubeId,
+            'scopes'    => $grantedScopes ?: 'NOT_SET',
+            'file'      => basename($filePath),
+            'mimeType'  => $mimeType,
+        ]);
 
-        // setDefer(true) must stay active for the entire upload — only reset after
+        // thumbnails.set requires the full youtube scope — force-ssl alone is not enough in practice
+        $hasFullScope = str_contains($grantedScopes, 'googleapis.com/auth/youtube ')
+                     || str_ends_with($grantedScopes, 'googleapis.com/auth/youtube')
+                     || str_contains($grantedScopes, 'googleapis.com/auth/youtube.upload');
+        if (!$hasFullScope) {
+            throw new \RuntimeException(
+                'Le token ne contient pas le scope youtube complet (scopes actuels : ' . ($grantedScopes ?: 'aucun') . '). '
+                . 'Reconnectez-vous via /auth/google?force_consent=1'
+            );
+        }
+
+        // Pre-flight: check the video exists and is not a Short (Shorts reject custom thumbnails)
+        try {
+            $videoResponse = $youtube->videos->listVideos('contentDetails,snippet', ['id' => $youtubeId]);
+            $items = $videoResponse->getItems();
+            if (empty($items)) {
+                throw new \RuntimeException("Vidéo introuvable via l'API YouTube (id={$youtubeId}).");
+            }
+            $duration = $items[0]->getContentDetails()->getDuration() ?? '';
+            // ISO 8601 duration: PT60S or less = Short candidate
+            preg_match('/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/', $duration, $m);
+            $seconds = (int)($m[1] ?? 0) * 3600 + (int)($m[2] ?? 0) * 60 + (int)($m[3] ?? 0);
+            if ($seconds > 0 && $seconds <= 60) {
+                throw new \RuntimeException(
+                    "Cette vidéo dure {$seconds}s — les YouTube Shorts (≤ 60s) n'acceptent pas de miniatures personnalisées."
+                );
+            }
+            $this->logger->info('Video pre-flight OK', ['youtubeId' => $youtubeId, 'duration' => $duration, 'seconds' => $seconds]);
+        } catch (\Google\Service\Exception $e) {
+            $this->logger->warning('Video pre-flight API error (continuing)', ['error' => $e->getMessage()]);
+        }
+
+        $chunkSize = 1 * 1024 * 1024;
+
         $client->setDefer(true);
         $setRequest = $youtube->thumbnails->set($youtubeId);
 
@@ -243,6 +286,8 @@ class YouTubeDataService
             fclose($handle);
             $client->setDefer(false);
         }
+
+        $this->logger->info('Thumbnail upload success', ['youtubeId' => $youtubeId]);
     }
 
     public function getDailyAnalytics(User $user, int $days = 30): array
