@@ -301,7 +301,7 @@ class GeminiService implements AiProviderInterface
                 'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
                 'generationConfig' => ['responseModalities' => ['IMAGE', 'TEXT']],
             ],
-            'timeout' => 60,
+            'timeout' => 120,
         ]);
 
         $data  = $response->toArray();

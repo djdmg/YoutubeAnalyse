@@ -745,12 +745,20 @@ switchTab(_activeTab);
         placeholder.style.display = '';
         imagenProgressStart();
 
+        var abortCtrl   = new AbortController();
+        var fetchTimeout = setTimeout(function() { abortCtrl.abort(); }, 150000); // 2.5 min
+
         fetch('{{ path('analytics_video_generate_thumbnail', {youtubeId: video.youtubeId}) }}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
-            body: 'prompt=' + encodeURIComponent(textarea.value.trim())
+            body:    'prompt=' + encodeURIComponent(textarea.value.trim()),
+            signal:  abortCtrl.signal,
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            clearTimeout(fetchTimeout);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(function(data) {
             btn.disabled = false;
             if (regenBtn) regenBtn.disabled = false;
@@ -767,12 +775,16 @@ switchTab(_activeTab);
                 errorDiv.style.display = '';
             }
         })
-        .catch(function() {
+        .catch(function(err) {
+            clearTimeout(fetchTimeout);
             btn.disabled = false;
             if (regenBtn) regenBtn.disabled = false;
             btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
             imagenProgressDone(false);
-            errorDiv.textContent   = 'Erreur réseau.';
+            var msg = err.name === 'AbortError'
+                ? 'La génération a dépassé le délai (2min 30s). Le modèle est peut-être surchargé — réessayez.'
+                : 'Erreur de connexion au serveur (' + (err.message || 'inconnue') + ').';
+            errorDiv.textContent   = msg;
             errorDiv.style.display = '';
         });
     }

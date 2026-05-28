@@ -377,6 +377,8 @@ PROMPT;
 
         $model = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
 
+        set_time_limit(180);
+
         try {
             $base64 = $this->gemini->generateImage($prompt, $model);
             if (!$base64) {
