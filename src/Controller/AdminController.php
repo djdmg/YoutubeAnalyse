@@ -162,6 +162,10 @@ class AdminController extends AbstractController
             'gemini_api_key'   => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
             'thumbnail_model'        => $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001',
             'thumbnail_prompt_model' => $this->settingRepo->get(GeminiService::SETTING_PROMPT_MODEL) ?? 'balanced',
+            'goals_model'            => $this->settingRepo->get(GeminiService::SETTING_GOALS_MODEL) ?? 'fast',
+            'gemini_tier_fast'       => $this->settingRepo->get(GeminiService::SETTING_TIER_FAST) ?? '',
+            'gemini_tier_balanced'   => $this->settingRepo->get(GeminiService::SETTING_TIER_BALANCED) ?? '',
+            'gemini_tier_full'       => $this->settingRepo->get(GeminiService::SETTING_TIER_FULL) ?? '',
             'image_models'           => $this->gemini->getAvailableModels(),
             'task_models'      => $taskModels,
             'ai_tasks_json'    => json_encode($aiTasks),
@@ -244,6 +248,20 @@ class AdminController extends AbstractController
                 $this->settingRepo->set(GeminiService::SETTING_PROMPT_MODEL, $promptModel);
             }
 
+            $goalsModel = trim((string) $request->request->get('goals_model', ''));
+            if ($goalsModel !== '') {
+                $this->settingRepo->set(GeminiService::SETTING_GOALS_MODEL, $goalsModel);
+            }
+
+            foreach ([
+                'gemini_tier_fast'     => GeminiService::SETTING_TIER_FAST,
+                'gemini_tier_balanced' => GeminiService::SETTING_TIER_BALANCED,
+                'gemini_tier_full'     => GeminiService::SETTING_TIER_FULL,
+            ] as $field => $setting) {
+                $value = trim((string) $request->request->get($field, ''));
+                $this->settingRepo->set($setting, $value ?: null);
+            }
+
             $this->gemini->clearModelsCache();
         }
 
@@ -302,6 +320,13 @@ class AdminController extends AbstractController
         }, $logs);
 
         return new JsonResponse(['counts' => $counts, 'logs' => $serialized]);
+    }
+
+    #[Route('/messenger/clear', name: 'admin_messenger_clear', methods: ['POST'])]
+    public function messengerClear(): JsonResponse
+    {
+        $deleted = $this->messengerLogRepo->deleteAll();
+        return new JsonResponse(['success' => true, 'deleted' => $deleted]);
     }
 
     #[Route('/messenger/{id}/retry', name: 'admin_messenger_retry', methods: ['POST'])]

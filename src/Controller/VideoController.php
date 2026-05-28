@@ -11,8 +11,10 @@ use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
 use App\Repository\VideoMetaSnapshotRepository;
 use App\Repository\AppSettingRepository;
+use App\Entity\ThumbnailChange;
 use App\Repository\VideoSearchTermRepository;
 use App\Service\GeminiService;
+use App\Service\YouTubeDataService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -47,6 +49,7 @@ class VideoController extends AbstractController
         private readonly CacheInterface $cache,
         private readonly MessageBusInterface $bus,
         private readonly LoggerInterface $logger,
+        private readonly YouTubeDataService $youtubeData,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
@@ -492,15 +495,27 @@ PROMPT;
             return new JsonResponse(['success' => false, 'message' => 'Aucune prévisualisation à appliquer. Générez d\'abord une miniature.']);
         }
 
+        // Upload thumbnail to YouTube first
+        try {
+            $this->youtubeData->uploadThumbnail($user, $youtubeId, $previewFile);
+        } catch (\Throwable $e) {
+            $this->logger->error('YouTube thumbnail upload failed', ['error' => $e->getMessage(), 'youtubeId' => $youtubeId]);
+            return new JsonResponse(['success' => false, 'message' => 'Erreur upload YouTube : ' . $e->getMessage()]);
+        }
+
         // Rename preview → permanent file with timestamp
         $finalFile = $youtubeId . '_' . time() . '.png';
         rename($previewFile, $dir . $finalFile);
 
-        $url = '/uploads/thumbnails/' . $finalFile;
+        $oldUrl = $video->getThumbnailUrl();
+        $url    = '/uploads/thumbnails/' . $finalFile;
         $video->setThumbnailUrl($url);
+
+        $change = new ThumbnailChange($video, $oldUrl, $url);
+        $this->em->persist($change);
         $this->em->flush();
 
-        return new JsonResponse(['success' => true, 'url' => $url, 'message' => 'Miniature appliquée avec succès.']);
+        return new JsonResponse(['success' => true, 'url' => $url, 'message' => 'Miniature appliquée sur YouTube avec succès.']);
     }
 
     #[Route('/videos/{youtubeId}/trigger-analysis', name: 'analytics_video_trigger_analysis', methods: ['POST'])]

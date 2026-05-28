@@ -131,6 +131,34 @@
             {% endif %}
         </div>
 
+        {# ── Gemini tier models ───────────────────────────────────────────── #}
+        <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase">
+            Modèles Gemini par niveau
+        </div>
+        {% set tier_fields = [
+            {key: 'gemini_tier_fast',     label: '⚡ Fast',     default: 'gemini-1.5-flash', current: gemini_tier_fast ?? ''},
+            {key: 'gemini_tier_balanced', label: '⚖️ Balanced', default: 'gemini-1.5-pro',   current: gemini_tier_balanced ?? ''},
+            {key: 'gemini_tier_full',     label: '🔬 Full',     default: 'gemini-2.0-flash',  current: gemini_tier_full ?? ''},
+        ] %}
+        {% set text_models_for_tier = image_models is not empty ? image_models|filter(m => (m.type ?? 'text') == 'text') : [] %}
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+        {% for tf in tier_fields %}
+        <div style="flex:1;min-width:180px">
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">{{ tf.label }}</label>
+            <select name="{{ tf.key }}" class="form-control" style="font-size:13px">
+                {% if text_models_for_tier is empty %}
+                    <option value="" {{ tf.current == '' ? 'selected' : '' }}>{{ tf.default }} (défaut)</option>
+                {% else %}
+                    <option value="" {{ tf.current == '' ? 'selected' : '' }}>{{ tf.default }} (défaut)</option>
+                    {% for m in text_models_for_tier %}
+                    <option value="{{ m.id }}" {{ tf.current == m.id ? 'selected' : '' }}>{{ m.name }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        {% endfor %}
+        </div>
+
         <div style="margin-bottom:20px">
             <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
                 <i class="fas fa-image" style="color:#f59e0b;margin-right:4px"></i> Modèle de génération de miniatures
@@ -190,6 +218,32 @@
             <span class="help-text">Modèle utilisé pour générer le prompt envoyé au modèle image. Un modèle plus capable produit des suggestions plus créatives.</span>
         </div>
 
+        <div style="margin-bottom:20px">
+            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
+                <i class="fas fa-bullseye" style="color:#34d399;margin-right:4px"></i> Modèle IA pour les suggestions d'objectifs
+            </label>
+            <select name="goals_model" class="form-control" style="max-width:460px">
+                {% set text_models = image_models is not empty ? image_models|filter(m => (m.type ?? 'text') == 'text') : [] %}
+                {% if text_models is empty %}
+                    <option value="fast"     {{ (goals_model ?? 'fast') == 'fast'     ? 'selected' : '' }}>⚡ Fast (défaut)</option>
+                    <option value="balanced" {{ (goals_model ?? '') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced</option>
+                    <option value="full"     {{ (goals_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
+                {% else %}
+                    <optgroup label="Niveaux génériques">
+                        <option value="fast"     {{ (goals_model ?? 'fast') == 'fast'     ? 'selected' : '' }}>⚡ Fast (défaut)</option>
+                        <option value="balanced" {{ (goals_model ?? '') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced</option>
+                        <option value="full"     {{ (goals_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
+                    </optgroup>
+                    <optgroup label="Modèles texte Gemini">
+                        {% for m in text_models %}
+                        <option value="{{ m.id }}" {{ (goals_model ?? '') == m.id ? 'selected' : '' }}>{{ m.name }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% endif %}
+            </select>
+            <span class="help-text">Modèle utilisé pour générer les suggestions d'objectifs SMART sur la page Goals.</span>
+        </div>
+
         <button type="submit" class="btn btn-primary">
             <i class="fas fa-save"></i> Enregistrer
         </button>
@@ -197,9 +251,9 @@
 
     <div style="margin-top:20px;padding:14px;background:rgba(255,255,255,.03);border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.8">
         <strong style="color:var(--text-secondary)">Correspondance des niveaux</strong><br>
-        Fast → <code>claude-haiku-4-5</code> ($0.80/$4 /1M) / <code>gemini-2.0-flash</code> ($0.10/$0.40 /1M)<br>
+        Fast → <code>claude-haiku-4-5</code> ($0.80/$4 /1M) / <code>gemini-1.5-flash</code> ($0.075/$0.30 /1M)<br>
         Balanced → <code>claude-sonnet-4-6</code> ($3/$15 /1M) / <code>gemini-1.5-pro</code> ($1.25/$5 /1M)<br>
-        Full → <code>claude-sonnet-4-20250514</code> ($3/$15 /1M) / <code>gemini-2.5-pro</code> ($1.25/$10 /1M)
+        Full → <code>claude-sonnet-4-20250514</code> ($3/$15 /1M) / <code>gemini-2.0-flash</code> ($0.10/$0.40 /1M)
     </div>
 </div>
 

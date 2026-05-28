@@ -50,4 +50,12 @@ class MessengerLogRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    public function deleteAll(): int
+    {
+        return (int) $this->createQueryBuilder('m')
+            ->delete()
+            ->getQuery()
+            ->execute();
+    }
 }

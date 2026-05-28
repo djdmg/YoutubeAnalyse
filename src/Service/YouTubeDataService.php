@@ -204,6 +204,34 @@ class YouTubeDataService
         return $result;
     }
 
+    public function uploadThumbnail(User $user, string $youtubeId, string $filePath): void
+    {
+        $client = $this->authService->getAuthenticatedClientForUser($user);
+        if (!$client) {
+            throw new \RuntimeException('Non authentifié avec Google.');
+        }
+
+        $client->setDefer(true);
+        $youtube = new YouTube($client);
+        $request = $youtube->thumbnails->set($youtubeId);
+
+        $chunkSize = 1 * 1024 * 1024;
+        $media     = new \Google\Http\MediaFileUpload($client, $request, 'image/png', null, true, $chunkSize);
+        $media->setFileSize(filesize($filePath));
+
+        $status = false;
+        $handle = fopen($filePath, 'rb');
+        try {
+            while (!$status && !feof($handle)) {
+                $chunk  = fread($handle, $chunkSize);
+                $status = $media->nextChunk($chunk);
+            }
+        } finally {
+            fclose($handle);
+            $client->setDefer(false);
+        }
+    }
+
     public function getDailyAnalytics(User $user, int $days = 30): array
     {
         $cacheKey = 'yt_daily_analytics_' . $user->getId() . '_' . $days;

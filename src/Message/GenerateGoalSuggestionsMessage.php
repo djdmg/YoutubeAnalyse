@@ -14,5 +14,6 @@ final class GenerateGoalSuggestionsMessage
         public readonly float  $avgCtr,
         public readonly string $existingGoals,
         public readonly string $today,
+        public readonly string $model = 'fast',
     ) {}
 }
