@@ -60,7 +60,7 @@ class VideoController extends AbstractController
             ? round(array_sum(array_map(fn($m) => $m->getAvgRetentionPercent() ?? 0, $metrics)) / count($metrics), 1)
             : null;
 
-        $context  = 'Titre : ' . $video->getTitle() . "\n";
+        $context = '';
         if ($video->getDescription()) {
             $context .= 'Description : ' . mb_substr($video->getDescription(), 0, 400) . "\n";
         }
@@ -71,37 +71,60 @@ class VideoController extends AbstractController
         if ($avgCtr !== null)       $context .= "CTR moyen : {$avgCtr}%\n";
         if ($avgRetention !== null)  $context .= "Rétention moyenne : {$avgRetention}%\n";
 
+        // Visual styles
         $styles = [
-            'cinematic, dramatic lighting, film still',
-            'bold flat illustration, graphic design',
-            'photorealistic, vibrant colors, high contrast',
-            'dark moody atmosphere, neon accents',
-            'bright energetic, pop art style',
-            'minimalist, clean, strong typography focus',
+            'cinematic wide shot, dramatic volumetric lighting, film grain',
+            'bold geometric flat illustration, strong contrast, vibrant palette',
+            'photorealistic macro detail, vivid saturation, shallow depth of field',
+            'dark moody atmosphere, neon accent lights, smoke and fog',
+            'explosive pop art, halftone dots, saturated complementary colors',
+            'ultra-minimalist composition, single strong graphic element, white space',
+            'glitch art aesthetic, chromatic aberration, digital distortion',
+            'golden hour warm tones, lens flare, epic landscape scale',
         ];
+
+        // Conceptual angles — push Gemini away from literal title illustration
+        $angles = [
+            'Show the EMOTION or FEELING the video provokes, not its subject.',
+            'Represent the concept as a metaphor or abstract symbol.',
+            'Focus on an unexpected detail or close-up that hints at the topic.',
+            'Use contrast: before/after, chaos/order, dark/light, slow/fast.',
+            'Show the energy or movement of the subject through dynamic composition.',
+            'Imagine what the viewer will FEEL after watching, and visualize that.',
+        ];
+
         $style = $styles[array_rand($styles)];
+        $angle = $angles[array_rand($angles)];
 
         $aiPrompt = <<<PROMPT
-Tu es un expert en miniatures YouTube optimisées pour le CTR.
-Voici les données d'une vidéo :
+Tu es un directeur artistique spécialisé en miniatures YouTube à très haut CTR.
+Voici le contexte d'une vidéo (NE PAS illustrer le titre littéralement) :
 
+Titre (contexte uniquement, ne pas le recopier) : {$video->getTitle()}
 {$context}
+Angle créatif imposé : {$angle}
+Style visuel imposé : {$style}
 
-Génère un prompt créatif et original en anglais pour un modèle de génération d'images qui produira une miniature YouTube percutante.
-Style imposé cette fois : {$style}
+Génère un prompt en anglais pour un modèle de génération d'images.
 
-Le prompt doit :
-- Décrire une scène visuelle précise et originale en lien direct avec le sujet
-- Intégrer le style imposé
-- Se terminer par : "16:9 aspect ratio, YouTube thumbnail, high quality, no watermarks, no text overlay"
-- Tenir en 2-3 phrases maximum
+Règles ABSOLUES :
+- Aucun visage de personne réelle, célébrité ou artiste connu (utilise des silhouettes, des éléments abstraits, des objets, des paysages)
+- Ne jamais reprendre le titre mot pour mot dans le prompt
+- Décrire une SCÈNE VISUELLE originale qui évoque l'émotion ou le concept, pas le sujet littéral
+- Intégrer le style visuel imposé
+- Terminer par : "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks, no text, no logos"
+- Maximum 3 phrases
 
-Réponds UNIQUEMENT avec le prompt en anglais, sans explication, sans guillemets, sans tirets.
+Réponds UNIQUEMENT avec le prompt image en anglais. Aucune explication, aucun guillemet, aucun tiret.
 PROMPT;
 
-        return $this->gemini->callRawText($aiPrompt, 'fast', 300, 1.4)
-            ?? 'Stunning YouTube thumbnail for "' . $video->getTitle() . '", ' . $style . '. '
-            . '16:9 aspect ratio, high quality, no watermarks.';
+        $generated = $this->gemini->callRawText($aiPrompt, 'fast', 350, 1.5);
+
+        // Fallback: abstract concept instead of title repeat
+        return $generated
+            ?? "Abstract visual metaphor evoking {$style}, dynamic composition, intense atmosphere. "
+            . "No faces, no text, no real people. "
+            . "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks.";
     }
 
     private function resolveThumbnailModelName(): string
