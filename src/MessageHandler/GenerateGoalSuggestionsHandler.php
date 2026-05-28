@@ -40,22 +40,36 @@ Rules:
 - Deadlines must be in YYYY-MM-DD format, between 1 and 6 months from today
 - Label must be in French, concise (max 50 chars), motivating
 
-Respond with ONLY a valid JSON array, no markdown, no explanation:
+OUTPUT FORMAT — respond with ONLY a raw JSON array matching this schema exactly.
+Do NOT use markdown code fences. Do NOT add any explanation. Start with [ and end with ].
+
+Schema:
 [
-  {"label": "...", "type": "subscribers|views|watch_time", "targetValue": 1234, "deadline": "YYYY-MM-DD"},
+  {"label": "string (French, max 50 chars)", "type": "subscribers|views|watch_time", "targetValue": 1234, "deadline": "YYYY-MM-DD"},
   ...
+]
+
+Example:
+[
+  {"label": "Atteindre 1 000 abonnés", "type": "subscribers", "targetValue": 1000, "deadline": "{$msg->today}"},
+  {"label": "1 000 vues en 30 jours", "type": "views", "targetValue": 1000, "deadline": "{$msg->today}"}
 ]
 PROMPT;
 
-            $raw  = $this->ai->callRaw($prompt, AiProviderInterface::TIER_FAST, 512);
-            $text = trim($raw['content'][0]['text'] ?? $raw['choices'][0]['message']['content'] ?? '');
+            $text = trim($this->ai->callText($prompt, AiProviderInterface::TIER_FAST, 600));
 
+            // Strip markdown fences if the model ignored instructions
+            $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
+            $text = preg_replace('/\s*```$/i', '', $text);
+
+            // Extract JSON array (handles any preamble the model may have added)
             if (preg_match('/\[[\s\S]*\]/u', $text, $m)) {
                 $text = $m[0];
             }
+
             $items = json_decode($text, true);
             if (!is_array($items)) {
-                throw new \RuntimeException('Invalid JSON from AI: ' . $text);
+                throw new \RuntimeException('Invalid JSON from AI: ' . substr($text, 0, 300));
             }
 
             $suggestions = [];

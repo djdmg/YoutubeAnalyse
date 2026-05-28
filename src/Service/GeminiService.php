@@ -143,6 +143,11 @@ class GeminiService implements AiProviderInterface
         }
     }
 
+    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 1024): string
+    {
+        return $this->callRawText($prompt, $model, $maxTokens, 0.7);
+    }
+
     public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): string
     {
         $resolvedModel = $this->resolveModel($model);
