@@ -41,6 +41,15 @@ class VideoController extends AbstractController
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
+    private function resolveThumbnailModelName(): string
+    {
+        $id = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
+        foreach ($this->gemini->getAvailableModels() as $m) {
+            if ($m['id'] === $id) return $m['name'];
+        }
+        return $id;
+    }
+
     #[Route('/videos', name: 'analytics_videos')]
     public function list(Request $request): Response
     {
@@ -445,6 +454,8 @@ class VideoController extends AbstractController
             'traffic_total'        => $trafficTotal,
             'estimated_revenue'    => $estimatedRevenue,
             'estimated_rpm'        => $user->getEstimatedRpm(),
+            'thumbnail_model_id'   => $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001',
+            'thumbnail_model_name' => $this->resolveThumbnailModelName(),
         ]);
     }
 
