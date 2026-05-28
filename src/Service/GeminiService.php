@@ -305,13 +305,39 @@ class GeminiService implements AiProviderInterface
         ]);
 
         $data  = $response->toArray();
+
+        // Log full response to help diagnose unexpected structures
+        $this->logger->debug('generateImageWithGenerateContent response', [
+            'model'          => $model,
+            'finishReason'   => $data['candidates'][0]['finishReason'] ?? 'n/a',
+            'parts_count'    => count($data['candidates'][0]['content']['parts'] ?? []),
+            'parts_types'    => array_keys(array_merge(...array_map('array_keys', $data['candidates'][0]['content']['parts'] ?? [[]]))),
+            'promptFeedback' => $data['promptFeedback'] ?? null,
+        ]);
+
         $parts = $data['candidates'][0]['content']['parts'] ?? [];
         foreach ($parts as $part) {
             if (isset($part['inlineData']['data'])) {
                 return $part['inlineData']['data'];
             }
         }
-        return null;
+
+        // Build a meaningful exception so the controller can show a useful message
+        $finishReason = $data['candidates'][0]['finishReason'] ?? null;
+        $blocked      = $data['promptFeedback']['blockReason'] ?? null;
+        $textFallback = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+
+        if ($blocked) {
+            throw new \RuntimeException("Prompt bloqué par le filtre de sécurité Gemini : {$blocked}.");
+        }
+        if ($finishReason && $finishReason !== 'STOP') {
+            throw new \RuntimeException("Génération arrêtée (finishReason: {$finishReason}). Le modèle n'a pas produit d'image.");
+        }
+        if ($textFallback) {
+            throw new \RuntimeException("Le modèle a répondu en texte au lieu d'une image : \"{$textFallback}\"");
+        }
+
+        throw new \RuntimeException("Aucune image reçue du modèle {$model}. Vérifiez que ce modèle supporte la génération d'images avec responseModalities.");
     }
 
     public function validateApiKey(string $key): bool
