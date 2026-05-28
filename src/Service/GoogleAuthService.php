@@ -26,6 +26,7 @@ class GoogleAuthService
         $client->setClientId($this->clientId);
         $client->setClientSecret($this->clientSecret);
         $client->setRedirectUri($this->redirectUri);
+        $client->addScope('https://www.googleapis.com/auth/youtube');
         $client->addScope('https://www.googleapis.com/auth/youtube.readonly');
         $client->addScope('https://www.googleapis.com/auth/youtube.force-ssl');
         $client->addScope('https://www.googleapis.com/auth/yt-analytics.readonly');

@@ -219,12 +219,15 @@ class YouTubeDataService
             throw new \RuntimeException('Access token manquant — reconnectez votre compte Google.');
         }
 
-        // Log granted scopes so we can verify youtube.force-ssl is present
-        $grantedScopes = $tokenData['scope'] ?? 'unknown';
-        $hasForceSsl   = str_contains((string) $grantedScopes, 'youtube.force-ssl');
-        if (!$hasForceSsl) {
+        // Require at least one write-capable scope for thumbnail upload
+        $grantedScopes  = (string) ($tokenData['scope'] ?? '');
+        $hasWriteScope  = str_contains($grantedScopes, 'auth/youtube ')
+                       || str_ends_with($grantedScopes, 'auth/youtube')
+                       || str_contains($grantedScopes, 'youtube.force-ssl')
+                       || str_contains($grantedScopes, 'youtube.upload');
+        if (!$hasWriteScope) {
             throw new \RuntimeException(
-                'Scope youtube.force-ssl manquant dans le token. Reconnectez votre compte via /auth/google?force_consent=1'
+                'Permissions insuffisantes pour uploader une miniature. Reconnectez votre compte via /auth/google?force_consent=1'
             );
         }
 
