@@ -1,0 +1,125 @@
+{% extends 'base.html.twig' %}
+{% block title %}Admin — Messenger{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-paper-plane"></i> Messenger — File de messages</h1>
+        <span class="last-sync">Derniers 200 messages</span>
+    </div>
+    <div style="display:flex;gap:.75rem;align-items:center">
+        <a href="{{ path('admin_users') }}" class="btn btn-secondary btn-sm"><i class="fas fa-users"></i> Utilisateurs</a>
+        <a href="{{ path('admin_settings') }}" class="btn btn-secondary btn-sm"><i class="fas fa-cog"></i> Paramètres</a>
+    </div>
+</div>
+
+{# Stats bar #}
+<div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:1.5rem">
+    <div class="metric-card">
+        <div class="metric-value" style="color:var(--text-muted)">{{ counts.pending }}</div>
+        <div class="metric-label">En attente</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value" style="color:#22c55e">{{ counts.success }}</div>
+        <div class="metric-label">Réussis</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value" style="color:#f59e0b">{{ counts.retry }}</div>
+        <div class="metric-label">En retry</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value" style="color:#ef4444">{{ counts.failed }}</div>
+        <div class="metric-label">Échoués</div>
+    </div>
+</div>
+
+{# CLI hint #}
+<div class="alert alert-info" style="margin-bottom:1.5rem;padding:.75rem 1rem;background:rgba(99,102,241,.1);border-left:3px solid #6366f1;border-radius:6px">
+    <strong>Worker :</strong>
+    <code style="background:rgba(0,0,0,.3);padding:.2rem .5rem;border-radius:4px;font-size:.85em">php bin/console messenger:consume async --time-limit=3600</code>
+    &nbsp;·&nbsp; Rejeter les échoués : <code style="background:rgba(0,0,0,.3);padding:.2rem .5rem;border-radius:4px;font-size:.85em">messenger:failed:retry</code>
+</div>
+
+<div class="card" style="overflow:hidden">
+    <div style="overflow-x:auto">
+        <table class="data-table" style="width:100%;border-collapse:collapse">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Message</th>
+                    <th>Payload</th>
+                    <th>Statut</th>
+                    <th>Durée</th>
+                    <th>Créé</th>
+                    <th>Terminé</th>
+                    <th>Erreur</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for log in logs %}
+                {% set statusColor = {
+                    'pending': '#94a3b8',
+                    'success': '#22c55e',
+                    'failed':  '#ef4444',
+                    'retry':   '#f59e0b'
+                }[log.status] ?? '#94a3b8' %}
+                <tr>
+                    <td style="color:var(--text-muted);font-size:.8em">{{ log.id }}</td>
+                    <td style="font-size:.8em;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.messageClass }}">
+                        {{ log.messageClass|split('\\')|last }}
+                    </td>
+                    <td style="font-size:.75em;max-width:240px">
+                        <details>
+                            <summary style="cursor:pointer;color:var(--text-muted)">voir</summary>
+                            <pre style="margin:.25rem 0;white-space:pre-wrap;font-size:.85em;color:var(--text-secondary)">{{ log.payload|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_UNICODE')) }}</pre>
+                        </details>
+                    </td>
+                    <td>
+                        <span style="background:{{ statusColor }}22;color:{{ statusColor }};padding:.15rem .5rem;border-radius:20px;font-size:.75em;font-weight:600">
+                            {{ log.status|upper }}
+                        </span>
+                        {% if log.retryCount %}
+                            <span style="font-size:.7em;color:var(--text-muted)">({{ log.retryCount }}x)</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:.8em;white-space:nowrap">
+                        {% if log.durationMs %}
+                            {% if log.durationMs >= 1000 %}
+                                {{ (log.durationMs / 1000)|number_format(1) }}s
+                            {% else %}
+                                {{ log.durationMs }}ms
+                            {% endif %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td style="font-size:.75em;white-space:nowrap;color:var(--text-muted)">{{ log.createdAt|date('d/m H:i:s') }}</td>
+                    <td style="font-size:.75em;white-space:nowrap;color:var(--text-muted)">{{ log.finishedAt ? log.finishedAt|date('d/m H:i:s') : '—' }}</td>
+                    <td style="font-size:.75em;max-width:280px">
+                        {% if log.error %}
+                            <span style="color:#ef4444" title="{{ log.error }}">{{ log.error|slice(0,80) }}{% if log.error|length > 80 %}…{% endif %}</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted)">Aucun message enregistré</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// Auto-refresh every 10s if there are pending/retry messages
+const hasPending = {{ (counts.pending + counts.retry) > 0 ? 'true' : 'false' }};
+if (hasPending) {
+    setTimeout(() => location.reload(), 10000);
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;bottom:1rem;right:1rem;background:#6366f1;color:#fff;padding:.5rem 1rem;border-radius:6px;font-size:.8em;opacity:.8';
+    banner.textContent = 'Actualisation auto dans 10s…';
+    document.body.appendChild(banner);
+}
+</script>
+{% endblock %}

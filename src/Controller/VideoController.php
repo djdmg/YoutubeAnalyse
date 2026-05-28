@@ -21,9 +21,11 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use App\Message\GenerateThumbnailMessage;
 
 #[IsGranted('ROLE_USER')]
 #[Route('/analytics')]
@@ -41,6 +43,7 @@ class VideoController extends AbstractController
         private readonly AppSettingRepository $settingRepo,
         private readonly EntityManagerInterface $em,
         private readonly CacheInterface $cache,
+        private readonly MessageBusInterface $bus,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
@@ -394,25 +397,13 @@ PROMPT;
         $jobId    = bin2hex(random_bytes(8));
         $cacheKey = 'thumbnail_job_' . $jobId;
 
-        // Store pending state
+        // Pre-store pending state so the polling endpoint never returns "not found"
         $this->cache->get($cacheKey, function (ItemInterface $item) {
             $item->expiresAfter(600);
             return ['status' => 'pending'];
         });
 
-        // Launch generation in background — avoids nginx 504 timeout
-        $php     = PHP_BINARY;
-        $console = escapeshellarg($this->projectDir . '/bin/console');
-        $cmd     = sprintf(
-            '%s %s app:thumbnail:generate %s %s %s %s > /dev/null 2>&1 &',
-            escapeshellcmd($php),
-            $console,
-            escapeshellarg($jobId),
-            escapeshellarg($youtubeId),
-            escapeshellarg($model),
-            escapeshellarg($prompt)
-        );
-        exec($cmd);
+        $this->bus->dispatch(new GenerateThumbnailMessage($jobId, $youtubeId, $model, $prompt));
 
         return new JsonResponse(['success' => true, 'jobId' => $jobId]);
     }

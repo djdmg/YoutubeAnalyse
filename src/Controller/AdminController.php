@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Repository\AppSettingRepository;
+use App\Repository\MessengerLogRepository;
 use App\Repository\UserRepository;
 use App\Enum\AiReportType;
 use App\Service\AiProviderFactory;
@@ -30,6 +31,7 @@ class AdminController extends AbstractController
         private readonly AiProviderFactory      $aiFactory,
         private readonly GeminiService          $gemini,
         private readonly LoggerInterface        $logger,
+        private readonly MessengerLogRepository $messengerLogRepo,
     ) {}
 
     #[Route('', name: 'admin_users')]
@@ -251,5 +253,25 @@ class AdminController extends AbstractController
 
         $this->addFlash('success', $message);
         return $this->redirectToRoute('admin_settings');
+    }
+
+    #[Route('/messenger', name: 'admin_messenger')]
+    public function messenger(): Response
+    {
+        $logs      = $this->messengerLogRepo->findRecent(200);
+        $counts    = $this->messengerLogRepo->countByStatus();
+
+        return $this->render('admin/messenger.html.twig', [
+            'logs'   => $logs,
+            'counts' => $counts,
+        ]);
+    }
+
+    #[Route('/messenger/{id}/retry', name: 'admin_messenger_retry', methods: ['POST'])]
+    public function messengerRetry(int $id): Response
+    {
+        // Instruct user to use CLI — retrying failed messages requires the console worker
+        $this->addFlash('info', 'Pour rejouer les messages échoués : php bin/console messenger:failed:retry');
+        return $this->redirectToRoute('admin_messenger');
     }
 }
