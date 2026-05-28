@@ -194,19 +194,32 @@ class GeminiService implements AiProviderInterface
         $url           = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
         $startTime     = microtime(true);
 
-        $response = $this->httpClient->request('POST', $url, [
-            'json' => [
-                'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-                'generationConfig' => [
-                    'maxOutputTokens'  => $maxTokens,
-                    'responseMimeType' => 'application/json',
-                    'responseSchema'   => $schema,
-                ],
-            ],
-            'timeout' => 60,
-        ]);
+        // Gemini responseSchema requires the top-level type to be 'object'.
+        // Wrap array schemas so the API accepts them, then unwrap the result.
+        $isTopLevelArray = ($schema['type'] ?? '') === 'array';
+        $apiSchema = $isTopLevelArray
+            ? ['type' => 'object', 'properties' => ['items' => $schema], 'required' => ['items']]
+            : $schema;
 
-        $data  = $response->toArray();
+        try {
+            $response = $this->httpClient->request('POST', $url, [
+                'json' => [
+                    'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                    'generationConfig' => [
+                        'maxOutputTokens'  => $maxTokens,
+                        'responseMimeType' => 'application/json',
+                        'responseSchema'   => $apiSchema,
+                    ],
+                ],
+                'timeout' => 60,
+            ]);
+
+            $data  = $response->toArray();
+        } catch (\Throwable $e) {
+            $this->logger->error('Gemini callJson HTTP error', ['error' => $e->getMessage(), 'model' => $resolvedModel]);
+            throw $e;
+        }
+
         $text  = trim($data['candidates'][0]['content']['parts'][0]['text'] ?? '');
         $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
@@ -217,11 +230,20 @@ class GeminiService implements AiProviderInterface
             $report->setDurationMs($durationMs);
         }
 
-        $parsed = json_decode($text, true);
-        if ($parsed === null && $text !== '') {
-            $this->logger->error('Gemini callJson: invalid JSON', ['response' => substr($text, 0, 300)]);
+        if ($text === '') {
+            $reason = $data['candidates'][0]['finishReason'] ?? ($data['promptFeedback']['blockReason'] ?? 'unknown');
+            $this->logger->error('Gemini callJson: empty response', ['reason' => $reason, 'model' => $resolvedModel]);
+            return null;
         }
-        return $parsed;
+
+        $parsed = json_decode($text, true);
+        if ($parsed === null) {
+            $this->logger->error('Gemini callJson: invalid JSON', ['response' => substr($text, 0, 300)]);
+            return null;
+        }
+
+        // Unwrap the object wrapper if we added one
+        return $isTopLevelArray ? ($parsed['items'] ?? array_values($parsed)) : $parsed;
     }
 
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
