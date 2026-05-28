@@ -54,6 +54,9 @@
         <a href="{{ path('admin_settings') }}" class="{{ app.request.attributes.get('_route') == 'admin_settings' ? 'active' : '' }}" style="{{ app.request.attributes.get('_route') != 'admin_settings' ? 'color:var(--yellow)' : '' }}">
             <i class="fas fa-cogs"></i> Paramètres
         </a>
+        <a href="{{ path('admin_messenger') }}" class="{{ app.request.attributes.get('_route') == 'admin_messenger' ? 'active' : '' }}" style="{{ app.request.attributes.get('_route') != 'admin_messenger' ? 'color:var(--yellow)' : '' }}">
+            <i class="fas fa-paper-plane"></i> Messenger
+        </a>
         {% endif %}
         <div class="navbar-user">
             {% if app.user.avatarUrl %}

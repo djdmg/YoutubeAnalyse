@@ -404,7 +404,15 @@ PROMPT;
             return ['status' => 'pending'];
         });
 
-        $this->bus->dispatch(new GenerateThumbnailMessage($jobId, $youtubeId, $model, $prompt));
+        try {
+            $this->bus->dispatch(new GenerateThumbnailMessage($jobId, $youtubeId, $model, $prompt));
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'messenger_messages') || str_contains($msg, "doesn't exist") || str_contains($msg, 'Base table')) {
+                return new JsonResponse(['success' => false, 'message' => 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate'], 500);
+            }
+            return new JsonResponse(['success' => false, 'message' => 'Erreur interne : ' . $msg], 500);
+        }
 
         return new JsonResponse(['success' => true, 'jobId' => $jobId]);
     }
@@ -483,7 +491,15 @@ PROMPT;
             return ['status' => 'pending'];
         });
 
-        $this->bus->dispatch(new RunAiAnalysisMessage($user->getId(), $jobId, $youtubeId, $type, $force));
+        try {
+            $this->bus->dispatch(new RunAiAnalysisMessage($user->getId(), $jobId, $youtubeId, $type, $force));
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'messenger_messages') || str_contains($msg, "doesn't exist") || str_contains($msg, 'Base table')) {
+                return new JsonResponse(['success' => false, 'message' => 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate'], 500);
+            }
+            return new JsonResponse(['success' => false, 'message' => 'Erreur interne : ' . $msg], 500);
+        }
 
         return new JsonResponse(['success' => true, 'jobId' => $jobId]);
     }
