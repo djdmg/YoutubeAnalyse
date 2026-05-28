@@ -66,18 +66,6 @@ class VideoController extends AbstractController
             ? mb_substr($video->getDescription(), 0, 800)
             : '';
 
-        $styles = [
-            'cinematic wide shot, dramatic volumetric lighting, film grain',
-            'bold geometric flat illustration, strong contrast, vibrant palette',
-            'photorealistic detail, vivid saturation, shallow depth of field',
-            'dark moody atmosphere, neon accent lights, smoke and fog',
-            'explosive pop art, halftone dots, saturated complementary colors',
-            'golden hour warm tones, lens flare, epic landscape scale',
-            'glitch art aesthetic, chromatic aberration, digital distortion',
-            'high-energy festival shot, crowd silhouettes, laser beams, fog machine',
-        ];
-        $style = $styles[array_rand($styles)];
-
         $promptModel = $this->settingRepo->get(GeminiService::SETTING_PROMPT_MODEL) ?? 'balanced';
 
         $aiPrompt = <<<PROMPT
@@ -92,13 +80,14 @@ Avg CTR: {$avgCtr}%
 
 TASK: Write an image generation prompt in English for this video's thumbnail.
 
+Based on the title and description, choose yourself the visual style, atmosphere, and composition that will generate the highest CTR for this specific content.
+
 STRICT RULES:
-1. Base the scene on SPECIFIC, REAL elements from the title and description (real places, real instruments, real events, real visual details mentioned). ZERO abstract or generic imagery.
-2. MANDATORY TEXT OVERLAY: include exactly 2-4 words as bold display typography directly in the scene. The text must come from the actual video content — a year, a genre name, a key phrase, a location. Write it as: bold text overlay "[YOUR TEXT]".
-3. No real human faces, no celebrity likenesses, no artist portraits — use silhouettes, objects, light effects, crowd shapes.
-4. Choose a composition that creates immediate visual impact and curiosity at small thumbnail size.
-5. End with: "16:9 aspect ratio, YouTube thumbnail, ultra high quality, no watermarks, no logos"
-6. Max 3 sentences. English only.
+1. Scene based on SPECIFIC, REAL elements from the title and description (real places, real instruments, real events, real visual details mentioned). ZERO abstract or generic imagery.
+2. MANDATORY TEXT OVERLAY: 2-4 words in bold display typography. Must come from the actual content — a year, a genre name, a key phrase, a location. Write it as: bold text overlay "[YOUR TEXT]".
+3. No real human faces, no celebrity likenesses — use silhouettes, objects, light effects, crowd shapes.
+4. End with: "16:9 aspect ratio, YouTube thumbnail, ultra high quality, no watermarks, no logos"
+5. Max 3 sentences. English only.
 
 Reply with ONLY the image prompt. No explanation, no quotes around it.
 PROMPT;
@@ -107,11 +96,11 @@ PROMPT;
             return $this->gemini->callRawText($aiPrompt, $promptModel, 450, 1.3);
         } catch (\Throwable $e) {
             $this->logger->warning('Thumbnail prompt generation failed, using PHP fallback', ['error' => $e->getMessage()]);
-            return $this->buildFallbackPrompt($video, $style);
+            return $this->buildFallbackPrompt($video);
         }
     }
 
-    private function buildFallbackPrompt(mixed $video, string $style): string
+    private function buildFallbackPrompt(mixed $video): string
     {
         $title = $video->getTitle();
         $desc  = $video->getDescription() ? mb_substr($video->getDescription(), 0, 300) : '';
@@ -123,10 +112,8 @@ PROMPT;
         preg_match_all('/\b[a-záàâäéèêëîïôöùûü]{4,}\b/u', $text, $matches);
         $words = array_values(array_diff(array_unique($matches[0]), $stopWords));
 
-        // Pick the 4 most distinctive words as scene elements
-        $sceneWords = implode(', ', array_slice($words, 0, 4));
+        $sceneWords = implode(', ', array_slice($words, 0, 5));
 
-        // Overlay text: year from title, or first 2 meaningful words uppercased
         preg_match('/20\d\d/', $title, $yearMatch);
         if ($yearMatch) {
             $overlayText = $yearMatch[0];
@@ -136,7 +123,7 @@ PROMPT;
             $overlayText = strtoupper($words[0] ?? 'NOW');
         }
 
-        return "Visual scene featuring {$sceneWords}, {$style}, "
+        return "Visual scene featuring {$sceneWords}, high visual impact composition, "
             . "bold text overlay \"{$overlayText}\" in large display font, "
             . "no real human faces, no logos. "
             . "16:9 aspect ratio, YouTube thumbnail, ultra high quality, no watermarks.";
