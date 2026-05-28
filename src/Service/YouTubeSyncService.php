@@ -258,18 +258,25 @@ class YouTubeSyncService
     /**
      * Syncs top search queries that led viewers to each video.
      * Uses insightTrafficSourceDetail with YT_SEARCH filter — 1 API unit per video.
+     * Window: last 90 days (avoids timeouts on very old videos; Analytics data rarely
+     * changes for content older than ~3 months anyway).
      */
     private function syncSearchTerms(YouTubeAnalytics $analytics, string $channelId, User $user, \DateTimeImmutable $today): int
     {
-        $videos  = $this->videoRepo->findForUser($user);
-        $endDate = $today->modify('-1 day')->format('Y-m-d');
-        $now     = new \DateTimeImmutable();
-        $synced  = 0;
+        $videos    = $this->videoRepo->findForUser($user);
+        $endDate   = $today->modify('-1 day')->format('Y-m-d');
+        // Use max 90 days to stay within API limits; clamp to publish date for newer videos
+        $windowStart = $today->modify('-90 days');
+        $now       = new \DateTimeImmutable();
+        $synced    = 0;
 
         foreach ($videos as $video) {
             if (!$this->quotaGuard->hasQuota(1)) break;
 
-            $startDate = $video->getPublishedAt()?->format('Y-m-d') ?? '2020-01-01';
+            $publishedAt = $video->getPublishedAt();
+            $startDate   = ($publishedAt && $publishedAt > $windowStart)
+                ? $publishedAt->format('Y-m-d')
+                : $windowStart->format('Y-m-d');
 
             try {
                 $response = $analytics->reports->query([
@@ -280,11 +287,17 @@ class YouTubeSyncService
                     'dimensions' => 'insightTrafficSourceDetail',
                     'filters'    => "video=={$video->getYoutubeId()};insightTrafficSourceType==YT_SEARCH",
                     'sort'       => '-views',
-                    'max-results'=> 25,
+                    'maxResults' => 25,
                 ]);
                 $this->quotaGuard->consume(1);
 
-                foreach ($response->getRows() ?? [] as $row) {
+                $rows = $response->getRows() ?? [];
+                $this->logger->debug('Search terms API response', [
+                    'video' => $video->getYoutubeId(),
+                    'rows'  => count($rows),
+                ]);
+
+                foreach ($rows as $row) {
                     $query = trim((string) $row[0]);
                     $views = (int) ($row[1] ?? 0);
                     if ($query === '' || $views === 0) continue;
@@ -301,12 +314,15 @@ class YouTubeSyncService
 
             } catch (\Exception $e) {
                 $this->logger->warning('Search terms sync failed', [
-                    'video'   => $video->getYoutubeId(),
-                    'error'   => $e->getMessage(),
+                    'video'      => $video->getYoutubeId(),
+                    'startDate'  => $startDate,
+                    'endDate'    => $endDate,
+                    'error'      => $e->getMessage(),
                 ]);
             }
         }
 
+        $this->logger->info('Search terms sync complete', ['synced' => $synced, 'channel' => $channelId]);
         return $synced;
     }
 
