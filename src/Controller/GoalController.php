@@ -4,6 +4,8 @@ namespace App\Controller;
 
 use App\Entity\Goal;
 use App\Entity\User;
+use App\Repository\ChannelStatsRepository;
+use App\Repository\DailyMetricRepository;
 use App\Repository\GoalRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -18,9 +20,28 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class GoalController extends AbstractController
 {
     public function __construct(
-        private readonly GoalRepository $goalRepo,
+        private readonly GoalRepository        $goalRepo,
         private readonly EntityManagerInterface $em,
+        private readonly ChannelStatsRepository $channelStatsRepo,
+        private readonly DailyMetricRepository  $dailyMetricRepo,
     ) {}
+
+    #[Route('', name: 'goal_index', methods: ['GET'])]
+    public function index(): Response
+    {
+        /** @var User $user */
+        $user         = $this->getUser();
+        $allGoals     = $this->goalRepo->findAllForUser($user);
+        $activeGoals  = array_values(array_filter($allGoals, fn($g) => !$g->isAchieved()));
+        $doneGoals    = array_values(array_filter($allGoals, fn($g) => $g->isAchieved()));
+
+        $this->syncCurrentValues($user, array_merge($activeGoals, $doneGoals));
+
+        return $this->render('goals/index.html.twig', [
+            'active_goals'   => $activeGoals,
+            'achieved_goals' => $doneGoals,
+        ]);
+    }
 
     #[Route('', name: 'goal_create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
@@ -30,7 +51,6 @@ class GoalController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
         if (!$data) {
-            // Try form-encoded
             $data = $request->request->all();
         }
 
@@ -58,20 +78,19 @@ class GoalController extends AbstractController
         if ($deadline) {
             try {
                 $goal->setDeadline(new \DateTimeImmutable($deadline));
-            } catch (\Exception) {
-                // ignore bad date
-            }
+            } catch (\Exception) {}
         }
 
         $this->em->persist($goal);
+        $this->syncCurrentValues($user, [$goal]);
         $this->em->flush();
 
         return new JsonResponse([
-            'id'            => $goal->getId(),
-            'label'         => $goal->getLabel(),
-            'type'          => $goal->getType(),
-            'targetValue'   => $goal->getTargetValue(),
-            'currentValue'  => $goal->getCurrentValue(),
+            'id'              => $goal->getId(),
+            'label'           => $goal->getLabel(),
+            'type'            => $goal->getType(),
+            'targetValue'     => $goal->getTargetValue(),
+            'currentValue'    => $goal->getCurrentValue(),
             'progressPercent' => $goal->getProgressPercent(),
         ], Response::HTTP_CREATED);
     }
@@ -91,5 +110,32 @@ class GoalController extends AbstractController
         $this->em->flush();
 
         return new JsonResponse(['success' => true]);
+    }
+
+    private function syncCurrentValues(User $user, array $goals): void
+    {
+        if (empty($goals)) return;
+
+        $latestStats   = $this->channelStatsRepo->findLatestForUser($user);
+        $globalStats   = $this->dailyMetricRepo->getGlobalStatsForUser($user, 30);
+        $subscribers   = $latestStats?->getSubscriberCount() ?? 0;
+        $views30       = (int) ($globalStats['total_views'] ?? 0);
+        $watchTime30   = (int) ($globalStats['total_watch_time'] ?? 0);
+
+        foreach ($goals as $goal) {
+            $current = match ($goal->getType()) {
+                'subscribers' => $subscribers,
+                'views'       => $views30,
+                'watch_time'  => $watchTime30,
+                default       => $goal->getCurrentValue(),
+            };
+            $goal->setCurrentValue($current);
+
+            if (!$goal->isAchieved() && $current >= $goal->getTargetValue()) {
+                $goal->setIsAchieved(true);
+                $goal->setAchievedAt(new \DateTimeImmutable());
+            }
+        }
+        $this->em->flush();
     }
 }

@@ -1,0 +1,330 @@
+{% extends 'base.html.twig' %}
+{% block title %}Objectifs — YouTube Analyse{% endblock %}
+
+{% block body %}
+
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-bullseye" style="color:var(--blue)"></i> Objectifs</h1>
+        <span class="last-sync">{{ active_goals|length }} actif{{ active_goals|length != 1 ? 's' : '' }} · {{ achieved_goals|length }} atteint{{ achieved_goals|length != 1 ? 's' : '' }}</span>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary btn-sm" id="btnAddGoal" type="button">
+            <i class="fas fa-plus"></i> Nouvel objectif
+        </button>
+    </div>
+</div>
+
+{# ── Active goals ─────────────────────────────────────────────────────────── #}
+{% if active_goals is empty and achieved_goals is empty %}
+<div class="section-card">
+    <div class="empty-state" style="padding:48px 24px">
+        <i class="fas fa-bullseye fa-3x" style="color:var(--text-muted);margin-bottom:16px"></i>
+        <h3>Aucun objectif</h3>
+        <p>Crée ton premier objectif pour suivre la progression de ta chaîne.</p>
+        <button class="btn btn-primary" id="btnAddGoalEmpty" type="button" style="margin-top:8px">
+            <i class="fas fa-plus"></i> Créer un objectif
+        </button>
+    </div>
+</div>
+{% else %}
+
+{% if active_goals is not empty %}
+<div class="goals-grid">
+{% for goal in active_goals %}
+{% set pct = goal.progressPercent %}
+{% set color = pct >= 100 ? '#22c55e' : (pct >= 75 ? '#3b82f6' : (pct >= 40 ? '#f59e0b' : '#94a3b8')) %}
+{% set typeLabel = {subscribers: 'Abonnés', views: 'Vues (30j)', watch_time: 'Watch time (30j)'}[goal.type] ?? goal.type %}
+{% set typeIcon  = {subscribers: 'fa-users', views: 'fa-eye', watch_time: 'fa-clock'}[goal.type] ?? 'fa-chart-line' %}
+<div class="goal-card" id="goal-{{ goal.id }}">
+    <div class="goal-card-top">
+        <div style="display:flex;align-items:center;gap:.6rem;min-width:0">
+            <div style="width:36px;height:36px;border-radius:10px;background:{{ color }}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fas {{ typeIcon }}" style="color:{{ color }};font-size:.9em"></i>
+            </div>
+            <div style="min-width:0">
+                <div class="goal-card-label">{{ goal.label }}</div>
+                <div class="goal-card-type">{{ typeLabel }}</div>
+            </div>
+        </div>
+        <button class="goal-card-delete" onclick="deleteGoal({{ goal.id }})" title="Supprimer" type="button">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    {# Circular progress #}
+    <div style="display:flex;align-items:center;gap:1.25rem;margin:1rem 0 .875rem">
+        <div style="position:relative;width:72px;height:72px;flex-shrink:0">
+            <svg width="72" height="72" viewBox="0 0 72 72" style="transform:rotate(-90deg)">
+                <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="7"/>
+                <circle cx="36" cy="36" r="28" fill="none" stroke="{{ color }}" stroke-width="7"
+                    stroke-dasharray="{{ (28 * 2 * 3.14159)|round(1) }}"
+                    stroke-dashoffset="{{ ((1 - pct / 100) * 28 * 2 * 3.14159)|round(1) }}"
+                    stroke-linecap="round" style="transition:stroke-dashoffset .5s ease"/>
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;color:{{ color }}">{{ pct }}%</div>
+        </div>
+        <div style="flex:1;min-width:0">
+            <div style="font-size:1.45rem;font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1.1">
+                {{ goal.currentValue|number_format(0, ',', ' ') }}
+            </div>
+            <div style="font-size:.75em;color:var(--text-muted);margin-top:.15rem">
+                sur {{ goal.targetValue|number_format(0, ',', ' ') }}
+            </div>
+            {% set remaining = goal.targetValue - goal.currentValue %}
+            {% if remaining > 0 %}
+            <div style="font-size:.72em;color:{{ color }};margin-top:.3rem;font-weight:500">
+                {{ remaining|number_format(0, ',', ' ') }} restant{{ remaining != 1 ? 's' : '' }}
+            </div>
+            {% else %}
+            <div style="font-size:.72em;color:#22c55e;margin-top:.3rem;font-weight:600">
+                <i class="fas fa-check"></i> Objectif atteint !
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Progress bar #}
+    <div style="height:5px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;margin-bottom:.6rem">
+        <div style="height:5px;width:{{ pct }}%;background:{{ color }};border-radius:4px;transition:width .5s ease"></div>
+    </div>
+
+    {% if goal.deadline %}
+    {% set now = "now"|date('U') %}
+    {% set dl  = goal.deadline|date('U') %}
+    {% set daysLeft = ((dl - now) / 86400)|round(0, 'ceil') %}
+    <div style="font-size:.72em;color:{{ daysLeft < 7 ? '#ef4444' : 'var(--text-muted)' }};display:flex;align-items:center;gap:.3rem">
+        <i class="fas fa-calendar{{ daysLeft < 0 ? '-times' : '' }}"></i>
+        {% if daysLeft < 0 %}
+            Délai dépassé ({{ goal.deadline|date('d/m/Y') }})
+        {% elseif daysLeft == 0 %}
+            Échéance aujourd'hui
+        {% else %}
+            {{ goal.deadline|date('d/m/Y') }} · {{ daysLeft }}j restant{{ daysLeft != 1 ? 's' : '' }}
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+{# ── Achieved goals ───────────────────────────────────────────────────────── #}
+{% if achieved_goals is not empty %}
+<div style="margin-top:2rem">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:.9rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">
+            <i class="fas fa-trophy" style="color:#f59e0b;margin-right:.4rem"></i>Objectifs atteints
+        </h3>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <div class="goals-grid">
+    {% for goal in achieved_goals %}
+    {% set typeLabel = {subscribers: 'Abonnés', views: 'Vues (30j)', watch_time: 'Watch time (30j)'}[goal.type] ?? goal.type %}
+    {% set typeIcon  = {subscribers: 'fa-users', views: 'fa-eye', watch_time: 'fa-clock'}[goal.type] ?? 'fa-chart-line' %}
+    <div class="goal-card goal-card--done" id="goal-{{ goal.id }}">
+        <div class="goal-card-top">
+            <div style="display:flex;align-items:center;gap:.6rem;min-width:0">
+                <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="fas fa-check" style="color:#22c55e;font-size:.9em"></i>
+                </div>
+                <div style="min-width:0">
+                    <div class="goal-card-label">{{ goal.label }}</div>
+                    <div class="goal-card-type"><i class="fas {{ typeIcon }}" style="margin-right:.25rem"></i>{{ typeLabel }}</div>
+                </div>
+            </div>
+            <button class="goal-card-delete" onclick="deleteGoal({{ goal.id }})" title="Supprimer" type="button">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem;margin-top:.75rem">
+            <span style="font-size:1.1rem;font-weight:700;color:#22c55e;font-variant-numeric:tabular-nums">{{ goal.targetValue|number_format(0, ',', ' ') }}</span>
+            <span style="font-size:.75em;color:var(--text-muted)">{{ typeLabel }}</span>
+        </div>
+        {% if goal.achievedAt %}
+        <div style="font-size:.72em;color:var(--text-muted);margin-top:.4rem">
+            <i class="fas fa-trophy" style="color:#f59e0b;margin-right:.3rem"></i>Atteint le {{ goal.achievedAt|date('d/m/Y') }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+{# ── Modal ────────────────────────────────────────────────────────────────── #}
+<div id="goalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:14px;padding:2rem;width:90%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+            <h3 style="margin:0;font-size:1.05rem"><i class="fas fa-bullseye" style="color:var(--blue);margin-right:.5rem"></i>Nouvel objectif</h3>
+            <button type="button" id="btnCloseModal" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.2rem;line-height:1;padding:.2rem">&times;</button>
+        </div>
+        <form id="goalForm">
+            <div style="margin-bottom:1rem">
+                <label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);display:block;margin-bottom:.4rem">Nom de l'objectif</label>
+                <input type="text" id="goalLabel" placeholder="ex: 1 000 abonnés" autocomplete="off"
+                    style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:.65rem .875rem;color:var(--text-primary);font-size:.9rem;outline:none">
+            </div>
+            <div style="margin-bottom:1rem">
+                <label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);display:block;margin-bottom:.4rem">Type</label>
+                <select id="goalType"
+                    style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:.65rem .875rem;color:var(--text-primary);font-size:.9rem;outline:none">
+                    <option value="subscribers">Abonnés</option>
+                    <option value="views">Vues (30 derniers jours)</option>
+                    <option value="watch_time">Watch time en minutes (30j)</option>
+                </select>
+            </div>
+            <div style="margin-bottom:1rem">
+                <label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);display:block;margin-bottom:.4rem">Valeur cible</label>
+                <input type="number" id="goalTarget" placeholder="ex: 1000" min="1"
+                    style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:.65rem .875rem;color:var(--text-primary);font-size:.9rem;outline:none">
+            </div>
+            <div style="margin-bottom:1.5rem">
+                <label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);display:block;margin-bottom:.4rem">Date limite <span style="font-weight:400;text-transform:none">(optionnel)</span></label>
+                <input type="date" id="goalDeadline"
+                    style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:.65rem .875rem;color:var(--text-primary);font-size:.9rem;outline:none">
+            </div>
+            <div id="goalError" style="color:#ef4444;font-size:.8rem;margin-bottom:.75rem;display:none"></div>
+            <div style="display:flex;gap:.75rem;justify-content:flex-end">
+                <button type="button" id="btnCancelModal" class="btn btn-outline">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Créer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.goals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+.goal-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    transition: border-color .2s, box-shadow .2s;
+}
+.goal-card:hover {
+    border-color: rgba(99,102,241,.35);
+    box-shadow: 0 4px 20px rgba(0,0,0,.2);
+}
+.goal-card--done {
+    opacity: .7;
+}
+.goal-card--done:hover { opacity: 1; }
+.goal-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .5rem;
+}
+.goal-card-label {
+    font-weight: 600;
+    font-size: .9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+.goal-card-type {
+    font-size: .72rem;
+    color: var(--text-muted);
+    margin-top: .15rem;
+}
+.goal-card-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: .25rem .4rem;
+    border-radius: 5px;
+    font-size: .8rem;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: .15s;
+}
+.goal-card-delete:hover { color: #ef4444; background: rgba(239,68,68,.1); }
+</style>
+
+<script>
+(function() {
+    var modal  = document.getElementById('goalModal');
+    var form   = document.getElementById('goalForm');
+    var errEl  = document.getElementById('goalError');
+
+    function openModal() { modal.style.display = 'flex'; document.getElementById('goalLabel').focus(); }
+    function closeModal() { modal.style.display = 'none'; form.reset(); errEl.style.display = 'none'; }
+
+    var btn = document.getElementById('btnAddGoal');
+    if (btn) btn.addEventListener('click', openModal);
+    var btn2 = document.getElementById('btnAddGoalEmpty');
+    if (btn2) btn2.addEventListener('click', openModal);
+    document.getElementById('btnCloseModal').addEventListener('click', closeModal);
+    document.getElementById('btnCancelModal').addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            errEl.style.display = 'none';
+            var payload = {
+                label:       (document.getElementById('goalLabel').value || '').trim(),
+                type:        document.getElementById('goalType').value,
+                targetValue: document.getElementById('goalTarget').value,
+                deadline:    document.getElementById('goalDeadline').value || null,
+            };
+            if (!payload.label) { errEl.textContent = 'Le nom est obligatoire.'; errEl.style.display = 'block'; return; }
+            if (!payload.targetValue || parseInt(payload.targetValue) <= 0) { errEl.textContent = 'La valeur cible doit être positive.'; errEl.style.display = 'block'; return; }
+
+            var submitBtn = form.querySelector('button[type=submit]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création…';
+
+            fetch('{{ path('goal_create') }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify(payload),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    errEl.textContent = data.error;
+                    errEl.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-plus"></i> Créer';
+                    return;
+                }
+                window.location.reload();
+            })
+            .catch(function() {
+                errEl.textContent = 'Erreur réseau.';
+                errEl.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-plus"></i> Créer';
+            });
+        });
+    }
+
+    window.deleteGoal = function(id) {
+        if (!confirm('Supprimer cet objectif ?')) return;
+        fetch('/goals/' + id, {
+            method: 'DELETE',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var el = document.getElementById('goal-' + id);
+                if (el) { el.style.opacity = '0'; el.style.transition = 'opacity .25s'; setTimeout(function() { el.remove(); }, 250); }
+            }
+        });
+    };
+})();
+</script>
+
+{% endblock %}

@@ -14,6 +14,8 @@
 </head>
 <body class="bg-dark">
 
+{% set route = app.request.attributes.get('_route') %}
+
 <nav class="navbar">
     <div class="navbar-brand">
         <i class="fab fa-youtube" style="color:#ff0000"></i>
@@ -26,38 +28,86 @@
     {% endif %}
     <div class="navbar-links" id="navLinks">
         {% if app.user %}
-        <a href="{{ path('dashboard') }}" class="{{ app.request.attributes.get('_route') == 'dashboard' ? 'active' : '' }}">
+
+        {# ── Dashboard ──────────────────────────────────────────────────────── #}
+        <a href="{{ path('dashboard') }}" class="{{ route == 'dashboard' ? 'active' : '' }}">
             <i class="fas fa-chart-line"></i> Dashboard
         </a>
-        <a href="{{ path('videos') }}" class="{{ app.request.attributes.get('_route') == 'videos' ? 'active' : '' }}">
-            <i class="fas fa-video"></i> Vidéos
+
+        {# ── Contenu ────────────────────────────────────────────────────────── #}
+        {% set contenuActive = route in ['videos', 'playlists_create'] %}
+        <div class="nav-dropdown {{ contenuActive ? 'active' : '' }}" data-dropdown="contenu">
+            <button class="nav-dropdown-btn {{ contenuActive ? 'active' : '' }}" type="button">
+                <i class="fas fa-film"></i> Contenu <i class="fas fa-chevron-down nav-chevron"></i>
+            </button>
+            <div class="nav-dropdown-menu">
+                <div class="nav-dropdown-label">Contenu</div>
+                <a href="{{ path('videos') }}" class="{{ route == 'videos' ? 'active' : '' }}">
+                    <i class="fas fa-video"></i> Vidéos
+                </a>
+                <a href="{{ path('playlists_create') }}" class="{{ route starts with 'playlists' ? 'active' : '' }}">
+                    <i class="fas fa-list-ul"></i> Playlists IA
+                </a>
+            </div>
+        </div>
+
+        {# ── Analytics ──────────────────────────────────────────────────────── #}
+        {% set analyticsActive = route starts with 'analytics_' %}
+        <div class="nav-dropdown {{ analyticsActive ? 'active' : '' }}" data-dropdown="analytics">
+            <button class="nav-dropdown-btn {{ analyticsActive ? 'active' : '' }}" type="button">
+                <i class="fas fa-chart-bar"></i> Analytics <i class="fas fa-chevron-down nav-chevron"></i>
+            </button>
+            <div class="nav-dropdown-menu">
+                <div class="nav-dropdown-label">Analytics</div>
+                <a href="{{ path('analytics_videos') }}" class="{{ route starts with 'analytics_video' ? 'active' : '' }}">
+                    <i class="fas fa-chart-bar"></i> Vidéos
+                </a>
+                <a href="{{ path('analytics_alerts') }}" class="{{ route == 'analytics_alerts' ? 'active' : '' }}">
+                    <i class="fas fa-tasks"></i> Actions
+                    {% if pending_approval_count is defined and pending_approval_count > 0 %}
+                    <span class="nav-badge" style="margin-left:auto">{{ pending_approval_count }}</span>
+                    {% endif %}
+                </a>
+                <a href="{{ path('analytics_best_time') }}" class="{{ route == 'analytics_best_time' ? 'active' : '' }}">
+                    <i class="fas fa-clock"></i> Meilleur moment
+                </a>
+                <a href="{{ path('analytics_ai_costs') }}" class="{{ route == 'analytics_ai_costs' ? 'active' : '' }}">
+                    <i class="fas fa-robot"></i> Coûts IA
+                </a>
+            </div>
+        </div>
+
+        {# ── Objectifs ──────────────────────────────────────────────────────── #}
+        <a href="{{ path('goal_index') }}" class="{{ route starts with 'goal_' ? 'active' : '' }}">
+            <i class="fas fa-bullseye"></i> Objectifs
         </a>
-        <a href="{{ path('analytics_videos') }}" class="{{ app.request.attributes.get('_route') starts with 'analytics_video' ? 'active' : '' }}">
-            <i class="fas fa-chart-bar"></i> Analytics
-        </a>
-        <a href="{{ path('analytics_alerts') }}" class="{{ app.request.attributes.get('_route') == 'analytics_alerts' ? 'active' : '' }}">
-            <i class="fas fa-tasks"></i> Actions
-        </a>
-        <a href="{{ path('analytics_ai_costs') }}" class="{{ app.request.attributes.get('_route') == 'analytics_ai_costs' ? 'active' : '' }}">
-            <i class="fas fa-robot"></i> Coûts IA
-        </a>
-        <a href="{{ path('playlists_create') }}" class="{{ app.request.attributes.get('_route') starts with 'playlists' ? 'active' : '' }}">
-            <i class="fas fa-list-ul"></i> Playlists IA
-        </a>
+
+        {# ── Admin ──────────────────────────────────────────────────────────── #}
         {% if is_granted('ROLE_ADMIN') %}
-        <a href="{{ path('admin_users') }}" class="{{ app.request.attributes.get('_route') == 'admin_users' ? 'active' : '' }}" style="{{ app.request.attributes.get('_route') != 'admin_users' ? 'color:var(--yellow)' : '' }}">
-            <i class="fas fa-users-cog"></i> Admin
-            {% if pending_approval_count is defined and pending_approval_count > 0 %}
-            <span class="nav-badge">{{ pending_approval_count }}</span>
-            {% endif %}
-        </a>
-        <a href="{{ path('admin_settings') }}" class="{{ app.request.attributes.get('_route') == 'admin_settings' ? 'active' : '' }}" style="{{ app.request.attributes.get('_route') != 'admin_settings' ? 'color:var(--yellow)' : '' }}">
-            <i class="fas fa-cogs"></i> Paramètres
-        </a>
-        <a href="{{ path('admin_messenger') }}" class="{{ app.request.attributes.get('_route') == 'admin_messenger' ? 'active' : '' }}" style="{{ app.request.attributes.get('_route') != 'admin_messenger' ? 'color:var(--yellow)' : '' }}">
-            <i class="fas fa-paper-plane"></i> Messenger
-        </a>
+        {% set adminActive = route in ['admin_users','admin_settings','admin_messenger'] %}
+        <div class="nav-dropdown {{ adminActive ? 'active' : '' }}" data-dropdown="admin">
+            <button class="nav-dropdown-btn {{ adminActive ? 'active' : '' }}" type="button" style="color:var(--yellow)">
+                <i class="fas fa-shield-alt"></i> Admin <i class="fas fa-chevron-down nav-chevron"></i>
+            </button>
+            <div class="nav-dropdown-menu">
+                <div class="nav-dropdown-label">Administration</div>
+                <a href="{{ path('admin_users') }}" class="{{ route == 'admin_users' ? 'active' : '' }}">
+                    <i class="fas fa-users-cog"></i> Utilisateurs
+                    {% if pending_approval_count is defined and pending_approval_count > 0 %}
+                    <span class="nav-badge" style="margin-left:auto">{{ pending_approval_count }}</span>
+                    {% endif %}
+                </a>
+                <a href="{{ path('admin_settings') }}" class="{{ route == 'admin_settings' ? 'active' : '' }}">
+                    <i class="fas fa-cogs"></i> Paramètres
+                </a>
+                <a href="{{ path('admin_messenger') }}" class="{{ route == 'admin_messenger' ? 'active' : '' }}">
+                    <i class="fas fa-paper-plane"></i> Messenger
+                </a>
+            </div>
+        </div>
         {% endif %}
+
+        {# ── User zone ──────────────────────────────────────────────────────── #}
         <div class="navbar-user">
             {% if app.user.avatarUrl %}
             <img src="{{ app.user.avatarUrl }}" alt="{{ app.user.displayName }}" class="user-avatar">
@@ -65,7 +115,8 @@
             <div class="user-avatar-placeholder"><i class="fas fa-user"></i></div>
             {% endif %}
             <span class="user-name">{{ app.user.displayName }}</span>
-            {# Multi-channel switcher — only shown if user has more than 1 token #}
+
+            {# Multi-channel switcher #}
             {% if app.user.googleTokens|length > 1 %}
             <div class="channel-switcher" id="channelSwitcher">
                 <button type="button" class="btn-logout channel-switcher-btn" id="channelSwitcherBtn" title="Changer de chaîne">
@@ -86,28 +137,9 @@
                     {% endfor %}
                 </div>
             </div>
-            <style>
-            .channel-switcher { position:relative; display:inline-block; }
-            .channel-switcher-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; min-width:220px; box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:200; padding:6px; }
-            .channel-switcher-menu.open { display:block; }
-            .channel-switcher-item { display:flex; align-items:center; width:100%; background:none; border:none; color:var(--text-primary); padding:8px 10px; border-radius:6px; cursor:pointer; font-size:13px; text-align:left; }
-            .channel-switcher-item:hover { background:rgba(255,255,255,.06); }
-            .channel-switcher-item.active { background:rgba(59,130,246,.15); color:var(--blue); }
-            </style>
-            <script>
-            (function() {
-                var btn  = document.getElementById('channelSwitcherBtn');
-                var menu = document.getElementById('channelSwitcherMenu');
-                if (!btn || !menu) return;
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    menu.classList.toggle('open');
-                });
-                document.addEventListener('click', function() { menu.classList.remove('open'); });
-            })();
-            </script>
             {% endif %}
-            <a href="{{ path('profile_index') }}" class="btn-logout {{ app.request.attributes.get('_route') starts with 'profile' ? 'active' : '' }}" title="Profil &amp; Notifications">
+
+            <a href="{{ path('profile_index') }}" class="btn-logout {{ route starts with 'profile' ? 'active' : '' }}" title="Profil &amp; Notifications">
                 <i class="fas fa-user-cog"></i>
             </a>
             <a href="{{ path('auth_google') }}" class="btn-logout" title="Changer de chaîne YouTube">
@@ -119,6 +151,7 @@
                 </button>
             </form>
         </div>
+
         {% endif %}
     </div>
 </nav>
@@ -140,6 +173,58 @@
     {{ encore_entry_script_tags('app') }}
 {% endblock %}
 
+<style>
+/* ── Nav dropdowns ──────────────────────────────────────────────────────── */
+.nav-dropdown { position: relative; display: inline-flex; align-items: center; }
+.nav-dropdown-btn {
+    background: none; border: none; cursor: pointer;
+    display: inline-flex; align-items: center; gap: .4rem;
+    font-size: inherit; font-family: inherit; font-weight: 500;
+    color: var(--text-secondary); padding: .35rem .5rem; border-radius: 6px;
+    transition: color .15s, background .15s; white-space: nowrap;
+}
+.nav-dropdown-btn:hover, .nav-dropdown-btn.active { color: var(--text-primary); background: rgba(255,255,255,.06); }
+.nav-chevron { font-size: .65em; opacity: .6; transition: transform .2s; }
+.nav-dropdown.open .nav-chevron { transform: rotate(180deg); }
+.nav-dropdown-menu {
+    display: none; position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px;
+    min-width: 200px; box-shadow: 0 12px 32px rgba(0,0,0,.45); z-index: 300; padding: .4rem;
+    flex-direction: column;
+}
+.nav-dropdown.open .nav-dropdown-menu { display: flex; }
+.nav-dropdown-label {
+    font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--text-muted); padding: .35rem .65rem .2rem; margin-bottom: .15rem;
+}
+.nav-dropdown-menu a {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .55rem .65rem; border-radius: 7px; font-size: .85rem;
+    color: var(--text-secondary); text-decoration: none; transition: background .12s, color .12s;
+    white-space: nowrap;
+}
+.nav-dropdown-menu a:hover { background: rgba(255,255,255,.07); color: var(--text-primary); }
+.nav-dropdown-menu a.active { background: rgba(99,102,241,.15); color: #a78bfa; font-weight: 500; }
+.nav-dropdown-menu a i { width: 14px; text-align: center; font-size: .8em; opacity: .75; }
+
+/* Channel switcher */
+.channel-switcher { position: relative; display: inline-block; }
+.channel-switcher-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 6px);
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; min-width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    z-index: 200; padding: 6px;
+}
+.channel-switcher-menu.open { display: block; }
+.channel-switcher-item {
+    display: flex; align-items: center; width: 100%; background: none; border: none;
+    color: var(--text-primary); padding: 8px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 13px; text-align: left;
+}
+.channel-switcher-item:hover { background: rgba(255,255,255,.06); }
+.channel-switcher-item.active { background: rgba(59,130,246,.15); color: var(--blue); }
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -151,6 +236,29 @@ document.addEventListener('DOMContentLoaded', function() {
             var open = navLinks.classList.toggle('open');
             navToggle.querySelector('i').className = open ? 'fas fa-times' : 'fas fa-bars';
         });
+    }
+
+    // ── Dropdowns ────────────────────────────────────────────────────────────
+    document.querySelectorAll('.nav-dropdown').forEach(function(dd) {
+        var btn = dd.querySelector('.nav-dropdown-btn');
+        if (!btn) return;
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var isOpen = dd.classList.contains('open');
+            document.querySelectorAll('.nav-dropdown.open').forEach(function(o) { o.classList.remove('open'); });
+            if (!isOpen) dd.classList.add('open');
+        });
+    });
+    document.addEventListener('click', function() {
+        document.querySelectorAll('.nav-dropdown.open').forEach(function(o) { o.classList.remove('open'); });
+    });
+
+    // ── Channel switcher ─────────────────────────────────────────────────────
+    var csBtn  = document.getElementById('channelSwitcherBtn');
+    var csMenu = document.getElementById('channelSwitcherMenu');
+    if (csBtn && csMenu) {
+        csBtn.addEventListener('click', function(e) { e.stopPropagation(); csMenu.classList.toggle('open'); });
+        document.addEventListener('click', function() { csMenu.classList.remove('open'); });
     }
 
     // ── Toast notification ───────────────────────────────────────────────────
@@ -167,7 +275,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── Sync button (/videos and other pages without overlay) ────────────────
     document.querySelectorAll('.js-sync-form').forEach(function(form) {
-        if (document.getElementById('syncOverlay')) return; // dashboard overlay handles it
+        if (document.getElementById('syncOverlay')) return;
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             var btn  = form.querySelector('button[type=submit]');
@@ -188,14 +296,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 if (!data.jobId) {
-                    // Legacy fallback: direct success response
                     btn.disabled = false;
                     btn.innerHTML = orig;
                     window.showToast(data.message || 'Synchronisé', 'success');
                     setTimeout(function() { window.location.reload(); }, 2000);
                     return;
                 }
-                // Async: poll until done
                 var attempts = 0;
                 var statusUrl = '/sync-status/' + data.jobId;
                 var poll = setInterval(function() {
