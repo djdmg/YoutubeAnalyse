@@ -12,7 +12,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class GeminiService implements AiProviderInterface
 {
-    public const SETTING_API_KEY = 'gemini_api_key';
+    public const SETTING_API_KEY        = 'gemini_api_key';
+    public const SETTING_THUMBNAIL_MODEL = 'thumbnail_model';
 
     private const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
@@ -238,6 +239,12 @@ class GeminiService implements AiProviderInterface
         });
 
         return $models ?: $this->defaultModels();
+    }
+
+    public function getImageModels(): array
+    {
+        $all = $this->getAvailableModels();
+        return array_values(array_filter($all, fn($m) => ($m['type'] ?? 'text') === 'image'));
     }
 
     public function generateImage(string $prompt, string $model = 'imagen-3.0-generate-001'): ?string

@@ -10,6 +10,7 @@ use App\Repository\DailyMetricRepository;
 use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
 use App\Repository\VideoMetaSnapshotRepository;
+use App\Repository\AppSettingRepository;
 use App\Repository\VideoSearchTermRepository;
 use App\Service\GeminiService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -35,6 +36,7 @@ class VideoController extends AbstractController
         private readonly VideoMetaSnapshotRepository $snapshotRepo,
         private readonly VideoSearchTermRepository $searchTermRepo,
         private readonly GeminiService $gemini,
+        private readonly AppSettingRepository $settingRepo,
         private readonly EntityManagerInterface $em,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
@@ -304,9 +306,10 @@ class VideoController extends AbstractController
         }
 
         try {
-            $base64 = $this->gemini->generateImage($prompt);
+            $model  = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
+            $base64 = $this->gemini->generateImage($prompt, $model);
             if (!$base64) {
-                return new JsonResponse(['success' => false, 'message' => 'Génération échouée. Vérifiez que la clé Gemini supporte Imagen 3.']);
+                return new JsonResponse(['success' => false, 'message' => 'Génération échouée. Vérifiez la clé Gemini et le modèle sélectionné dans les paramètres.']);
             }
 
             $dir = $this->projectDir . '/public/uploads/thumbnails/';
