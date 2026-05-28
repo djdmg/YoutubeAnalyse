@@ -21,6 +21,11 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use App\Message\GenerateThumbnailMessage;
+use App\Message\RunAiAnalysisMessage;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[IsGranted('ROLE_USER')]
@@ -38,6 +43,8 @@ class VideoController extends AbstractController
         private readonly GeminiService $gemini,
         private readonly AppSettingRepository $settingRepo,
         private readonly EntityManagerInterface $em,
+        private readonly CacheInterface $cache,
+        private readonly MessageBusInterface $bus,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
@@ -387,33 +394,43 @@ PROMPT;
             return new JsonResponse(['success' => false, 'message' => 'Le prompt est vide. Utilisez "Suggérer un prompt" pour en générer un.']);
         }
 
-        $model = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
+        $model    = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
+        $jobId    = bin2hex(random_bytes(8));
+        $cacheKey = 'thumbnail_job_' . $jobId;
 
-        set_time_limit(180);
+        // Pre-store pending state so the polling endpoint never returns "not found"
+        $this->cache->get($cacheKey, function (ItemInterface $item) {
+            $item->expiresAfter(600);
+            return ['status' => 'pending'];
+        });
 
-        try {
-            $base64 = $this->gemini->generateImage($prompt, $model);
+        $this->bus->dispatch(new GenerateThumbnailMessage($jobId, $youtubeId, $model, $prompt));
 
-            $dir = $this->projectDir . '/public/uploads/thumbnails/';
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
+        return new JsonResponse(['success' => true, 'jobId' => $jobId]);
+    }
 
-            // Save as preview (not applied to video yet)
-            $previewFile = $youtubeId . '_preview.png';
-            file_put_contents($dir . $previewFile, base64_decode($base64));
+    #[Route('/videos/{youtubeId}/thumbnail-status/{jobId}', name: 'analytics_video_thumbnail_status', methods: ['GET'])]
+    public function thumbnailStatus(string $youtubeId, string $jobId): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
 
-            return new JsonResponse(['success' => true, 'url' => '/uploads/thumbnails/' . $previewFile . '?t=' . time(), 'prompt' => $prompt]);
-
-        } catch (\Throwable $e) {
-            $msg = $e->getMessage();
-            // Strip API key from URLs before exposing to browser
-            $msg = preg_replace('/([?&]key=)[^&\s"\']+/', '$1***', $msg);
-            if (str_contains($msg, '429')) {
-                $msg = 'Quota API Gemini dépassé (429). Attendez quelques secondes et réessayez.';
-            }
-            return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $msg]);
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['status' => 'error', 'message' => 'Vidéo introuvable.'], 404);
         }
+
+        $cacheKey = 'thumbnail_job_' . $jobId;
+        $result   = $this->cache->get($cacheKey, function (ItemInterface $item) {
+            $item->expiresAfter(0);
+            return null;
+        });
+
+        if ($result === null) {
+            return new JsonResponse(['status' => 'error', 'message' => 'Job introuvable ou expiré.']);
+        }
+
+        return new JsonResponse($result);
     }
 
     #[Route('/videos/{youtubeId}/apply-thumbnail', name: 'analytics_video_apply_thumbnail', methods: ['POST'])]
@@ -443,6 +460,55 @@ PROMPT;
         $this->em->flush();
 
         return new JsonResponse(['success' => true, 'url' => $url, 'message' => 'Miniature appliquée avec succès.']);
+    }
+
+    #[Route('/videos/{youtubeId}/trigger-analysis', name: 'analytics_video_trigger_analysis', methods: ['POST'])]
+    public function triggerAnalysis(string $youtubeId, Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['success' => false, 'message' => 'Vidéo introuvable.'], 404);
+        }
+
+        $type     = $request->request->get('type'); // null = all types
+        $force    = (bool) $request->request->get('force', false);
+        $jobId    = bin2hex(random_bytes(8));
+        $cacheKey = 'job_' . $jobId;
+
+        $this->cache->get($cacheKey, function (ItemInterface $item) {
+            $item->expiresAfter(300);
+            return ['status' => 'pending'];
+        });
+
+        $this->bus->dispatch(new RunAiAnalysisMessage($user->getId(), $jobId, $youtubeId, $type, $force));
+
+        return new JsonResponse(['success' => true, 'jobId' => $jobId]);
+    }
+
+    #[Route('/videos/{youtubeId}/analysis-status/{jobId}', name: 'analytics_video_analysis_status', methods: ['GET'])]
+    public function analysisStatus(string $youtubeId, string $jobId): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['status' => 'error', 'message' => 'Vidéo introuvable.'], 404);
+        }
+
+        $result = $this->cache->get('job_' . $jobId, function (ItemInterface $item) {
+            $item->expiresAfter(0);
+            return null;
+        });
+
+        if ($result === null) {
+            return new JsonResponse(['status' => 'error', 'message' => 'Job introuvable ou expiré.']);
+        }
+
+        return new JsonResponse($result);
     }
 
     #[Route('/videos/{youtubeId}', name: 'analytics_video_detail')]

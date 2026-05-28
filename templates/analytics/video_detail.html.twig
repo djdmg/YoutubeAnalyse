@@ -272,7 +272,11 @@ switchTab(_activeTab);
         <div class="empty-state">
             <i class="fas fa-robot fa-3x"></i>
             <h3>Aucune analyse IA</h3>
-            <p>Lance <strong>app:ai:analyze</strong> pour générer des analyses sur cette vidéo.</p>
+            <p>Lancez l'analyse complète pour générer prédictions, anomalies et commentaires.</p>
+            <button class="btn btn-primary" style="margin-top:1rem" onclick="triggerAnalysis()">
+                <i class="fas fa-play"></i> Lancer l'analyse complète
+            </button>
+            <div id="aiAnalysisStatus" style="margin-top:.75rem;font-size:.85em;color:var(--text-muted);display:none"></div>
         </div>
     </div>
     {% else %}
@@ -437,7 +441,11 @@ switchTab(_activeTab);
         <div class="empty-state">
             <i class="fas fa-magic fa-3x"></i>
             <h3>Aucune suggestion d'optimisation</h3>
-            <p>Lance <strong>app:ai:analyze</strong> pour obtenir des recommandations SEO et titre.</p>
+            <p>Lancez l'analyse pour obtenir des recommandations SEO et titre.</p>
+            <button class="btn btn-primary" style="margin-top:1rem" onclick="triggerAnalysis()">
+                <i class="fas fa-play"></i> Lancer l'analyse complète
+            </button>
+            <div id="aiAnalysisStatusOpti" style="margin-top:.75rem;font-size:.85em;color:var(--text-muted);display:none"></div>
         </div>
     </div>
     {% endif %}
@@ -669,53 +677,47 @@ switchTab(_activeTab);
         });
     }
 
+    var _imagenPollTimer    = null;
+    var _imagenProgressPct = 0;
     var _imagenProgressTimer = null;
 
     function imagenProgressStart() {
-        var bar   = document.getElementById('imagenProgressBar');
-        var pct   = document.getElementById('imagenProgressPct');
-        var label = document.getElementById('imagenProgressLabel');
-        var wrap  = document.getElementById('imagenProgress');
-        var steps = [
-            [10,  'Initialisation…'],
-            [25,  'Analyse du prompt…'],
-            [45,  'Génération en cours…'],
-            [62,  'Rendu de l\'image…'],
-            [78,  'Finalisation…'],
-            [90,  'Presque prêt…'],
-        ];
-        var i = 0;
+        var bar  = document.getElementById('imagenProgressBar');
+        var pct  = document.getElementById('imagenProgressPct');
+        var lbl  = document.getElementById('imagenProgressLabel');
+        var wrap = document.getElementById('imagenProgress');
+        _imagenProgressPct = 0;
         wrap.style.display = '';
         bar.style.width    = '0%';
         pct.textContent    = '0%';
+        lbl.textContent    = 'Démarrage…';
+        bar.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)';
 
+        // Slow crawl up to 88% while waiting for the background job
         _imagenProgressTimer = setInterval(function() {
-            if (i >= steps.length) return;
-            bar.style.width   = steps[i][0] + '%';
-            pct.textContent   = steps[i][0] + '%';
-            label.textContent = steps[i][1];
-            i++;
-        }, 800);
+            if (_imagenProgressPct >= 88) return;
+            _imagenProgressPct += (_imagenProgressPct < 40 ? 3 : _imagenProgressPct < 70 ? 1.5 : 0.5);
+            bar.style.width = Math.min(_imagenProgressPct, 88) + '%';
+            pct.textContent = Math.round(Math.min(_imagenProgressPct, 88)) + '%';
+            var labels = ['Initialisation…','Envoi au modèle…','Génération en cours…','Rendu de l\'image…','Finalisation…'];
+            lbl.textContent = labels[Math.min(Math.floor(_imagenProgressPct / 20), labels.length - 1)];
+        }, 600);
     }
 
     function imagenProgressDone(success) {
         clearInterval(_imagenProgressTimer);
-        var bar   = document.getElementById('imagenProgressBar');
-        var pct   = document.getElementById('imagenProgressPct');
-        var label = document.getElementById('imagenProgressLabel');
-        var wrap  = document.getElementById('imagenProgress');
+        var bar  = document.getElementById('imagenProgressBar');
+        var pct  = document.getElementById('imagenProgressPct');
+        var lbl  = document.getElementById('imagenProgressLabel');
+        var wrap = document.getElementById('imagenProgress');
         if (success) {
             bar.style.background = 'linear-gradient(90deg,#22c55e,#4ade80)';
-            bar.style.width      = '100%';
-            pct.textContent      = '100%';
-            label.textContent    = 'Terminé !';
-            setTimeout(function() { wrap.style.display = 'none'; bar.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)'; }, 1200);
+            bar.style.width = '100%'; pct.textContent = '100%'; lbl.textContent = 'Terminé !';
+            setTimeout(function() { wrap.style.display = 'none'; bar.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)'; bar.style.width = '0%'; }, 1200);
         } else {
             bar.style.background = 'linear-gradient(90deg,#ef4444,#f87171)';
-            bar.style.width      = '100%';
-            pct.textContent      = '—';
-            label.textContent    = 'Échec';
-            setTimeout(function() { wrap.style.display = 'none'; bar.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)'; bar.style.width = '0%'; }, 2000);
+            bar.style.width = '100%'; pct.textContent = '—'; lbl.textContent = 'Échec';
+            setTimeout(function() { wrap.style.display = 'none'; bar.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)'; bar.style.width = '0%'; }, 2500);
         }
     }
 
@@ -745,48 +747,72 @@ switchTab(_activeTab);
         placeholder.style.display = '';
         imagenProgressStart();
 
-        var abortCtrl   = new AbortController();
-        var fetchTimeout = setTimeout(function() { abortCtrl.abort(); }, 150000); // 2.5 min
-
+        // Step 1: start the background job (returns immediately)
         fetch('{{ path('analytics_video_generate_thumbnail', {youtubeId: video.youtubeId}) }}', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body:    'prompt=' + encodeURIComponent(textarea.value.trim()),
-            signal:  abortCtrl.signal,
         })
-        .then(function(r) {
-            clearTimeout(fetchTimeout);
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        })
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function(data) {
-            btn.disabled = false;
-            if (regenBtn) regenBtn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
-            if (data.success) {
-                imagenProgressDone(true);
-                previewImg.src = data.url + '?t=' + Date.now();
-                previewImg.style.display  = '';
-                placeholder.style.display = 'none';
-                actions.style.display     = 'flex';
-            } else {
+            if (!data.success) {
                 imagenProgressDone(false);
-                errorDiv.textContent   = data.message || 'Erreur inconnue.';
+                btn.disabled = false; if (regenBtn) regenBtn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
+                errorDiv.textContent = data.message || 'Erreur inconnue.';
                 errorDiv.style.display = '';
+                return;
             }
+            // Step 2: poll for result
+            imagenPoll(data.jobId, btn, regenBtn, previewImg, placeholder, actions, errorDiv);
         })
         .catch(function(err) {
-            clearTimeout(fetchTimeout);
-            btn.disabled = false;
-            if (regenBtn) regenBtn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
             imagenProgressDone(false);
-            var msg = err.name === 'AbortError'
-                ? 'La génération a dépassé le délai (2min 30s). Le modèle est peut-être surchargé — réessayez.'
-                : 'Erreur de connexion au serveur (' + (err.message || 'inconnue') + ').';
-            errorDiv.textContent   = msg;
+            btn.disabled = false; if (regenBtn) regenBtn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
+            errorDiv.textContent = 'Erreur de démarrage : ' + (err.message || 'inconnue') + '.';
             errorDiv.style.display = '';
         });
+    }
+
+    function imagenPoll(jobId, btn, regenBtn, previewImg, placeholder, actions, errorDiv) {
+        var attempts = 0;
+        var maxAttempts = 60; // 2 min at 2s interval
+
+        clearInterval(_imagenPollTimer);
+        _imagenPollTimer = setInterval(function() {
+            attempts++;
+            if (attempts > maxAttempts) {
+                clearInterval(_imagenPollTimer);
+                imagenProgressDone(false);
+                btn.disabled = false; if (regenBtn) regenBtn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
+                errorDiv.textContent = 'La génération a dépassé 2 minutes. Le modèle est peut-être surchargé — réessayez.';
+                errorDiv.style.display = '';
+                return;
+            }
+
+            fetch('{{ path('analytics_video_thumbnail_status', {youtubeId: video.youtubeId, jobId: '__JOB__'}) }}'.replace('__JOB__', jobId))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'pending') return; // keep polling
+                clearInterval(_imagenPollTimer);
+                btn.disabled = false; if (regenBtn) regenBtn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
+                if (data.status === 'done') {
+                    imagenProgressDone(true);
+                    previewImg.src = data.url + '?t=' + Date.now();
+                    previewImg.style.display  = '';
+                    placeholder.style.display = 'none';
+                    actions.style.display     = 'flex';
+                } else {
+                    imagenProgressDone(false);
+                    errorDiv.textContent   = data.message || 'Erreur de génération.';
+                    errorDiv.style.display = '';
+                }
+            })
+            .catch(function() { /* ignore poll errors, keep trying */ });
+        }, 2000);
     }
 
     function applyThumbnailImagen() {
@@ -824,6 +850,64 @@ switchTab(_activeTab);
             applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature';
             errorDiv.textContent   = 'Erreur réseau.';
             errorDiv.style.display = '';
+        });
+    }
+
+    function triggerAnalysis(type) {
+        var statusEls = ['aiAnalysisStatus', 'aiAnalysisStatusOpti']
+            .map(function(id) { return document.getElementById(id); })
+            .filter(Boolean);
+
+        statusEls.forEach(function(el) {
+            el.style.display = '';
+            el.style.color   = 'var(--text-muted)';
+            el.innerHTML     = '<i class="fas fa-spinner fa-spin"></i> Analyse en cours…';
+        });
+
+        var body = new URLSearchParams();
+        if (type) body.append('type', type);
+
+        fetch('{{ path('analytics_video_trigger_analysis', {youtubeId: video.youtubeId}) }}', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) {
+                statusEls.forEach(function(el) {
+                    el.style.color   = '#ef4444';
+                    el.textContent   = '✗ ' + (data.message || 'Erreur');
+                });
+                return;
+            }
+            var attempts = 0;
+            var pollUrl = '{{ path('analytics_video_analysis_status', {youtubeId: video.youtubeId, jobId: '__JOB__'}) }}'
+                .replace('__JOB__', data.jobId);
+            var poll = setInterval(function() {
+                attempts++;
+                fetch(pollUrl)
+                    .then(function(r) { return r.json(); })
+                    .then(function(status) {
+                        if (status.status === 'pending' && attempts < 90) return;
+                        clearInterval(poll);
+                        var ok = status.status === 'done';
+                        statusEls.forEach(function(el) {
+                            el.style.color = ok ? '#22c55e' : '#ef4444';
+                            el.textContent = ok
+                                ? '✓ ' + status.message + ' — rechargement…'
+                                : '✗ ' + (status.message || 'Erreur');
+                        });
+                        if (ok) setTimeout(function() { window.location.reload(); }, 1500);
+                    })
+                    .catch(function() { if (attempts >= 90) clearInterval(poll); });
+            }, 2000);
+        })
+        .catch(function() {
+            statusEls.forEach(function(el) {
+                el.style.color = '#ef4444';
+                el.textContent = '✗ Erreur réseau';
+            });
         });
     }
     </script>

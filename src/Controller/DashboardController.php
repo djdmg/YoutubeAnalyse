@@ -4,6 +4,8 @@ namespace App\Controller;
 
 use App\Entity\Goal;
 use App\Entity\User;
+use App\Message\RunAiAnalysisMessage;
+use App\Message\SyncYouTubeMessage;
 use App\Repository\ChannelStatsRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\GoalRepository;
@@ -16,8 +18,11 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 #[IsGranted('ROLE_USER')]
 class DashboardController extends AbstractController
@@ -31,6 +36,8 @@ class DashboardController extends AbstractController
         private readonly GoalRepository $goalRepo,
         private readonly DailyMetricRepository $dailyMetricRepo,
         private readonly EntityManagerInterface $em,
+        private readonly MessageBusInterface $bus,
+        private readonly CacheInterface $cache,
     ) {}
 
     #[Route('/', name: 'dashboard')]
@@ -126,25 +133,38 @@ class DashboardController extends AbstractController
     public function sync(Request $request): Response
     {
         /** @var User $user */
-        $user = $this->getUser();
-        $isAjax = $request->isXmlHttpRequest();
+        $user   = $this->getUser();
+        $jobId  = bin2hex(random_bytes(8));
+        $cacheKey = 'job_' . $jobId;
 
-        try {
-            $result = $this->youtubeService->syncAll($user);
-            $message = sprintf('Synchronisation réussie : %d vidéos.', $result['videos_synced']);
+        $this->cache->get($cacheKey, function (ItemInterface $item) {
+            $item->expiresAfter(300);
+            return ['status' => 'pending'];
+        });
 
-            if ($isAjax) {
-                return new JsonResponse(['success' => true, 'message' => $message, 'result' => $result]);
-            }
-            $this->addFlash('success', $message);
-        } catch (\Exception $e) {
-            if ($isAjax) {
-                return new JsonResponse(['success' => false, 'message' => $e->getMessage()], 500);
-            }
-            $this->addFlash('error', 'Erreur: ' . $e->getMessage());
+        $this->bus->dispatch(new SyncYouTubeMessage($user->getId(), $jobId));
+
+        if ($request->isXmlHttpRequest()) {
+            return new JsonResponse(['success' => true, 'jobId' => $jobId]);
         }
 
+        $this->addFlash('info', 'Synchronisation lancée en arrière-plan.');
         return $this->redirectToRoute('dashboard');
+    }
+
+    #[Route('/sync-status/{jobId}', name: 'sync_status', methods: ['GET'])]
+    public function syncStatus(string $jobId): JsonResponse
+    {
+        $result = $this->cache->get('job_' . $jobId, function (ItemInterface $item) {
+            $item->expiresAfter(0);
+            return null;
+        });
+
+        if ($result === null) {
+            return new JsonResponse(['status' => 'error', 'message' => 'Job introuvable ou expiré.']);
+        }
+
+        return new JsonResponse($result);
     }
 
     #[Route('/videos', name: 'videos')]

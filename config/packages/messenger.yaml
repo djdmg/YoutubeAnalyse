@@ -1,0 +1,31 @@
+framework:
+    messenger:
+        failure_transport: failed
+
+        transports:
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    use_notify: false   # Synology MySQL does not support LISTEN/NOTIFY
+                retry_strategy:
+                    max_retries: 2
+                    delay: 10000        # 10s before first retry
+                    multiplier: 2       # 10s → 20s
+
+            failed:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    queue_name: failed
+
+            sync: 'sync://'
+
+        routing:
+            App\Message\GenerateThumbnailMessage: async
+            App\Message\SyncYouTubeMessage:       async
+            App\Message\RunAiAnalysisMessage:     async
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                async: 'in-memory://'
