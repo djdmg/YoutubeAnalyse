@@ -213,40 +213,34 @@ class YouTubeDataService
             throw new \RuntimeException('Non authentifié avec Google.');
         }
 
-        $tokenData   = $client->getAccessToken();
-        $accessToken = $tokenData['access_token'] ?? null;
-        if (!$accessToken) {
-            throw new \RuntimeException('Access token manquant — reconnectez votre compte Google.');
-        }
+        $mimeType  = mime_content_type($filePath) ?: 'image/png';
+        $chunkSize = 1 * 1024 * 1024; // 1 MB
 
-        // Require at least one write-capable scope for thumbnail upload
-        $grantedScopes  = (string) ($tokenData['scope'] ?? '');
-        $hasWriteScope  = str_contains($grantedScopes, 'auth/youtube ')
-                       || str_ends_with($grantedScopes, 'auth/youtube')
-                       || str_contains($grantedScopes, 'youtube.force-ssl')
-                       || str_contains($grantedScopes, 'youtube.upload');
-        if (!$hasWriteScope) {
-            throw new \RuntimeException(
-                'Permissions insuffisantes pour uploader une miniature. Reconnectez votre compte via /auth/google?force_consent=1'
-            );
-        }
+        $youtube = new YouTube($client);
 
-        $response = $this->httpClient->request('POST',
-            'https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' . urlencode($youtubeId) . '&uploadType=media',
-            [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . $accessToken,
-                    'Content-Type'  => 'image/png',
-                ],
-                'body' => fopen($filePath, 'rb'),
-                'timeout' => 60,
-            ]
+        $client->setDefer(true);
+        $setRequest = $youtube->thumbnails->set($youtubeId);
+        $client->setDefer(false);
+
+        $media = new \Google\Http\MediaFileUpload(
+            $client,
+            $setRequest,
+            $mimeType,
+            null,
+            true,
+            $chunkSize
         );
+        $media->setFileSize(filesize($filePath));
 
-        $status = $response->getStatusCode();
-        if ($status < 200 || $status >= 300) {
-            $body = $response->getContent(false);
-            throw new \Google\Service\Exception($body, $status);
+        $status = false;
+        $handle = fopen($filePath, 'rb');
+        try {
+            while (!$status && !feof($handle)) {
+                $chunk  = fread($handle, $chunkSize);
+                $status = $media->nextChunk($chunk);
+            }
+        } finally {
+            fclose($handle);
         }
     }
 
