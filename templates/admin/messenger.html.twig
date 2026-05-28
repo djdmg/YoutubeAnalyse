@@ -24,12 +24,12 @@
 </div>
 
 {# ── KPI cards ───────────────────────────────────────────────────────────── #}
-{% set total = counts.pending + counts.success + counts.failed + counts.retry %}
+{% set total = counts.processing + counts.pending + counts.success + counts.failed + counts.retry %}
 {% set cards = [
-    {label: 'En attente', key: 'pending', icon: 'fa-hourglass-half',  color: '#94a3b8', glow: 'rgba(148,163,184,.15)'},
-    {label: 'Réussis',    key: 'success', icon: 'fa-check-circle',    color: '#22c55e', glow: 'rgba(34,197,94,.15)'},
-    {label: 'En retry',   key: 'retry',   icon: 'fa-redo',            color: '#f59e0b', glow: 'rgba(245,158,11,.15)'},
-    {label: 'Échoués',    key: 'failed',  icon: 'fa-times-circle',    color: '#ef4444', glow: 'rgba(239,68,68,.15)'},
+    {label: 'En traitement', key: 'processing', icon: 'fa-spinner',       color: '#a78bfa', glow: 'rgba(167,139,250,.15)'},
+    {label: 'Réussis',       key: 'success',    icon: 'fa-check-circle',  color: '#22c55e', glow: 'rgba(34,197,94,.15)'},
+    {label: 'En retry',      key: 'retry',      icon: 'fa-redo',          color: '#f59e0b', glow: 'rgba(245,158,11,.15)'},
+    {label: 'Échoués',       key: 'failed',     icon: 'fa-times-circle',  color: '#ef4444', glow: 'rgba(239,68,68,.15)'},
 ] %}
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem" id="kpiGrid">
 {% for c in cards %}
@@ -61,8 +61,8 @@
         <span style="color:var(--text-secondary);margin-left:.4rem">Rejouer les échoués :</span>
         <code style="background:rgba(0,0,0,.35);padding:.15rem .5rem;border-radius:4px;margin-left:.4rem">messenger:failed:retry</code>
     </div>
-    <span id="workerBadge" style="margin-left:auto;display:{{ (counts.pending + counts.retry) > 0 ? 'inline-flex' : 'none' }};background:rgba(245,158,11,.15);color:#f59e0b;padding:.2rem .6rem;border-radius:20px;font-size:.9em;font-weight:600;white-space:nowrap;align-items:center;gap:.3rem">
-        <i class="fas fa-circle-notch fa-spin"></i><span id="workerBadgeText">{{ counts.pending + counts.retry }} en cours</span>
+    <span id="workerBadge" style="margin-left:auto;display:{{ (counts.processing + counts.pending + counts.retry) > 0 ? 'inline-flex' : 'none' }};background:rgba(167,139,250,.15);color:#a78bfa;padding:.2rem .6rem;border-radius:20px;font-size:.9em;font-weight:600;white-space:nowrap;align-items:center;gap:.3rem">
+        <i class="fas fa-circle-notch fa-spin"></i><span id="workerBadgeText">{{ counts.processing + counts.pending + counts.retry }} en cours</span>
     </span>
 </div>
 
@@ -97,7 +97,7 @@
         </thead>
         <tbody id="messengerTbody">
         {% for log in logs %}
-            {% set sc = {pending:'#94a3b8',success:'#22c55e',failed:'#ef4444',retry:'#f59e0b'}[log.status] ?? '#94a3b8' %}
+            {% set sc = {processing:'#a78bfa',pending:'#94a3b8',success:'#22c55e',failed:'#ef4444',retry:'#f59e0b'}[log.status] ?? '#94a3b8' %}
             {% set typeIcons = {
                 'GenerateThumbnailMessage': 'fa-image',
                 'SyncYouTubeMessage':       'fa-sync',
@@ -123,12 +123,18 @@
                 </td>
                 <td style="padding:.65rem 1rem">
                     <span style="display:inline-flex;align-items:center;gap:.3rem;background:{{ sc }}18;color:{{ sc }};padding:.2rem .65rem;border-radius:20px;font-size:.75em;font-weight:700;white-space:nowrap">
-                        {% if log.status == 'pending' %}<i class="fas fa-circle-notch fa-spin" style="font-size:.7em"></i>
+                        {% if log.status == 'processing' %}<i class="fas fa-circle-notch fa-spin" style="font-size:.7em"></i>
+                        {% elseif log.status == 'pending' %}<i class="fas fa-hourglass-half" style="font-size:.7em"></i>
                         {% elseif log.status == 'success' %}<i class="fas fa-check" style="font-size:.7em"></i>
                         {% elseif log.status == 'failed' %}<i class="fas fa-times" style="font-size:.7em"></i>
                         {% elseif log.status == 'retry' %}<i class="fas fa-redo" style="font-size:.7em"></i>
                         {% endif %}
-                        {{ log.status|upper }}
+                        {% if log.status == 'processing' %}En traitement
+                        {% elseif log.status == 'pending' %}En attente
+                        {% elseif log.status == 'success' %}Réussi
+                        {% elseif log.status == 'failed' %}Échoué
+                        {% elseif log.status == 'retry' %}Retry
+                        {% else %}{{ log.status|upper }}{% endif %}
                     </span>
                     {% if log.retryCount %}<span style="font-size:.7em;color:var(--text-muted);margin-left:.25rem">×{{ log.retryCount }}</span>{% endif %}
                 </td>
@@ -163,13 +169,14 @@
 <script>
 var DATA_URL = '{{ path('admin_messenger_data') }}';
 var ICONS = { GenerateThumbnailMessage:'fa-image', SyncYouTubeMessage:'fa-sync', RunAiAnalysisMessage:'fa-robot', SyncSearchTermsMessage:'fa-search' };
-var STATUS_COLOR = { pending:'#94a3b8', success:'#22c55e', failed:'#ef4444', retry:'#f59e0b' };
-var STATUS_ICON  = { pending:'fa-circle-notch fa-spin', success:'fa-check', failed:'fa-times', retry:'fa-redo' };
+var STATUS_COLOR = { processing:'#a78bfa', pending:'#94a3b8', success:'#22c55e', failed:'#ef4444', retry:'#f59e0b' };
+var STATUS_ICON  = { processing:'fa-circle-notch fa-spin', pending:'fa-hourglass-half', success:'fa-check', failed:'fa-times', retry:'fa-redo' };
+var STATUS_LABEL = { processing:'En traitement', pending:'En attente', success:'Réussi', failed:'Échoué', retry:'Retry' };
 var KPI_META = {
-    pending: { label:'En attente', color:'#94a3b8' },
-    success: { label:'Réussis',    color:'#22c55e' },
-    retry:   { label:'En retry',   color:'#f59e0b' },
-    failed:  { label:'Échoués',    color:'#ef4444' }
+    processing: { label:'En traitement', color:'#a78bfa' },
+    success:    { label:'Réussis',       color:'#22c55e' },
+    retry:      { label:'En retry',      color:'#f59e0b' },
+    failed:     { label:'Échoués',       color:'#ef4444' }
 };
 
 function fmtDuration(ms) {
@@ -211,7 +218,7 @@ function buildRow(log) {
         + '</div></div></td>'
         + '<td style="padding:.65rem 1rem">'
         + '<span style="display:inline-flex;align-items:center;gap:.3rem;background:' + sc + '18;color:' + sc + ';padding:.2rem .65rem;border-radius:20px;font-size:.75em;font-weight:700;white-space:nowrap">'
-        + '<i class="fas ' + si + '" style="font-size:.7em"></i> ' + log.status.toUpperCase() + '</span>' + retryBadge + '</td>'
+        + '<i class="fas ' + si + '" style="font-size:.7em"></i> ' + (STATUS_LABEL[log.status] || log.status.toUpperCase()) + '</span>' + retryBadge + '</td>'
         + '<td style="padding:.65rem 1rem;white-space:nowrap;font-variant-numeric:tabular-nums">' + fmtDuration(log.durationMs) + '</td>'
         + '<td style="padding:.65rem 1rem;white-space:nowrap;color:var(--text-muted)">' + esc(log.createdAt) + '</td>'
         + '<td style="padding:.65rem 1rem;white-space:nowrap;color:var(--text-muted)">' + esc(log.finishedAt || '—') + '</td>'
@@ -221,8 +228,8 @@ function buildRow(log) {
 
 function applyData(data) {
     var counts = data.counts;
-    var total  = counts.pending + counts.success + counts.failed + counts.retry;
-    var hasPending = counts.pending + counts.retry > 0;
+    var total  = (counts.processing || 0) + (counts.pending || 0) + counts.success + counts.failed + counts.retry;
+    var hasPending = (counts.processing || 0) + (counts.pending || 0) + counts.retry > 0;
 
     // Update KPI cards
     document.querySelectorAll('[data-kpi]').forEach(function(card) {
@@ -244,7 +251,7 @@ function applyData(data) {
     if (badge) {
         badge.style.display = hasPending ? 'inline-flex' : 'none';
         var bt = document.getElementById('workerBadgeText');
-        if (bt) bt.textContent = (counts.pending + counts.retry) + ' en cours';
+        if (bt) bt.textContent = ((counts.processing || 0) + (counts.pending || 0) + counts.retry) + ' en cours';
     }
 
     // Table
@@ -313,7 +320,7 @@ window.messengerRefresh = function() {
 
 // Start
 (function() {
-    var hasPending = {{ (counts.pending + counts.retry) > 0 ? 'true' : 'false' }};
+    var hasPending = {{ (counts.processing + counts.pending + counts.retry) > 0 ? 'true' : 'false' }};
     scheduleNext(hasPending);
 })();
 
