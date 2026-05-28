@@ -25,7 +25,7 @@ class MessengerLog
     private array $payload = [];
 
     #[ORM\Column(length: 20)]
-    private string $status = 'pending'; // pending | success | failed | retry
+    private string $status = 'processing'; // processing | success | failed | retry
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $error = null;

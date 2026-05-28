@@ -33,7 +33,7 @@ class MessengerLogRepository extends ServiceEntityRepository
             ->getQuery()
             ->getArrayResult();
 
-        $result = ['pending' => 0, 'success' => 0, 'failed' => 0, 'retry' => 0];
+        $result = ['processing' => 0, 'pending' => 0, 'success' => 0, 'failed' => 0, 'retry' => 0];
         foreach ($rows as $row) {
             $result[$row['status']] = (int) $row['cnt'];
         }
