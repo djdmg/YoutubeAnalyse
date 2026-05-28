@@ -58,20 +58,21 @@ class GenerateThumbnailHandler
                 mkdir($dir, 0755, true);
             }
 
-            $previewFile = $message->videoId . '_preview.png';
-            file_put_contents($dir . $previewFile, base64_decode($base64));
+            $filename = $message->videoId . '_gen_' . $message->jobId . '.png';
+            file_put_contents($dir . $filename, base64_decode($base64));
 
             $report->setStatus(AiReportStatus::Done);
             $report->setDurationMs((int)((microtime(true) - $startTime) * 1000));
-            // Image generation: no token counts, but payload tracks 1 image generated
             $report->setTokensInput(1);
             $report->setTokensOutput(0);
+            $report->setPayload(['filename' => $filename, 'prompt' => $message->prompt]);
             $this->em->persist($report);
             $this->em->flush();
 
             $this->storeResult($cacheKey, [
-                'status' => 'done',
-                'url'    => '/uploads/thumbnails/' . $previewFile . '?t=' . time(),
+                'status'   => 'done',
+                'filename' => $filename,
+                'url'      => '/uploads/thumbnails/' . $filename . '?t=' . time(),
             ]);
 
         } catch (\Throwable $e) {

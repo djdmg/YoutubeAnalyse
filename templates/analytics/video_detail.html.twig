@@ -598,6 +598,17 @@ switchTab(_activeTab);
             </button>
         </div>
         <div id="imagenSuccess" style="display:none;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:8px 12px;font-size:13px;color:#4ade80;margin-top:10px"></div>
+
+        {# ── Saved thumbnails gallery ─────────────────────────────────── #}
+        <div id="thumbGalleryWrap" style="display:none;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <span style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">
+                    <i class="fas fa-images" style="margin-right:4px;color:#f59e0b"></i> Miniatures sauvegardées
+                </span>
+                <span id="thumbGalleryCount" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+            <div id="thumbGalleryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px"></div>
+        </div>
     </div>
 
     {# Meta History #}
@@ -800,9 +811,11 @@ switchTab(_activeTab);
         });
     }
 
+    var _currentThumbFilename = null;
+
     function imagenPoll(jobId, btn, regenBtn, previewImg, placeholder, actions, errorDiv) {
         var attempts = 0;
-        var maxAttempts = 60; // 2 min at 2s interval
+        var maxAttempts = 60;
 
         clearInterval(_imagenPollTimer);
         _imagenPollTimer = setInterval(function() {
@@ -820,46 +833,49 @@ switchTab(_activeTab);
             fetch('{{ path('analytics_video_thumbnail_status', {youtubeId: video.youtubeId, jobId: '__JOB__'}) }}'.replace('__JOB__', jobId))
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                if (data.status === 'pending') return; // keep polling
+                if (data.status === 'pending') return;
                 clearInterval(_imagenPollTimer);
                 btn.disabled = false; if (regenBtn) regenBtn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
                 if (data.status === 'done') {
                     imagenProgressDone(true);
+                    _currentThumbFilename = data.filename || null;
                     previewImg.src = data.url + '?t=' + Date.now();
                     previewImg.style.display  = '';
                     placeholder.style.display = 'none';
                     actions.style.display     = 'flex';
+                    loadThumbGallery(); // refresh gallery to show new image
                 } else {
                     imagenProgressDone(false);
                     errorDiv.textContent   = data.message || 'Erreur de génération.';
                     errorDiv.style.display = '';
                 }
             })
-            .catch(function() { /* ignore poll errors, keep trying */ });
+            .catch(function() { /* ignore poll errors */ });
         }, 2000);
     }
 
-    function applyThumbnailImagen() {
+    function applyThumbnailImagen(filename) {
         var applyBtn   = document.getElementById('imagenApplyBtn');
         var errorDiv   = document.getElementById('imagenError');
         var successDiv = document.getElementById('imagenSuccess');
+        var fn         = filename || _currentThumbFilename || '';
 
-        applyBtn.disabled = true;
-        applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Application…';
+        if (applyBtn) { applyBtn.disabled = true; applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Application…'; }
         errorDiv.style.display   = 'none';
         successDiv.style.display = 'none';
 
+        var body = fn ? 'filename=' + encodeURIComponent(fn) : '';
+
         fetch('{{ path('analytics_video_apply_thumbnail', {youtubeId: video.youtubeId}) }}', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+            body: body
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            applyBtn.disabled = false;
-            applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature';
+            if (applyBtn) { applyBtn.disabled = false; applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature'; }
             if (data.success) {
-                // Update header thumbnail
                 var headerThumb = document.getElementById('headerThumbnail');
                 if (headerThumb) headerThumb.src = data.url + '?t=' + Date.now();
                 successDiv.textContent   = data.message || 'Miniature appliquée.';
@@ -876,12 +892,82 @@ switchTab(_activeTab);
             }
         })
         .catch(function() {
-            applyBtn.disabled = false;
-            applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature';
+            if (applyBtn) { applyBtn.disabled = false; applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature'; }
             errorDiv.textContent   = 'Erreur réseau.';
             errorDiv.style.display = '';
         });
     }
+
+    function loadThumbGallery() {
+        fetch('{{ path('analytics_video_generated_thumbnails', {youtubeId: video.youtubeId}) }}', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(items) {
+            var wrap  = document.getElementById('thumbGalleryWrap');
+            var grid  = document.getElementById('thumbGalleryGrid');
+            var count = document.getElementById('thumbGalleryCount');
+            if (!wrap || !grid) return;
+
+            if (!items || items.length === 0) {
+                wrap.style.display = 'none';
+                return;
+            }
+
+            wrap.style.display = '';
+            count.textContent  = items.length + ' image' + (items.length > 1 ? 's' : '');
+            grid.innerHTML     = '';
+
+            items.forEach(function(item) {
+                var d   = new Date(item.created * 1000);
+                var lbl = d.toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit'}) + ' '
+                        + d.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+
+                var card = document.createElement('div');
+                card.style.cssText = 'background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative';
+
+                var img = document.createElement('img');
+                img.src   = item.url + '?t=' + item.created;
+                img.style.cssText = 'width:100%;aspect-ratio:16/9;object-fit:cover;display:block';
+
+                var footer = document.createElement('div');
+                footer.style.cssText = 'padding:6px 8px;display:flex;align-items:center;justify-content:space-between;gap:4px';
+
+                var time = document.createElement('span');
+                time.style.cssText  = 'font-size:10px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+                time.textContent    = lbl;
+
+                var btnApply = document.createElement('button');
+                btnApply.title     = 'Appliquer sur YouTube';
+                btnApply.style.cssText = 'background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px;white-space:nowrap';
+                btnApply.innerHTML = '<i class="fas fa-check"></i>';
+                btnApply.onclick   = function() { applyThumbnailImagen(item.filename); };
+
+                var btnDel = document.createElement('button');
+                btnDel.title     = 'Supprimer';
+                btnDel.style.cssText = 'background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px';
+                btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>';
+                btnDel.onclick   = function() {
+                    if (!confirm('Supprimer cette miniature sauvegardée ?')) return;
+                    fetch('{{ path('analytics_video_delete_thumbnail', {youtubeId: video.youtubeId}) }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                        body: 'filename=' + encodeURIComponent(item.filename)
+                    }).then(function() { loadThumbGallery(); });
+                };
+
+                footer.appendChild(time);
+                footer.appendChild(btnApply);
+                footer.appendChild(btnDel);
+                card.appendChild(img);
+                card.appendChild(footer);
+                grid.appendChild(card);
+            });
+        })
+        .catch(function() {});
+    }
+
+    document.addEventListener('DOMContentLoaded', function() { loadThumbGallery(); });
 
     function copyMetaPrompt() {
         var pre = document.getElementById('metaPromptPre');
