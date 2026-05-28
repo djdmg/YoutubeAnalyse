@@ -21,6 +21,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[IsGranted('ROLE_USER')]
@@ -38,6 +40,7 @@ class VideoController extends AbstractController
         private readonly GeminiService $gemini,
         private readonly AppSettingRepository $settingRepo,
         private readonly EntityManagerInterface $em,
+        private readonly CacheInterface $cache,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
@@ -387,33 +390,55 @@ PROMPT;
             return new JsonResponse(['success' => false, 'message' => 'Le prompt est vide. Utilisez "Suggérer un prompt" pour en générer un.']);
         }
 
-        $model = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
+        $model    = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
+        $jobId    = bin2hex(random_bytes(8));
+        $cacheKey = 'thumbnail_job_' . $jobId;
 
-        set_time_limit(180);
+        // Store pending state
+        $this->cache->get($cacheKey, function (ItemInterface $item) {
+            $item->expiresAfter(600);
+            return ['status' => 'pending'];
+        });
 
-        try {
-            $base64 = $this->gemini->generateImage($prompt, $model);
+        // Launch generation in background — avoids nginx 504 timeout
+        $php     = PHP_BINARY;
+        $console = escapeshellarg($this->projectDir . '/bin/console');
+        $cmd     = sprintf(
+            '%s %s app:thumbnail:generate %s %s %s %s > /dev/null 2>&1 &',
+            escapeshellcmd($php),
+            $console,
+            escapeshellarg($jobId),
+            escapeshellarg($youtubeId),
+            escapeshellarg($model),
+            escapeshellarg($prompt)
+        );
+        exec($cmd);
 
-            $dir = $this->projectDir . '/public/uploads/thumbnails/';
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
+        return new JsonResponse(['success' => true, 'jobId' => $jobId]);
+    }
 
-            // Save as preview (not applied to video yet)
-            $previewFile = $youtubeId . '_preview.png';
-            file_put_contents($dir . $previewFile, base64_decode($base64));
+    #[Route('/videos/{youtubeId}/thumbnail-status/{jobId}', name: 'analytics_video_thumbnail_status', methods: ['GET'])]
+    public function thumbnailStatus(string $youtubeId, string $jobId): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
 
-            return new JsonResponse(['success' => true, 'url' => '/uploads/thumbnails/' . $previewFile . '?t=' . time(), 'prompt' => $prompt]);
-
-        } catch (\Throwable $e) {
-            $msg = $e->getMessage();
-            // Strip API key from URLs before exposing to browser
-            $msg = preg_replace('/([?&]key=)[^&\s"\']+/', '$1***', $msg);
-            if (str_contains($msg, '429')) {
-                $msg = 'Quota API Gemini dépassé (429). Attendez quelques secondes et réessayez.';
-            }
-            return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $msg]);
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['status' => 'error', 'message' => 'Vidéo introuvable.'], 404);
         }
+
+        $cacheKey = 'thumbnail_job_' . $jobId;
+        $result   = $this->cache->get($cacheKey, function (ItemInterface $item) {
+            $item->expiresAfter(0);
+            return null;
+        });
+
+        if ($result === null) {
+            return new JsonResponse(['status' => 'error', 'message' => 'Job introuvable ou expiré.']);
+        }
+
+        return new JsonResponse($result);
     }
 
     #[Route('/videos/{youtubeId}/apply-thumbnail', name: 'analytics_video_apply_thumbnail', methods: ['POST'])]
