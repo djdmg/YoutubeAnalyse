@@ -356,8 +356,9 @@ class GeminiService implements AiProviderInterface
     private function detectType(string $id): string
     {
         $lower = strtolower($id);
-        if (str_contains($lower, 'imagen'))            return 'image';
-        if (str_contains($lower, 'image-generation'))  return 'image';
+        if (str_contains($lower, 'imagen'))           return 'image';
+        if (str_contains($lower, 'image-generation')) return 'image';
+        if (str_contains($lower, 'image-preview'))    return 'image';
         if (str_contains($lower, 'embedding') || str_contains($lower, 'retrieval')) return 'embedding';
         return 'text';
     }

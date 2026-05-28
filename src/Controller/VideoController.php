@@ -333,7 +333,13 @@ class VideoController extends AbstractController
             return new JsonResponse(['success' => true, 'url' => '/uploads/thumbnails/' . $previewFile . '?t=' . time()]);
 
         } catch (\Throwable $e) {
-            return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()]);
+            $msg = $e->getMessage();
+            // Strip API key from URLs before exposing to browser
+            $msg = preg_replace('/([?&]key=)[^&\s"\']+/', '$1***', $msg);
+            if (str_contains($msg, '429')) {
+                $msg = 'Quota API Gemini dépassé (429). Attendez quelques secondes et réessayez.';
+            }
+            return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $msg]);
         }
     }
 
