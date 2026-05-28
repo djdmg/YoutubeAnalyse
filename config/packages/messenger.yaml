@@ -20,9 +20,10 @@ framework:
             sync: 'sync://'
 
         routing:
-            App\Message\GenerateThumbnailMessage: async
-            App\Message\SyncYouTubeMessage:       async
-            App\Message\RunAiAnalysisMessage:     async
+            App\Message\GenerateThumbnailMessage:        async
+            App\Message\SyncYouTubeMessage:              async
+            App\Message\RunAiAnalysisMessage:            async
+            App\Message\GenerateGoalSuggestionsMessage:  async
 
 when@test:
     framework:

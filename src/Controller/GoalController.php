@@ -4,29 +4,31 @@ namespace App\Controller;
 
 use App\Entity\Goal;
 use App\Entity\User;
+use App\Message\GenerateGoalSuggestionsMessage;
 use App\Repository\ChannelStatsRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\GoalRepository;
-use App\Service\AiProviderFactory;
-use App\Service\AiProviderInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Contracts\Cache\CacheInterface;
 
 #[IsGranted('ROLE_USER')]
 #[Route('/goals')]
 class GoalController extends AbstractController
 {
     public function __construct(
-        private readonly GoalRepository        $goalRepo,
-        private readonly EntityManagerInterface $em,
-        private readonly ChannelStatsRepository $channelStatsRepo,
-        private readonly DailyMetricRepository  $dailyMetricRepo,
-        private readonly AiProviderFactory      $ai,
+        private readonly GoalRepository         $goalRepo,
+        private readonly EntityManagerInterface  $em,
+        private readonly ChannelStatsRepository  $channelStatsRepo,
+        private readonly DailyMetricRepository   $dailyMetricRepo,
+        private readonly MessageBusInterface     $bus,
+        private readonly CacheInterface          $cache,
     ) {}
 
     #[Route('', name: 'goal_index', methods: ['GET'])]
@@ -104,76 +106,46 @@ class GoalController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        $latestStats  = $this->channelStatsRepo->findLatestForUser($user);
-        $stats30      = $this->dailyMetricRepo->getGlobalStatsForUser($user, 30);
-        $stats7       = $this->dailyMetricRepo->getGlobalStatsForUser($user, 7);
-        $activeGoals  = $this->goalRepo->findActiveForUser($user);
+        $latestStats = $this->channelStatsRepo->findLatestForUser($user);
+        $stats30     = $this->dailyMetricRepo->getGlobalStatsForUser($user, 30);
+        $stats7      = $this->dailyMetricRepo->getGlobalStatsForUser($user, 7);
+        $activeGoals = $this->goalRepo->findActiveForUser($user);
 
-        $subscribers   = $latestStats?->getSubscriberCount() ?? 0;
-        $views30       = (int)($stats30['total_views'] ?? 0);
-        $watchTime30   = (int)($stats30['total_watch_time'] ?? 0);
-        $views7        = (int)($stats7['total_views'] ?? 0);
-        $avgCtr        = round((float)($stats30['avg_ctr'] ?? 0), 2);
-        $today         = (new \DateTimeImmutable())->format('Y-m-d');
-        $existing      = implode(', ', array_map(fn($g) => '"' . $g->getLabel() . '"', $activeGoals));
+        $jobId = bin2hex(random_bytes(8));
 
-        $prompt = <<<PROMPT
-You are a YouTube growth strategist. Analyse these channel metrics and suggest 3 to 5 SMART goals.
+        // Pre-seed cache as pending so the status endpoint can answer immediately
+        $cacheKey = 'goal_suggestions_' . $jobId;
+        $this->cache->delete($cacheKey);
+        $this->cache->get($cacheKey, function ($item) {
+            $item->expiresAfter(600);
+            return ['status' => 'pending'];
+        });
 
-Today: {$today}
-Current subscribers: {$subscribers}
-Views last 30 days: {$views30}
-Views last 7 days: {$views7}
-Watch time last 30 days: {$watchTime30} minutes
-Average CTR: {$avgCtr}%
-Existing active goals: {$existing}
+        $this->bus->dispatch(new GenerateGoalSuggestionsMessage(
+            jobId:         $jobId,
+            userId:        $user->getId(),
+            subscribers:   $latestStats?->getSubscriberCount() ?? 0,
+            views30:       (int)($stats30['total_views'] ?? 0),
+            views7:        (int)($stats7['total_views'] ?? 0),
+            watchTime30:   (int)($stats30['total_watch_time'] ?? 0),
+            avgCtr:        round((float)($stats30['avg_ctr'] ?? 0), 2),
+            existingGoals: implode(', ', array_map(fn($g) => '"' . $g->getLabel() . '"', $activeGoals)),
+            today:         (new \DateTimeImmutable())->format('Y-m-d'),
+        ));
 
-Rules:
-- Goals must be ambitious yet realistic (achievable in 1–6 months)
-- Do NOT suggest goals already covered by existing active goals
-- Vary the types: mix subscribers, views, and watch_time goals
-- Deadlines should be in YYYY-MM-DD format between 1 and 6 months from today
-- Label must be in French, concise (max 50 chars), motivating
+        return new JsonResponse(['jobId' => $jobId]);
+    }
 
-Respond with ONLY a valid JSON array, no markdown, no explanation:
-[
-  {"label": "...", "type": "subscribers|views|watch_time", "targetValue": 1234, "deadline": "YYYY-MM-DD"},
-  ...
-]
-PROMPT;
+    #[Route('/generate-status/{jobId}', name: 'goal_generate_status', methods: ['GET'])]
+    public function generateStatus(string $jobId): JsonResponse
+    {
+        $cacheKey = 'goal_suggestions_' . $jobId;
+        $result   = $this->cache->get($cacheKey, function ($item) {
+            $item->expiresAfter(600);
+            return ['status' => 'pending'];
+        });
 
-        try {
-            $raw = $this->ai->callRaw($prompt, AiProviderInterface::TIER_FAST, 512);
-            $text = trim($raw['content'][0]['text'] ?? $raw['choices'][0]['message']['content'] ?? '');
-
-            // Extract JSON array from response (may have surrounding text)
-            if (preg_match('/\[[\s\S]*\]/u', $text, $m)) {
-                $text = $m[0];
-            }
-            $suggestions = json_decode($text, true);
-            if (!is_array($suggestions)) {
-                throw new \RuntimeException('Invalid JSON from AI: ' . $text);
-            }
-
-            $valid = [];
-            foreach ($suggestions as $s) {
-                if (!isset($s['label'], $s['type'], $s['targetValue'])) continue;
-                if (!in_array($s['type'], ['subscribers', 'views', 'watch_time'], true)) continue;
-                $targetValue = (int)$s['targetValue'];
-                if ($targetValue <= 0) continue;
-                $valid[] = [
-                    'label'       => mb_substr((string)$s['label'], 0, 100),
-                    'type'        => $s['type'],
-                    'targetValue' => $targetValue,
-                    'deadline'    => isset($s['deadline']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $s['deadline'])
-                                        ? $s['deadline'] : null,
-                ];
-            }
-
-            return new JsonResponse(['suggestions' => $valid]);
-        } catch (\Throwable $e) {
-            return new JsonResponse(['error' => 'Erreur IA : ' . $e->getMessage()], 500);
-        }
+        return new JsonResponse($result);
     }
 
     #[Route('/{id}', name: 'goal_delete', methods: ['DELETE'])]
