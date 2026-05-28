@@ -553,6 +553,16 @@ switchTab(_activeTab);
             </button>
         </div>
 
+        <div id="imagenProgress" style="display:none;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px">
+                <span id="imagenProgressLabel">Génération en cours…</span>
+                <span id="imagenProgressPct">0%</span>
+            </div>
+            <div style="background:var(--bg-secondary);border-radius:999px;height:6px;overflow:hidden">
+                <div id="imagenProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:999px;transition:width .4s ease"></div>
+            </div>
+        </div>
+
         <div id="imagenError" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:8px 12px;font-size:13px;color:#f87171;margin-bottom:10px"></div>
 
         <div id="imagenActions" style="display:none;gap:8px;flex-wrap:wrap">
@@ -659,6 +669,56 @@ switchTab(_activeTab);
         });
     }
 
+    var _imagenProgressTimer = null;
+
+    function imagenProgressStart() {
+        var bar   = document.getElementById('imagenProgressBar');
+        var pct   = document.getElementById('imagenProgressPct');
+        var label = document.getElementById('imagenProgressLabel');
+        var wrap  = document.getElementById('imagenProgress');
+        var steps = [
+            [10,  'Initialisation…'],
+            [25,  'Analyse du prompt…'],
+            [45,  'Génération en cours…'],
+            [62,  'Rendu de l\'image…'],
+            [78,  'Finalisation…'],
+            [90,  'Presque prêt…'],
+        ];
+        var i = 0;
+        wrap.style.display = '';
+        bar.style.width    = '0%';
+        pct.textContent    = '0%';
+
+        _imagenProgressTimer = setInterval(function() {
+            if (i >= steps.length) return;
+            bar.style.width   = steps[i][0] + '%';
+            pct.textContent   = steps[i][0] + '%';
+            label.textContent = steps[i][1];
+            i++;
+        }, 800);
+    }
+
+    function imagenProgressDone(success) {
+        clearInterval(_imagenProgressTimer);
+        var bar   = document.getElementById('imagenProgressBar');
+        var pct   = document.getElementById('imagenProgressPct');
+        var label = document.getElementById('imagenProgressLabel');
+        var wrap  = document.getElementById('imagenProgress');
+        if (success) {
+            bar.style.background = 'linear-gradient(90deg,#22c55e,#4ade80)';
+            bar.style.width      = '100%';
+            pct.textContent      = '100%';
+            label.textContent    = 'Terminé !';
+            setTimeout(function() { wrap.style.display = 'none'; bar.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)'; }, 1200);
+        } else {
+            bar.style.background = 'linear-gradient(90deg,#ef4444,#f87171)';
+            bar.style.width      = '100%';
+            pct.textContent      = '—';
+            label.textContent    = 'Échec';
+            setTimeout(function() { wrap.style.display = 'none'; bar.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)'; bar.style.width = '0%'; }, 2000);
+        }
+    }
+
     function generateThumbnailImagen() {
         var btn         = document.getElementById('imagenBtn');
         var regenBtn    = document.getElementById('imagenRegenBtn');
@@ -683,6 +743,7 @@ switchTab(_activeTab);
         actions.style.display     = 'none';
         previewImg.style.display  = 'none';
         placeholder.style.display = '';
+        imagenProgressStart();
 
         fetch('{{ path('analytics_video_generate_thumbnail', {youtubeId: video.youtubeId}) }}', {
             method: 'POST',
@@ -695,11 +756,13 @@ switchTab(_activeTab);
             if (regenBtn) regenBtn.disabled = false;
             btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
             if (data.success) {
+                imagenProgressDone(true);
                 previewImg.src = data.url + '?t=' + Date.now();
                 previewImg.style.display  = '';
                 placeholder.style.display = 'none';
                 actions.style.display     = 'flex';
             } else {
+                imagenProgressDone(false);
                 errorDiv.textContent   = data.message || 'Erreur inconnue.';
                 errorDiv.style.display = '';
             }
@@ -708,6 +771,7 @@ switchTab(_activeTab);
             btn.disabled = false;
             if (regenBtn) regenBtn.disabled = false;
             btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Générer l\'image';
+            imagenProgressDone(false);
             errorDiv.textContent   = 'Erreur réseau.';
             errorDiv.style.display = '';
         });
