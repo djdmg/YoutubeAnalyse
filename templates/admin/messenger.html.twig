@@ -318,20 +318,60 @@ window.messengerRefresh = function() {
 })();
 
 function clearLogs() {
-    if (!confirm('Vider tous les logs Messenger ? Cette action est irréversible.')) return;
-    var btn = document.getElementById('btnClear');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vidage…'; }
+    openClearModal();
+}
+
+function openClearModal() {
+    var overlay = document.getElementById('clearModalOverlay');
+    overlay.style.display = 'flex';
+    requestAnimationFrame(function() {
+        overlay.classList.add('cm-visible');
+    });
+    document.getElementById('clearModalCancel').focus();
+}
+
+function closeClearModal() {
+    var overlay = document.getElementById('clearModalOverlay');
+    overlay.classList.remove('cm-visible');
+    overlay.addEventListener('transitionend', function handler() {
+        overlay.style.display = 'none';
+        overlay.removeEventListener('transitionend', handler);
+    });
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var overlay = document.getElementById('clearModalOverlay');
+        if (overlay && overlay.classList.contains('cm-visible')) closeClearModal();
+    }
+});
+
+function confirmClearLogs() {
+    var confirmBtn = document.getElementById('clearModalConfirm');
+    var cancelBtn  = document.getElementById('clearModalCancel');
+    confirmBtn.disabled = true;
+    cancelBtn.disabled  = true;
+    confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vidage…';
+
     fetch('{{ path('admin_messenger_clear') }}', {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' }
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.success) { messengerRefresh(); }
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash-alt"></i> Vider les logs'; }
+        closeClearModal();
+        if (data.success) {
+            messengerRefresh();
+        }
+        confirmBtn.disabled = false;
+        cancelBtn.disabled  = false;
+        confirmBtn.innerHTML = '<i class="fas fa-trash-alt"></i> Tout supprimer';
     })
     .catch(function() {
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash-alt"></i> Vider les logs'; }
+        closeClearModal();
+        confirmBtn.disabled = false;
+        cancelBtn.disabled  = false;
+        confirmBtn.innerHTML = '<i class="fas fa-trash-alt"></i> Tout supprimer';
     });
 }
 
@@ -352,4 +392,125 @@ function copyError(btn) {
     }
 }
 </script>
+
+{# ── Clear-logs confirmation modal ───────────────────────────────────────── #}
+<div id="clearModalOverlay" style="display:none" onclick="if(event.target===this)closeClearModal()">
+    <div id="clearModal" role="dialog" aria-modal="true" aria-labelledby="clearModalTitle">
+        <div class="cm-icon-wrap">
+            <i class="fas fa-trash-alt"></i>
+        </div>
+        <h2 id="clearModalTitle">Vider les logs</h2>
+        <p>Tous les logs Messenger seront supprimés définitivement. Cette action est <strong>irréversible</strong>.</p>
+        <div class="cm-actions">
+            <button id="clearModalCancel" class="cm-btn cm-btn-cancel" onclick="closeClearModal()">
+                Annuler
+            </button>
+            <button id="clearModalConfirm" class="cm-btn cm-btn-danger" onclick="confirmClearLogs()">
+                <i class="fas fa-trash-alt"></i> Tout supprimer
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+#clearModalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity .2s ease;
+}
+#clearModalOverlay.cm-visible { opacity: 1; }
+#clearModalOverlay.cm-visible #clearModal {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+#clearModal {
+    background: #13131f;
+    border: 1px solid rgba(239,68,68,.25);
+    border-radius: 16px;
+    padding: 36px 32px 28px;
+    max-width: 400px;
+    width: calc(100% - 32px);
+    text-align: center;
+    box-shadow: 0 24px 64px rgba(0,0,0,.7), 0 0 0 1px rgba(239,68,68,.08);
+    transform: translateY(24px) scale(.97);
+    opacity: 0;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1), opacity .2s ease;
+}
+
+.cm-icon-wrap {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(239,68,68,.12);
+    border: 1px solid rgba(239,68,68,.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 24px;
+    color: #f87171;
+    animation: cm-pulse 2s ease-in-out infinite;
+}
+@keyframes cm-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.25); }
+    50%      { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+}
+
+#clearModal h2 {
+    margin: 0 0 10px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+#clearModal p {
+    margin: 0 0 28px;
+    font-size: 13px;
+    color: var(--text-secondary, #94a3b8);
+    line-height: 1.6;
+}
+#clearModal strong { color: #f87171; }
+
+.cm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.cm-btn {
+    padding: 9px 22px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background .15s, transform .1s, opacity .15s;
+}
+.cm-btn:active { transform: scale(.97); }
+.cm-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.cm-btn-cancel {
+    background: rgba(255,255,255,.06);
+    border-color: rgba(255,255,255,.1);
+    color: #cbd5e1;
+}
+.cm-btn-cancel:hover:not(:disabled) {
+    background: rgba(255,255,255,.1);
+}
+.cm-btn-danger {
+    background: rgba(239,68,68,.18);
+    border-color: rgba(239,68,68,.4);
+    color: #f87171;
+}
+.cm-btn-danger:hover:not(:disabled) {
+    background: rgba(239,68,68,.3);
+    border-color: rgba(239,68,68,.6);
+}
+</style>
 {% endblock %}
