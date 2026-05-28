@@ -159,91 +159,6 @@
         {% endfor %}
         </div>
 
-        <div style="margin-bottom:20px">
-            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
-                <i class="fas fa-image" style="color:#f59e0b;margin-right:4px"></i> Modèle de génération de miniatures
-            </label>
-            <select name="thumbnail_model" class="form-control" style="max-width:460px">
-                {% if image_models is empty %}
-                    <option value="imagen-3.0-generate-001">Imagen 3 (défaut)</option>
-                    <option value="imagen-3.0-fast-generate-001">Imagen 3 Fast</option>
-                {% else %}
-                    {# Image models first #}
-                    {% set has_image = image_models|filter(m => (m.type ?? 'text') == 'image')|length > 0 %}
-                    {% if has_image %}
-                    <optgroup label="🖼 Génération d'images">
-                        {% for m in image_models %}{% if (m.type ?? 'text') == 'image' %}
-                        <option value="{{ m.id }}" {{ thumbnail_model == m.id ? 'selected' : '' }}>
-                            {{ m.name }}{% if m.pricing.label is defined %} — {{ m.pricing.label }}{% endif %}
-                        </option>
-                        {% endif %}{% endfor %}
-                    </optgroup>
-                    {% endif %}
-                    {# Text / multimodal models #}
-                    <optgroup label="💬 Modèles texte (multimodal)">
-                        {% for m in image_models %}{% if (m.type ?? 'text') == 'text' %}
-                        <option value="{{ m.id }}" {{ thumbnail_model == m.id ? 'selected' : '' }}>
-                            {{ m.name }}
-                        </option>
-                        {% endif %}{% endfor %}
-                    </optgroup>
-                {% endif %}
-            </select>
-            <span class="help-text">Tous les modèles Gemini sont disponibles. Les modèles image (Imagen, *image-generation*) utilisent leur endpoint natif ; les autres utilisent generateContent avec responseModalities.</span>
-        </div>
-
-        <div style="margin-bottom:20px">
-            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
-                <i class="fas fa-pen-nib" style="color:#a78bfa;margin-right:4px"></i> Modèle de génération de prompt (suggestion de miniature)
-            </label>
-            <select name="thumbnail_prompt_model" class="form-control" style="max-width:460px">
-                {% set text_models = image_models is not empty ? image_models|filter(m => (m.type ?? 'text') == 'text') : [] %}
-                {% if text_models is empty %}
-                    <option value="balanced" {{ (thumbnail_prompt_model ?? 'balanced') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced (défaut)</option>
-                    <option value="fast" {{ (thumbnail_prompt_model ?? '') == 'fast' ? 'selected' : '' }}>⚡ Fast</option>
-                    <option value="full" {{ (thumbnail_prompt_model ?? '') == 'full' ? 'selected' : '' }}>🔬 Full</option>
-                {% else %}
-                    <optgroup label="Niveaux génériques">
-                        <option value="fast"     {{ (thumbnail_prompt_model ?? '') == 'fast'     ? 'selected' : '' }}>⚡ Fast</option>
-                        <option value="balanced" {{ (thumbnail_prompt_model ?? 'balanced') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced (défaut)</option>
-                        <option value="full"     {{ (thumbnail_prompt_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
-                    </optgroup>
-                    <optgroup label="Modèles texte Gemini">
-                        {% for m in text_models %}
-                        <option value="{{ m.id }}" {{ (thumbnail_prompt_model ?? '') == m.id ? 'selected' : '' }}>{{ m.name }}</option>
-                        {% endfor %}
-                    </optgroup>
-                {% endif %}
-            </select>
-            <span class="help-text">Modèle utilisé pour générer le prompt envoyé au modèle image. Un modèle plus capable produit des suggestions plus créatives.</span>
-        </div>
-
-        <div style="margin-bottom:20px">
-            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">
-                <i class="fas fa-bullseye" style="color:#34d399;margin-right:4px"></i> Modèle IA pour les suggestions d'objectifs
-            </label>
-            <select name="goals_model" class="form-control" style="max-width:460px">
-                {% set text_models = image_models is not empty ? image_models|filter(m => (m.type ?? 'text') == 'text') : [] %}
-                {% if text_models is empty %}
-                    <option value="fast"     {{ (goals_model ?? 'fast') == 'fast'     ? 'selected' : '' }}>⚡ Fast (défaut)</option>
-                    <option value="balanced" {{ (goals_model ?? '') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced</option>
-                    <option value="full"     {{ (goals_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
-                {% else %}
-                    <optgroup label="Niveaux génériques">
-                        <option value="fast"     {{ (goals_model ?? 'fast') == 'fast'     ? 'selected' : '' }}>⚡ Fast (défaut)</option>
-                        <option value="balanced" {{ (goals_model ?? '') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced</option>
-                        <option value="full"     {{ (goals_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
-                    </optgroup>
-                    <optgroup label="Modèles texte Gemini">
-                        {% for m in text_models %}
-                        <option value="{{ m.id }}" {{ (goals_model ?? '') == m.id ? 'selected' : '' }}>{{ m.name }}</option>
-                        {% endfor %}
-                    </optgroup>
-                {% endif %}
-            </select>
-            <span class="help-text">Modèle utilisé pour générer les suggestions d'objectifs SMART sur la page Goals.</span>
-        </div>
-
         <button type="submit" class="btn btn-primary">
             <i class="fas fa-save"></i> Enregistrer
         </button>
@@ -275,6 +190,114 @@
         <input type="hidden" name="_token" value="{{ csrf_token('admin_settings') }}">
         <input type="hidden" name="section" value="models">
         <div id="taskModelsGrid" style="display:grid;gap:10px"></div>
+
+        {# ── Tâches spéciales (miniature + objectifs) ─────────────────── #}
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:12px">
+                Miniatures &amp; Objectifs
+            </div>
+            {% set text_models = image_models is not empty ? image_models|filter(m => (m.type ?? 'text') == 'text') : [] %}
+            {% set tier_opts_html %}
+                <optgroup label="Niveaux génériques">
+                    <option value="fast">⚡ Fast</option>
+                    <option value="balanced">⚖️ Balanced</option>
+                    <option value="full">🔬 Full</option>
+                </optgroup>
+                {% if text_models is not empty %}
+                <optgroup label="Modèles texte Gemini">
+                    {% for m in text_models %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+                </optgroup>
+                {% endif %}
+            {% endset %}
+
+            <div style="display:grid;gap:10px">
+                {# thumbnail_model — image generation #}
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.07)">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0"></div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;color:var(--text-primary)">
+                            <i class="fas fa-image" style="color:#f59e0b;margin-right:4px"></i> Génération de miniature
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Modèle image utilisé pour créer les miniatures (Imagen, etc.)</div>
+                    </div>
+                    <select name="thumbnail_model" class="form-control" style="width:220px;font-size:12px">
+                        {% if image_models is empty %}
+                            <option value="imagen-3.0-generate-001" {{ thumbnail_model == 'imagen-3.0-generate-001' ? 'selected' : '' }}>Imagen 3</option>
+                            <option value="imagen-3.0-fast-generate-001" {{ thumbnail_model == 'imagen-3.0-fast-generate-001' ? 'selected' : '' }}>Imagen 3 Fast</option>
+                        {% else %}
+                            {% set has_image = image_models|filter(m => (m.type ?? 'text') == 'image')|length > 0 %}
+                            {% if has_image %}
+                            <optgroup label="🖼 Génération d'images">
+                                {% for m in image_models %}{% if (m.type ?? 'text') == 'image' %}
+                                <option value="{{ m.id }}" {{ thumbnail_model == m.id ? 'selected' : '' }}>{{ m.name }}{% if m.pricing.label is defined %} — {{ m.pricing.label }}{% endif %}</option>
+                                {% endif %}{% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            <optgroup label="💬 Modèles texte (multimodal)">
+                                {% for m in image_models %}{% if (m.type ?? 'text') == 'text' %}
+                                <option value="{{ m.id }}" {{ thumbnail_model == m.id ? 'selected' : '' }}>{{ m.name }}</option>
+                                {% endif %}{% endfor %}
+                            </optgroup>
+                        {% endif %}
+                    </select>
+                </div>
+
+                {# thumbnail_prompt_model — prompt generation #}
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.07)">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#a78bfa;flex-shrink:0"></div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;color:var(--text-primary)">
+                            <i class="fas fa-pen-nib" style="color:#a78bfa;margin-right:4px"></i> Génération de prompt miniature
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Modèle texte pour rédiger le prompt créatif envoyé au modèle image</div>
+                    </div>
+                    <select name="thumbnail_prompt_model" class="form-control" style="width:220px;font-size:12px">
+                        {% if text_models is empty %}
+                            <option value="balanced" {{ (thumbnail_prompt_model ?? 'balanced') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced (défaut)</option>
+                            <option value="fast" {{ (thumbnail_prompt_model ?? '') == 'fast' ? 'selected' : '' }}>⚡ Fast</option>
+                            <option value="full" {{ (thumbnail_prompt_model ?? '') == 'full' ? 'selected' : '' }}>🔬 Full</option>
+                        {% else %}
+                            <optgroup label="Niveaux génériques">
+                                <option value="fast"     {{ (thumbnail_prompt_model ?? '') == 'fast'     ? 'selected' : '' }}>⚡ Fast</option>
+                                <option value="balanced" {{ (thumbnail_prompt_model ?? 'balanced') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced (défaut)</option>
+                                <option value="full"     {{ (thumbnail_prompt_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
+                            </optgroup>
+                            <optgroup label="Modèles texte Gemini">
+                                {% for m in text_models %}<option value="{{ m.id }}" {{ (thumbnail_prompt_model ?? '') == m.id ? 'selected' : '' }}>{{ m.name }}</option>{% endfor %}
+                            </optgroup>
+                        {% endif %}
+                    </select>
+                </div>
+
+                {# goals_model — AI goal suggestions #}
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.07)">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#34d399;flex-shrink:0"></div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;color:var(--text-primary)">
+                            <i class="fas fa-bullseye" style="color:#34d399;margin-right:4px"></i> Suggestions d'objectifs
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Modèle utilisé pour générer les objectifs SMART sur la page Goals</div>
+                    </div>
+                    <select name="goals_model" class="form-control" style="width:220px;font-size:12px">
+                        {% if text_models is empty %}
+                            <option value="fast"     {{ (goals_model ?? 'fast') == 'fast'     ? 'selected' : '' }}>⚡ Fast (défaut)</option>
+                            <option value="balanced" {{ (goals_model ?? '') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced</option>
+                            <option value="full"     {{ (goals_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
+                        {% else %}
+                            <optgroup label="Niveaux génériques">
+                                <option value="fast"     {{ (goals_model ?? 'fast') == 'fast'     ? 'selected' : '' }}>⚡ Fast (défaut)</option>
+                                <option value="balanced" {{ (goals_model ?? '') == 'balanced' ? 'selected' : '' }}>⚖️ Balanced</option>
+                                <option value="full"     {{ (goals_model ?? '') == 'full'     ? 'selected' : '' }}>🔬 Full</option>
+                            </optgroup>
+                            <optgroup label="Modèles texte Gemini">
+                                {% for m in text_models %}<option value="{{ m.id }}" {{ (goals_model ?? '') == m.id ? 'selected' : '' }}>{{ m.name }}</option>{% endfor %}
+                            </optgroup>
+                        {% endif %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
         <div style="margin-top:16px">
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save"></i> Enregistrer les modèles

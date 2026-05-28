@@ -215,6 +215,19 @@ class AdminController extends AbstractController
                 $model = trim((string) $request->request->get('ai_model_' . $type->value, ''));
                 $this->settingRepo->set('ai_model_' . $type->value, $model ?: null);
             }
+            // Special-task model settings (thumbnail, goals) live in this section
+            $thumbnailModel = trim((string) $request->request->get('thumbnail_model', ''));
+            if ($thumbnailModel !== '') {
+                $this->settingRepo->set(GeminiService::SETTING_THUMBNAIL_MODEL, $thumbnailModel);
+            }
+            $promptModel = trim((string) $request->request->get('thumbnail_prompt_model', ''));
+            if ($promptModel !== '') {
+                $this->settingRepo->set(GeminiService::SETTING_PROMPT_MODEL, $promptModel);
+            }
+            $goalsModel = trim((string) $request->request->get('goals_model', ''));
+            if ($goalsModel !== '') {
+                $this->settingRepo->set(GeminiService::SETTING_GOALS_MODEL, $goalsModel);
+            }
         } elseif ($section === 'ai') {
             $provider = $request->request->get('ai_provider', AiProviderFactory::PROVIDER_CLAUDE);
             if (!in_array($provider, [AiProviderFactory::PROVIDER_CLAUDE, AiProviderFactory::PROVIDER_GEMINI], true)) {
@@ -237,21 +250,6 @@ class AdminController extends AbstractController
             }
 
             $this->settingRepo->set(AiProviderFactory::SETTING_PROVIDER, $provider);
-
-            $thumbnailModel = trim((string) $request->request->get('thumbnail_model', ''));
-            if ($thumbnailModel !== '') {
-                $this->settingRepo->set(GeminiService::SETTING_THUMBNAIL_MODEL, $thumbnailModel);
-            }
-
-            $promptModel = trim((string) $request->request->get('thumbnail_prompt_model', ''));
-            if ($promptModel !== '') {
-                $this->settingRepo->set(GeminiService::SETTING_PROMPT_MODEL, $promptModel);
-            }
-
-            $goalsModel = trim((string) $request->request->get('goals_model', ''));
-            if ($goalsModel !== '') {
-                $this->settingRepo->set(GeminiService::SETTING_GOALS_MODEL, $goalsModel);
-            }
 
             foreach ([
                 'gemini_tier_fast'     => GeminiService::SETTING_TIER_FAST,
