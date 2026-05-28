@@ -52,48 +52,48 @@ class VideoController extends AbstractController
 
     private function generateThumbnailPrompt(mixed $video): string
     {
-        // Gather recent performance metrics (last 30 days)
-        $metrics     = $this->metricRepo->findForVideo($video, 30);
-        $totalViews  = array_sum(array_map(fn($m) => $m->getViews(), $metrics));
-        $avgCtr      = count($metrics) > 0
-            ? round(array_sum(array_map(fn($m) => $m->getCtr() ?? 0, $metrics)) / count($metrics), 2)
-            : null;
-        $avgRetention = count($metrics) > 0
-            ? round(array_sum(array_map(fn($m) => $m->getAvgRetentionPercent() ?? 0, $metrics)) / count($metrics), 1)
-            : null;
-
         $description = $video->getDescription()
-            ? mb_substr($video->getDescription(), 0, 800)
+            ? mb_substr($video->getDescription(), 0, 1200)
             : '';
 
         $promptModel = $this->settingRepo->get(GeminiService::SETTING_PROMPT_MODEL) ?? 'balanced';
 
         $aiPrompt = <<<PROMPT
-You are a YouTube thumbnail art director. Your only goal: maximize click-through rate.
+You are both a YouTube thumbnail expert and an AI image-generation prompt engineer.
+Your mission: write a single, extremely detailed image generation prompt that produces a thumbnail where ANY viewer instantly understands what the video is about — without reading any text.
 
-VIDEO CONTENT:
+━━ VIDEO CONTENT ━━
 Title: {$video->getTitle()}
 Description: {$description}
-Genre: {$video->getGenre()}
-Views (30d): {$totalViews}
-Avg CTR: {$avgCtr}%
 
-TASK: Write an image generation prompt in English for this video's thumbnail.
+━━ STEP 1 — EXTRACT SPECIFIC VISUAL ELEMENTS (think, don't write this part) ━━
+From the title and description, identify:
+• The ONE central subject that defines this video's topic (specific instrument, object, location, event, technique — NOT a concept)
+• 2–3 supporting visual elements mentioned or implied in the description
+• The dominant mood/atmosphere (e.g. epic, nostalgic, electric, gritty, euphoric)
+• The single most content-specific text overlay (3–5 words max from the actual content)
 
-Based on the title and description, choose yourself the visual style, atmosphere, and composition that will generate the highest CTR for this specific content.
+━━ STEP 2 — WRITE THE IMAGE GENERATION PROMPT ━━
+Structure the prompt in this order:
+1. MAIN SUBJECT: Describe the central visual element in extreme detail — material, texture, color, state, position in frame (close-up foreground, center). Be hyper-specific: not "a guitar" but "a battered 1970s sunburst Fender Stratocaster with worn frets, center frame".
+2. SCENE & BACKGROUND: Specific setting that instantly places the viewer — real environment, identifiable backdrop, depth (e.g. "smoke-filled concert hall with blurred stage lights", "rain-soaked Tokyo street at night").
+3. LIGHTING & COLOR PALETTE: Choose lighting that maximises visual drama and matches the mood — be specific (golden backlight, cold neon glow, single spotlight, hazy stage lighting).
+4. COMPOSITION: Camera angle and framing (extreme close-up, low angle, rule of thirds), what draws the eye first.
+5. TEXT OVERLAY: Exactly this format — bold display typography overlay reading "[SPECIFIC TEXT]", placed [position], [color] on [contrasting background/shadow]. The text must be the most impactful phrase from the content.
+6. TECHNICAL TAIL: End with "no human faces, no celebrity likenesses, 16:9 YouTube thumbnail format, hyper-realistic photo quality, ultra-sharp, cinematic depth of field, no watermarks, no logos."
 
-STRICT RULES:
-1. Scene based on SPECIFIC, REAL elements from the title and description (real places, real instruments, real events, real visual details mentioned). ZERO abstract or generic imagery.
-2. MANDATORY TEXT OVERLAY: 2-4 words in bold display typography. Must come from the actual content — a year, a genre name, a key phrase, a location. Write it as: bold text overlay "[YOUR TEXT]".
-3. No real human faces, no celebrity likenesses — use silhouettes, objects, light effects, crowd shapes.
-4. End with: "16:9 aspect ratio, YouTube thumbnail, ultra high quality, no watermarks, no logos"
-5. Max 3 sentences. English only.
+━━ RULES ━━
+— Every visual detail must come from the actual content — zero generic or abstract imagery
+— The thumbnail must tell the story at a glance: topic, mood, and era all visible simultaneously
+— Bold, contrasted, visually striking — built to stop a scroll
+— No real human faces or celebrity likenesses
+— Output: ONE flowing English paragraph of 5–8 sentences. No headers. No bullet points. No explanation.
 
-Reply with ONLY the image prompt. No explanation, no quotes around it.
+Reply with ONLY the image prompt.
 PROMPT;
 
         try {
-            return $this->gemini->callRawText($aiPrompt, $promptModel, 450, 1.3);
+            return $this->gemini->callRawText($aiPrompt, $promptModel, 900, 1.0);
         } catch (\Throwable $e) {
             $this->logger->warning('Thumbnail prompt generation failed, using PHP fallback', ['error' => $e->getMessage()]);
             return $this->buildFallbackPrompt($video);
@@ -103,30 +103,33 @@ PROMPT;
     private function buildFallbackPrompt(mixed $video): string
     {
         $title = $video->getTitle();
-        $desc  = $video->getDescription() ? mb_substr($video->getDescription(), 0, 300) : '';
+        $desc  = $video->getDescription() ? mb_substr($video->getDescription(), 0, 600) : '';
 
-        $stopWords = ['the','a','an','and','or','of','in','on','at','to','for','with','by',
-                      'le','la','les','de','du','des','un','une','et','ou','en','au','aux',
-                      'pour','avec','sur','dans','par','mix','vol','feat','ft'];
-        $text  = strtolower($title . ' ' . $desc);
+        $stopWords = ['the','a','an','and','or','of','in','on','at','to','for','with','by','is','was','are','were',
+                      'le','la','les','de','du','des','un','une','et','ou','en','au','aux','ce','se','sa','son','ses',
+                      'pour','avec','sur','dans','par','mix','vol','feat','ft','this','that','from','its','also','more'];
+        $text = strtolower($title . ' ' . $desc);
         preg_match_all('/\b[a-záàâäéèêëîïôöùûü]{4,}\b/u', $text, $matches);
         $words = array_values(array_diff(array_unique($matches[0]), $stopWords));
 
-        $sceneWords = implode(', ', array_slice($words, 0, 5));
+        $scene   = implode(', ', array_slice($words, 0, 7));
+        $subject = array_slice($words, 0, 3);
 
         preg_match('/20\d\d/', $title, $yearMatch);
         if ($yearMatch) {
             $overlayText = $yearMatch[0];
-        } elseif (count($words) >= 2) {
-            $overlayText = strtoupper($words[0] . ' ' . $words[1]);
+        } elseif (count($subject) >= 2) {
+            $overlayText = strtoupper($subject[0] . ' ' . $subject[1]);
         } else {
-            $overlayText = strtoupper($words[0] ?? 'NOW');
+            $overlayText = strtoupper($subject[0] ?? 'WATCH');
         }
 
-        return "Visual scene featuring {$sceneWords}, high visual impact composition, "
-            . "bold text overlay \"{$overlayText}\" in large display font, "
-            . "no real human faces, no logos. "
-            . "16:9 aspect ratio, YouTube thumbnail, ultra high quality, no watermarks.";
+        return "Hyper-realistic cinematic scene featuring {$scene} as the central visual focus, "
+            . "dramatic foreground subject filling 60% of the frame with rich texture and vivid color detail, "
+            . "specific atmospheric background with identifiable environment establishing the context, "
+            . "bold display typography overlay \"{$overlayText}\" in large white letters with dark shadow, placed upper-third, "
+            . "no human faces, no logos. "
+            . "16:9 YouTube thumbnail, ultra-sharp, cinematic depth of field, professional photo quality, no watermarks.";
     }
 
     private function resolveThumbnailModelName(): string
