@@ -264,13 +264,44 @@ class AdminController extends AbstractController
     #[Route('/messenger', name: 'admin_messenger')]
     public function messenger(): Response
     {
-        $logs      = $this->messengerLogRepo->findRecent(200);
-        $counts    = $this->messengerLogRepo->countByStatus();
+        $logs   = $this->messengerLogRepo->findRecent(200);
+        $counts = $this->messengerLogRepo->countByStatus();
 
         return $this->render('admin/messenger.html.twig', [
             'logs'   => $logs,
             'counts' => $counts,
         ]);
+    }
+
+    #[Route('/messenger/data', name: 'admin_messenger_data')]
+    public function messengerData(): JsonResponse
+    {
+        $logs   = $this->messengerLogRepo->findRecent(200);
+        $counts = $this->messengerLogRepo->countByStatus();
+
+        $serialized = array_map(function ($log) {
+            $payload = $log->getPayload();
+            $preview = [];
+            $i = 0;
+            foreach ($payload as $k => $v) {
+                if ($i++ >= 2) break;
+                $preview[] = ['k' => $k, 'v' => mb_substr((string)$v, 0, 20)];
+            }
+            return [
+                'id'          => $log->getId(),
+                'messageClass'=> $log->getMessageClass(),
+                'shortName'   => substr(strrchr($log->getMessageClass(), '\\') ?: $log->getMessageClass(), 1),
+                'payload'     => $preview,
+                'status'      => $log->getStatus(),
+                'retryCount'  => $log->getRetryCount(),
+                'durationMs'  => $log->getDurationMs(),
+                'createdAt'   => $log->getCreatedAt()->format('d/m H:i:s'),
+                'finishedAt'  => $log->getFinishedAt()?->format('d/m H:i:s'),
+                'error'       => $log->getError(),
+            ];
+        }, $logs);
+
+        return new JsonResponse(['counts' => $counts, 'logs' => $serialized]);
     }
 
     #[Route('/messenger/{id}/retry', name: 'admin_messenger_retry', methods: ['POST'])]

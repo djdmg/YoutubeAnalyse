@@ -7,10 +7,11 @@
 <div class="dashboard-header">
     <div>
         <h1><i class="fas fa-paper-plane" style="color:#a78bfa"></i> Messenger</h1>
-        <span class="last-sync">File de traitement asynchrone · {{ logs|length }} entrées</span>
+        <span class="last-sync" id="messengerMeta">File de traitement asynchrone · {{ logs|length }} entrées</span>
     </div>
     <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
-        <button onclick="location.reload()" class="btn btn-outline btn-sm">
+        <span id="refreshStatus" style="font-size:.75em;color:var(--text-muted)"></span>
+        <button onclick="messengerRefresh()" class="btn btn-outline btn-sm" id="btnRefresh">
             <i class="fas fa-sync-alt"></i> Actualiser
         </button>
         <a href="{{ path('admin_settings') }}" class="btn btn-outline btn-sm">
@@ -27,28 +28,22 @@
     {label: 'En retry',   key: 'retry',   icon: 'fa-redo',            color: '#f59e0b', glow: 'rgba(245,158,11,.15)'},
     {label: 'Échoués',    key: 'failed',  icon: 'fa-times-circle',    color: '#ef4444', glow: 'rgba(239,68,68,.15)'},
 ] %}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem" id="kpiGrid">
 {% for c in cards %}
 {% set val = attribute(counts, c.key) %}
-<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.25rem 1rem;position:relative;overflow:hidden;transition:.2s">
-    {# accent stripe top #}
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:{{ c.color }};border-radius:12px 12px 0 0;opacity:{{ val > 0 ? '1' : '.25' }}"></div>
+<div data-kpi="{{ c.key }}" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.25rem 1rem;position:relative;overflow:hidden">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:{{ c.color }};border-radius:12px 12px 0 0;opacity:{{ val > 0 ? '1' : '.25' }}" class="kpi-stripe"></div>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.75rem">
         <span style="font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">{{ c.label }}</span>
         <div style="width:32px;height:32px;border-radius:8px;background:{{ c.glow }};display:flex;align-items:center;justify-content:center;flex-shrink:0">
             <i class="fas {{ c.icon }}" style="color:{{ c.color }};font-size:.85em"></i>
         </div>
     </div>
-    <div style="font-size:2.25rem;font-weight:700;color:{{ val > 0 ? c.color : 'var(--text-muted)' }};line-height:1;margin-bottom:.6rem;font-variant-numeric:tabular-nums">{{ val }}</div>
-    {% if total > 0 %}
+    <div class="kpi-value" style="font-size:2.25rem;font-weight:700;color:{{ val > 0 ? c.color : 'var(--text-muted)' }};line-height:1;margin-bottom:.6rem;font-variant-numeric:tabular-nums">{{ val }}</div>
     <div style="height:4px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">
-        <div style="height:4px;width:{{ (val / total * 100)|round }}%;background:{{ c.color }};border-radius:4px;transition:width .4s ease;opacity:{{ val > 0 ? '.85' : '0' }}"></div>
+        <div class="kpi-bar" style="height:4px;width:{% if total > 0 %}{{ (val / total * 100)|round }}{% else %}0{% endif %}%;background:{{ c.color }};border-radius:4px;transition:width .4s ease;opacity:{{ val > 0 ? '.85' : '0' }}"></div>
     </div>
-    <div style="font-size:.7em;color:var(--text-muted);margin-top:.35rem">{{ total > 0 ? (val / total * 100)|round : 0 }}% du total</div>
-    {% else %}
-    <div style="height:4px;background:rgba(255,255,255,.06);border-radius:4px"></div>
-    <div style="font-size:.7em;color:var(--text-muted);margin-top:.35rem">—</div>
-    {% endif %}
+    <div class="kpi-pct" style="font-size:.7em;color:var(--text-muted);margin-top:.35rem">{% if total > 0 %}{{ (val / total * 100)|round }}%{% else %}—{% endif %} du total</div>
 </div>
 {% endfor %}
 </div>
@@ -63,28 +58,28 @@
         <span style="color:var(--text-secondary);margin-left:.4rem">Rejouer les échoués :</span>
         <code style="background:rgba(0,0,0,.35);padding:.15rem .5rem;border-radius:4px;margin-left:.4rem">messenger:failed:retry</code>
     </div>
-    {% if counts.pending + counts.retry > 0 %}
-    <span style="margin-left:auto;background:rgba(245,158,11,.15);color:#f59e0b;padding:.2rem .6rem;border-radius:20px;font-size:.9em;font-weight:600;white-space:nowrap">
-        <i class="fas fa-circle-notch fa-spin" style="margin-right:.3rem"></i>{{ counts.pending + counts.retry }} en cours
+    <span id="workerBadge" style="margin-left:auto;display:{{ (counts.pending + counts.retry) > 0 ? 'inline-flex' : 'none' }};background:rgba(245,158,11,.15);color:#f59e0b;padding:.2rem .6rem;border-radius:20px;font-size:.9em;font-weight:600;white-space:nowrap;align-items:center;gap:.3rem">
+        <i class="fas fa-circle-notch fa-spin"></i><span id="workerBadgeText">{{ counts.pending + counts.retry }} en cours</span>
     </span>
-    {% endif %}
 </div>
 
 {# ── Table ───────────────────────────────────────────────────────────────── #}
 <div class="section-card" style="padding:0;overflow:hidden">
     <div style="padding:.875rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
         <h3 style="margin:0;font-size:.95rem"><i class="fas fa-list-ul" style="color:var(--text-muted);margin-right:.5rem"></i>Journal des messages</h3>
-        <span style="font-size:.75em;color:var(--text-muted)">200 derniers · {% if counts.pending + counts.retry > 0 %}actualisation auto 10s{% else %}à jour{% endif %}</span>
+        <span style="font-size:.75em;color:var(--text-muted)" id="tableCaption">200 derniers · auto-refresh actif</span>
     </div>
 
     {% if logs is empty %}
-    <div class="empty-state" style="padding:3rem">
+    <div class="empty-state" style="padding:3rem" id="emptyState">
         <i class="fas fa-inbox fa-2x"></i>
         <h3>Aucun message</h3>
         <p>Les jobs apparaîtront ici dès qu'un message sera dispatché.</p>
     </div>
+    <div style="overflow-x:auto;display:none" id="tableWrap">
     {% else %}
-    <div style="overflow-x:auto">
+    <div style="overflow-x:auto" id="tableWrap">
+    {% endif %}
     <table style="width:100%;border-collapse:collapse;font-size:.83em">
         <thead>
             <tr style="background:var(--bg-secondary)">
@@ -97,7 +92,7 @@
                 <th style="padding:.6rem 1rem;text-align:left;font-weight:600;color:var(--text-muted);font-size:.75em;text-transform:uppercase;letter-spacing:.04em">Détails</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="messengerTbody">
         {% for log in logs %}
             {% set sc = {pending:'#94a3b8',success:'#22c55e',failed:'#ef4444',retry:'#f59e0b'}[log.status] ?? '#94a3b8' %}
             {% set typeIcons = {
@@ -108,7 +103,7 @@
             } %}
             {% set shortName = log.messageClass|split('\\')|last %}
             {% set icon = typeIcons[shortName] ?? 'fa-envelope' %}
-            <tr style="border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
+            <tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
                 <td style="padding:.65rem 1rem;color:var(--text-muted);font-variant-numeric:tabular-nums">{{ log.id }}</td>
                 <td style="padding:.65rem 1rem">
                     <div style="display:flex;align-items:center;gap:.5rem">
@@ -136,13 +131,9 @@
                 </td>
                 <td style="padding:.65rem 1rem;white-space:nowrap;font-variant-numeric:tabular-nums">
                     {% if log.durationMs %}
-                        {% if log.durationMs >= 60000 %}
-                            <span style="color:#f59e0b">{{ (log.durationMs / 60000)|number_format(1) }}min</span>
-                        {% elseif log.durationMs >= 1000 %}
-                            {{ (log.durationMs / 1000)|number_format(1) }}s
-                        {% else %}
-                            <span style="color:var(--text-muted)">{{ log.durationMs }}ms</span>
-                        {% endif %}
+                        {% if log.durationMs >= 60000 %}<span style="color:#f59e0b">{{ (log.durationMs / 60000)|number_format(1) }}min</span>
+                        {% elseif log.durationMs >= 1000 %}{{ (log.durationMs / 1000)|number_format(1) }}s
+                        {% else %}<span style="color:var(--text-muted)">{{ log.durationMs }}ms</span>{% endif %}
                     {% else %}—{% endif %}
                 </td>
                 <td style="padding:.65rem 1rem;white-space:nowrap;color:var(--text-muted)">{{ log.createdAt|date('d/m H:i:s') }}</td>
@@ -152,34 +143,176 @@
                     <div style="display:flex;align-items:flex-start;gap:.4rem">
                         <span style="color:#ef4444;flex:1;line-height:1.4" title="{{ log.error }}">{{ log.error|slice(0,100) }}{% if log.error|length > 100 %}…{% endif %}</span>
                         <button onclick="copyError(this)" data-error="{{ log.error|e('html_attr') }}"
-                            title="Copier l'erreur complète"
-                            style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:5px;padding:.2rem .45rem;cursor:pointer;font-size:.8em;flex-shrink:0;transition:.15s">
+                            title="Copier l'erreur"
+                            style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:5px;padding:.2rem .45rem;cursor:pointer;font-size:.8em;flex-shrink:0">
                             <i class="fas fa-copy"></i>
                         </button>
                     </div>
-                    {% elseif log.status == 'success' %}
-                        <span style="color:var(--text-muted);font-size:.85em">—</span>
-                    {% else %}
-                        <span style="color:var(--text-muted)">—</span>
-                    {% endif %}
+                    {% else %}<span style="color:var(--text-muted)">—</span>{% endif %}
                 </td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
     </div>
-    {% endif %}
 </div>
 
 <script>
-const hasPending = {{ (counts.pending + counts.retry) > 0 ? 'true' : 'false' }};
-if (hasPending) {
-    var t = 10, banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;bottom:1.25rem;right:1.25rem;background:#6366f1;color:#fff;padding:.5rem .9rem;border-radius:8px;font-size:.78em;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:999';
-    banner.innerHTML = '<i class="fas fa-sync-alt fa-spin" style="margin-right:.4rem"></i><span id="cntdn">' + t + '</span>s…';
-    document.body.appendChild(banner);
-    var iv = setInterval(function() { t--; var el = document.getElementById('cntdn'); if(el) el.textContent = t; if(t<=0){clearInterval(iv);location.reload();} }, 1000);
+var DATA_URL = '{{ path('admin_messenger_data') }}';
+var ICONS = { GenerateThumbnailMessage:'fa-image', SyncYouTubeMessage:'fa-sync', RunAiAnalysisMessage:'fa-robot', SyncSearchTermsMessage:'fa-search' };
+var STATUS_COLOR = { pending:'#94a3b8', success:'#22c55e', failed:'#ef4444', retry:'#f59e0b' };
+var STATUS_ICON  = { pending:'fa-circle-notch fa-spin', success:'fa-check', failed:'fa-times', retry:'fa-redo' };
+var KPI_META = {
+    pending: { label:'En attente', color:'#94a3b8' },
+    success: { label:'Réussis',    color:'#22c55e' },
+    retry:   { label:'En retry',   color:'#f59e0b' },
+    failed:  { label:'Échoués',    color:'#ef4444' }
+};
+
+function fmtDuration(ms) {
+    if (!ms) return '—';
+    if (ms >= 60000) return '<span style="color:#f59e0b">' + (ms/60000).toFixed(1) + 'min</span>';
+    if (ms >= 1000)  return (ms/1000).toFixed(1) + 's';
+    return '<span style="color:var(--text-muted)">' + ms + 'ms</span>';
 }
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function buildRow(log) {
+    var sc     = STATUS_COLOR[log.status] || '#94a3b8';
+    var si     = STATUS_ICON[log.status]  || 'fa-question';
+    var sn     = log.shortName;
+    var icon   = ICONS[sn] || 'fa-envelope';
+    var label  = sn.replace('Message', '');
+    var payloadHtml = log.payload.map(function(p, i) {
+        return '<span>' + esc(p.k) + ':<b>' + esc(p.v) + '</b></span>' + (i < log.payload.length - 1 ? ' · ' : '');
+    }).join('');
+    var retryBadge = log.retryCount ? '<span style="font-size:.7em;color:var(--text-muted);margin-left:.25rem">×' + log.retryCount + '</span>' : '';
+    var errHtml = log.error
+        ? '<div style="display:flex;align-items:flex-start;gap:.4rem">'
+          + '<span style="color:#ef4444;flex:1;line-height:1.4" title="' + esc(log.error) + '">'
+          + esc(log.error.slice(0, 100)) + (log.error.length > 100 ? '…' : '') + '</span>'
+          + '<button onclick="copyError(this)" data-error="' + esc(log.error) + '" title="Copier l\'erreur"'
+          + ' style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:5px;padding:.2rem .45rem;cursor:pointer;font-size:.8em;flex-shrink:0">'
+          + '<i class="fas fa-copy"></i></button></div>'
+        : '<span style="color:var(--text-muted)">—</span>';
+
+    return '<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">'
+        + '<td style="padding:.65rem 1rem;color:var(--text-muted);font-variant-numeric:tabular-nums">' + log.id + '</td>'
+        + '<td style="padding:.65rem 1rem"><div style="display:flex;align-items:center;gap:.5rem">'
+        + '<span style="width:26px;height:26px;border-radius:6px;background:rgba(167,139,250,.12);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">'
+        + '<i class="fas ' + icon + '" style="color:#a78bfa;font-size:.7em"></i></span>'
+        + '<div><div style="font-weight:500;color:var(--text-primary)">' + esc(label) + '</div>'
+        + '<div style="font-size:.75em;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + payloadHtml + '</div>'
+        + '</div></div></td>'
+        + '<td style="padding:.65rem 1rem">'
+        + '<span style="display:inline-flex;align-items:center;gap:.3rem;background:' + sc + '18;color:' + sc + ';padding:.2rem .65rem;border-radius:20px;font-size:.75em;font-weight:700;white-space:nowrap">'
+        + '<i class="fas ' + si + '" style="font-size:.7em"></i> ' + log.status.toUpperCase() + '</span>' + retryBadge + '</td>'
+        + '<td style="padding:.65rem 1rem;white-space:nowrap;font-variant-numeric:tabular-nums">' + fmtDuration(log.durationMs) + '</td>'
+        + '<td style="padding:.65rem 1rem;white-space:nowrap;color:var(--text-muted)">' + esc(log.createdAt) + '</td>'
+        + '<td style="padding:.65rem 1rem;white-space:nowrap;color:var(--text-muted)">' + esc(log.finishedAt || '—') + '</td>'
+        + '<td style="padding:.65rem 1rem;max-width:320px">' + errHtml + '</td>'
+        + '</tr>';
+}
+
+function applyData(data) {
+    var counts = data.counts;
+    var total  = counts.pending + counts.success + counts.failed + counts.retry;
+    var hasPending = counts.pending + counts.retry > 0;
+
+    // Update KPI cards
+    document.querySelectorAll('[data-kpi]').forEach(function(card) {
+        var key  = card.getAttribute('data-kpi');
+        var val  = counts[key] || 0;
+        var meta = KPI_META[key];
+        var pct  = total > 0 ? Math.round(val / total * 100) : 0;
+        var color = meta.color;
+        card.querySelector('.kpi-value').textContent = val;
+        card.querySelector('.kpi-value').style.color = val > 0 ? color : 'var(--text-muted)';
+        card.querySelector('.kpi-bar').style.width   = pct + '%';
+        card.querySelector('.kpi-bar').style.opacity = val > 0 ? '.85' : '0';
+        card.querySelector('.kpi-pct').textContent   = total > 0 ? pct + '% du total' : '—';
+        card.querySelector('.kpi-stripe').style.opacity = val > 0 ? '1' : '.25';
+    });
+
+    // Worker badge
+    var badge = document.getElementById('workerBadge');
+    if (badge) {
+        badge.style.display = hasPending ? 'inline-flex' : 'none';
+        var bt = document.getElementById('workerBadgeText');
+        if (bt) bt.textContent = (counts.pending + counts.retry) + ' en cours';
+    }
+
+    // Table
+    var tbody = document.getElementById('messengerTbody');
+    var empty = document.getElementById('emptyState');
+    var wrap  = document.getElementById('tableWrap');
+    if (tbody) tbody.innerHTML = data.logs.map(buildRow).join('');
+    if (empty) empty.style.display = data.logs.length === 0 ? '' : 'none';
+    if (wrap)  wrap.style.display  = data.logs.length === 0 ? 'none' : '';
+
+    // Meta
+    var meta = document.getElementById('messengerMeta');
+    if (meta) meta.textContent = 'File de traitement asynchrone · ' + data.logs.length + ' entrées';
+
+    var cap = document.getElementById('tableCaption');
+    if (cap) cap.textContent = '200 derniers · ' + (hasPending ? 'auto-refresh actif' : 'à jour');
+
+    updateRefreshStatus(hasPending);
+    return hasPending;
+}
+
+var refreshTimer = null;
+var countdown    = 0;
+var cdInterval   = null;
+
+function updateRefreshStatus(hasPending) {
+    var el = document.getElementById('refreshStatus');
+    if (!el) return;
+    if (!hasPending) { el.textContent = 'À jour'; return; }
+    el.textContent = 'Actualisation dans ' + countdown + 's…';
+}
+
+function scheduleNext(hasPending) {
+    clearTimeout(refreshTimer);
+    clearInterval(cdInterval);
+    var delay = hasPending ? 10 : 30;
+    countdown = delay;
+    var el = document.getElementById('refreshStatus');
+
+    cdInterval = setInterval(function() {
+        countdown--;
+        if (el) el.textContent = (hasPending ? 'Actualisation dans ' + countdown + 's…' : 'À jour');
+    }, 1000);
+
+    refreshTimer = setTimeout(messengerRefresh, delay * 1000);
+}
+
+window.messengerRefresh = function() {
+    clearTimeout(refreshTimer);
+    clearInterval(cdInterval);
+    var btn = document.getElementById('btnRefresh');
+    if (btn) btn.querySelector('i').className = 'fas fa-spinner fa-spin';
+
+    fetch(DATA_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (btn) btn.querySelector('i').className = 'fas fa-sync-alt';
+            var hasPending = applyData(data);
+            scheduleNext(hasPending);
+        })
+        .catch(function() {
+            if (btn) btn.querySelector('i').className = 'fas fa-sync-alt';
+            scheduleNext(false);
+        });
+};
+
+// Start
+(function() {
+    var hasPending = {{ (counts.pending + counts.retry) > 0 ? 'true' : 'false' }};
+    scheduleNext(hasPending);
+})();
 
 function copyError(btn) {
     var text = btn.getAttribute('data-error');
