@@ -281,6 +281,9 @@
 </style>
 
 <script>
+function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 (function() {
     var modal  = document.getElementById('goalModal');
     var form   = document.getElementById('goalForm');
@@ -394,7 +397,14 @@
                 }
                 if (data.status === 'error') {
                     aiLoading.style.display = 'none';
-                    aiError.textContent = 'Erreur IA : ' + (data.message || 'inconnue');
+                    var errHtml = '<strong>Erreur IA :</strong> ' + esc(data.message || 'inconnue');
+                    if (data.debug && Object.keys(data.debug).length > 0) {
+                        errHtml += '<details style="margin-top:.6rem"><summary style="cursor:pointer;font-size:.8rem;opacity:.7">Détails de débogage</summary>'
+                            + '<pre style="font-size:.75rem;white-space:pre-wrap;word-break:break-all;margin-top:.4rem;background:rgba(0,0,0,.3);padding:.5rem;border-radius:6px">'
+                            + esc(JSON.stringify(data.debug, null, 2))
+                            + '</pre></details>';
+                    }
+                    aiError.innerHTML = errHtml;
                     aiError.style.display = '';
                     return;
                 }

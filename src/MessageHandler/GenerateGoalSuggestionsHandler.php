@@ -43,20 +43,33 @@ class GenerateGoalSuggestionsHandler
         $report->setType(AiReportType::GoalSuggestions);
         $report->setStatus(AiReportStatus::Pending);
 
+        $debug = [];
+
         try {
             $prompt = $this->buildPrompt($msg);
 
             // Primary: native JSON mode (Gemini responseMimeType, Claude tool_use)
-            $items = $this->ai->callJson($prompt, self::SCHEMA, $msg->model, 600, $report);
+            $jsonRaw = null;
+            $items   = $this->ai->callJson($prompt, self::SCHEMA, $msg->model, 600, $report);
+            $debug['callJson_result_type'] = gettype($items);
+            if ($items !== null) {
+                $debug['callJson_raw'] = mb_substr(json_encode($items, JSON_UNESCAPED_UNICODE), 0, 1000);
+            }
 
             // Fallback: plain text call + robust extraction (handles any stray prose/fences)
             if (!is_array($items)) {
-                $rawText = $this->ai->callText($prompt, $msg->model, 600);
-                $items   = $this->extractJsonArray($rawText);
+                $jsonRaw              = $this->ai->callText($prompt, $msg->model, 600);
+                $debug['callText_raw'] = mb_substr($jsonRaw, 0, 1000);
+                $items                = $this->extractJsonArray($jsonRaw);
+                $debug['extract_result_type'] = gettype($items);
             }
 
             if (!is_array($items)) {
-                throw new \RuntimeException('Impossible d\'obtenir un tableau JSON valide après deux tentatives.');
+                throw new \RuntimeException(
+                    'Impossible d\'obtenir un tableau JSON valide après deux tentatives. '
+                    . 'callJson=' . ($debug['callJson_result_type'] ?? '?')
+                    . ' fallbackRaw=' . mb_substr($jsonRaw ?? '', 0, 200)
+                );
             }
 
             $suggestions = $this->validateItems($items);
@@ -72,7 +85,11 @@ class GenerateGoalSuggestionsHandler
             $report->setStatus(AiReportStatus::Failed);
             $this->em->persist($report);
             $this->em->flush();
-            $this->store($cacheKey, ['status' => 'error', 'message' => $e->getMessage()]);
+            $this->store($cacheKey, [
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+                'debug'   => $debug,
+            ]);
             throw $e;
         }
     }
