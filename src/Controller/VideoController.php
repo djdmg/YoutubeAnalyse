@@ -495,7 +495,7 @@ PROMPT;
     }
 
     #[Route('/videos/{youtubeId}/apply-thumbnail', name: 'analytics_video_apply_thumbnail', methods: ['POST'])]
-    public function applyThumbnail(string $youtubeId): JsonResponse
+    public function applyThumbnail(string $youtubeId, Request $request): JsonResponse
     {
         /** @var User $user */
         $user  = $this->getUser();
@@ -505,23 +505,34 @@ PROMPT;
             return new JsonResponse(['success' => false, 'message' => 'Vidéo introuvable.'], 404);
         }
 
-        $dir         = $this->projectDir . '/public/uploads/thumbnails/';
-        $previewFile = $dir . $youtubeId . '_preview.png';
+        $dir      = $this->projectDir . '/public/uploads/thumbnails/';
+        $filename = basename((string) $request->request->get('filename', ''));
 
-        if (!file_exists($previewFile)) {
-            return new JsonResponse(['success' => false, 'message' => 'Aucune prévisualisation à appliquer. Générez d\'abord une miniature.']);
+        // Fallback: legacy _preview.png
+        if ($filename === '') {
+            $filename = $youtubeId . '_preview.png';
         }
 
-        // Upload thumbnail to YouTube first
+        $filePath = $dir . $filename;
+
+        // Security: only allow files belonging to this video
+        if (!str_starts_with($filename, $youtubeId . '_') || !str_ends_with($filename, '.png')) {
+            return new JsonResponse(['success' => false, 'message' => 'Fichier invalide.']);
+        }
+
+        if (!file_exists($filePath)) {
+            return new JsonResponse(['success' => false, 'message' => 'Fichier introuvable. Générez d\'abord une miniature.']);
+        }
+
         try {
-            $this->youtubeData->uploadThumbnail($user, $youtubeId, $previewFile);
+            $this->youtubeData->uploadThumbnail($user, $youtubeId, $filePath);
         } catch (\Google\Service\Exception $e) {
             $this->logger->error('YouTube thumbnail upload failed', ['error' => $e->getMessage(), 'youtubeId' => $youtubeId]);
             if ($e->getCode() === 403) {
                 return new JsonResponse([
                     'success' => false,
                     'message' => 'Accès refusé par YouTube (403). Reconnectez votre compte Google pour mettre à jour les permissions.',
-                    'reauth' => true,
+                    'reauth'  => true,
                 ]);
             }
             return new JsonResponse(['success' => false, 'message' => 'Erreur YouTube : ' . $e->getMessage()]);
@@ -530,19 +541,68 @@ PROMPT;
             return new JsonResponse(['success' => false, 'message' => 'Erreur upload YouTube : ' . $e->getMessage()]);
         }
 
-        // Rename preview → permanent file with timestamp
-        $finalFile = $youtubeId . '_' . time() . '.png';
-        rename($previewFile, $dir . $finalFile);
-
-        $oldUrl = $video->getThumbnailUrl();
-        $url    = '/uploads/thumbnails/' . $finalFile;
+        $url = '/uploads/thumbnails/' . $filename;
         $video->setThumbnailUrl($url);
-
-        $change = new ThumbnailChange($video, $oldUrl, $url);
+        $change = new ThumbnailChange($video, $video->getThumbnailUrl(), $url);
         $this->em->persist($change);
         $this->em->flush();
 
         return new JsonResponse(['success' => true, 'url' => $url, 'message' => 'Miniature appliquée sur YouTube avec succès.']);
+    }
+
+    #[Route('/videos/{youtubeId}/generated-thumbnails', name: 'analytics_video_generated_thumbnails', methods: ['GET'])]
+    public function generatedThumbnails(string $youtubeId): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse([], 404);
+        }
+
+        $dir   = $this->projectDir . '/public/uploads/thumbnails/';
+        $files = glob($dir . $youtubeId . '_gen_*.png') ?: [];
+
+        $results = [];
+        foreach ($files as $path) {
+            $name = basename($path);
+            $results[] = [
+                'filename' => $name,
+                'url'      => '/uploads/thumbnails/' . $name,
+                'created'  => filemtime($path),
+            ];
+        }
+
+        // Most recent first
+        usort($results, fn($a, $b) => $b['created'] <=> $a['created']);
+
+        return new JsonResponse($results);
+    }
+
+    #[Route('/videos/{youtubeId}/delete-generated-thumbnail', name: 'analytics_video_delete_thumbnail', methods: ['POST'])]
+    public function deleteGeneratedThumbnail(string $youtubeId, Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user  = $this->getUser();
+        $video = $this->videoRepo->findByYoutubeId($youtubeId);
+
+        if (!$video || $video->getUser() !== $user) {
+            return new JsonResponse(['success' => false], 404);
+        }
+
+        $filename = basename((string) $request->request->get('filename', ''));
+
+        if (!str_starts_with($filename, $youtubeId . '_gen_') || !str_ends_with($filename, '.png')) {
+            return new JsonResponse(['success' => false, 'message' => 'Fichier invalide.']);
+        }
+
+        $path = $this->projectDir . '/public/uploads/thumbnails/' . $filename;
+        if (file_exists($path)) {
+            unlink($path);
+        }
+
+        return new JsonResponse(['success' => true]);
     }
 
     #[Route('/videos/{youtubeId}/trigger-analysis', name: 'analytics_video_trigger_analysis', methods: ['POST'])]
