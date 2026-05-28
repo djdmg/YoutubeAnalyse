@@ -46,7 +46,7 @@ class GeminiService implements AiProviderInterface
         ['id' => 'imagen-3.0-fast-generate-001', 'name' => 'Imagen 3 Fast', 'tier' => null, 'type' => 'image', 'pricing' => ['label' => '$0.02/image']],
     ];
 
-    private const MAX_TOKENS = 2048;
+    private const MAX_TOKENS = 8192;
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
@@ -147,12 +147,12 @@ class GeminiService implements AiProviderInterface
         }
     }
 
-    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 1024): string
+    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192): string
     {
         return $this->callRawText($prompt, $model, $maxTokens, 0.7);
     }
 
-    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): string
+    public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192, float $temperature = 1.0): string
     {
         return $this->callRawTextFull($prompt, $model, $maxTokens, $temperature)['text'];
     }
@@ -161,7 +161,7 @@ class GeminiService implements AiProviderInterface
      * Like callRawText but also returns token counts, duration, resolved model.
      * @return array{text:string, tokensInput:int, tokensOutput:int, durationMs:int, model:string}
      */
-    public function callRawTextFull(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): array
+    public function callRawTextFull(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192, float $temperature = 1.0): array
     {
         $resolvedModel = $this->resolveModel($model);
         $url           = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());

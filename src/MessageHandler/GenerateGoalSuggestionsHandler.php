@@ -50,7 +50,7 @@ class GenerateGoalSuggestionsHandler
 
             // Primary: native JSON mode (Gemini responseMimeType, Claude tool_use)
             $jsonRaw = null;
-            $items   = $this->ai->callJson($prompt, self::SCHEMA, $msg->model, 600, $report);
+            $items   = $this->ai->callJson($prompt, self::SCHEMA, $msg->model, 2048, $report);
             $debug['callJson_result_type'] = gettype($items);
             if ($items !== null) {
                 $debug['callJson_raw'] = mb_substr(json_encode($items, JSON_UNESCAPED_UNICODE), 0, 1000);
@@ -58,7 +58,7 @@ class GenerateGoalSuggestionsHandler
 
             // Fallback: plain text call + robust extraction (handles any stray prose/fences)
             if (!is_array($items)) {
-                $jsonRaw              = $this->ai->callText($prompt, $msg->model, 600);
+                $jsonRaw              = $this->ai->callText($prompt, $msg->model, 2048);
                 $debug['callText_raw'] = mb_substr($jsonRaw, 0, 1000);
                 $items                = $this->extractJsonArray($jsonRaw);
                 $debug['extract_result_type'] = gettype($items);

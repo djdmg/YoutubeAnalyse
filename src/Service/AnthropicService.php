@@ -44,7 +44,7 @@ class AnthropicService implements AiProviderInterface
     public const MODEL_BALANCED = AiProviderInterface::TIER_BALANCED;
     public const MODEL_FULL     = AiProviderInterface::TIER_FULL;
 
-    private const MAX_TOKENS = 2048;
+    private const MAX_TOKENS = 8192;
 
     private readonly Client $client;
 
@@ -227,7 +227,7 @@ class AnthropicService implements AiProviderInterface
     /**
      * Calls Claude Vision with an image URL and prompt. Returns parsed JSON or null.
      */
-    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 1024): string
+    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192): string
     {
         $resolvedModel = $this->resolveModel($model);
         try {

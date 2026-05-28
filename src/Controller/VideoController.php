@@ -106,7 +106,7 @@ PROMPT;
         $report->setStatus(AiReportStatus::Pending);
 
         try {
-            $result = $this->gemini->callRawTextFull($aiPrompt, $promptModel, 900, 1.0);
+            $result = $this->gemini->callRawTextFull($aiPrompt, $promptModel, 8192, 1.0);
             $prompt = $result['text'];
             $report->setModelVersion($result['model']);
             $report->setTokensInput($result['tokensInput']);
