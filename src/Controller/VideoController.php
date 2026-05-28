@@ -98,32 +98,32 @@ class VideoController extends AbstractController
 
         $aiPrompt = <<<PROMPT
 Tu es un directeur artistique spécialisé en miniatures YouTube à très haut CTR.
-Voici le contexte d'une vidéo (NE PAS illustrer le titre littéralement) :
+L'objectif UNIQUE de la miniature : faire cliquer l'utilisateur et lui donner envie de regarder la vidéo.
 
-Titre (contexte uniquement, ne pas le recopier) : {$video->getTitle()}
+Contexte de la vidéo :
+Titre (pour contexte uniquement) : {$video->getTitle()}
 {$context}
 Angle créatif imposé : {$angle}
 Style visuel imposé : {$style}
 
 Génère un prompt en anglais pour un modèle de génération d'images.
 
-Règles ABSOLUES :
-- Aucun visage de personne réelle, célébrité ou artiste connu (utilise des silhouettes, des éléments abstraits, des objets, des paysages)
-- Ne jamais reprendre le titre mot pour mot dans le prompt
-- Décrire une SCÈNE VISUELLE originale qui évoque l'émotion ou le concept, pas le sujet littéral
-- Intégrer le style visuel imposé
-- Terminer par : "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks, no text, no logos"
-- Maximum 3 phrases
+Règles ABSOLUES (toutes obligatoires) :
+1. TEXTE INTÉGRÉ OBLIGATOIRE : inclure dans l'image un texte court (2 à 5 mots maximum), impactant et accrocheur rendu en typographie bold/display. Ce texte doit créer de la curiosité ou de l'urgence (ex : "YOU WON'T BELIEVE THIS", "BEFORE & AFTER", "GAME CHANGER", "INSANE DROP"). Précise exactement le texte entre guillemets dans le prompt.
+2. Aucun visage de personne réelle, célébrité ou artiste connu — utilise des silhouettes, formes abstraites, objets, paysages.
+3. Ne jamais illustrer le titre littéralement — évoque l'émotion ou le concept de manière visuelle et créative.
+4. Intégrer le style visuel imposé.
+5. Terminer par : "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks, no logos"
+6. Maximum 3 phrases.
 
-Réponds UNIQUEMENT avec le prompt image en anglais. Aucune explication, aucun guillemet, aucun tiret.
+Réponds UNIQUEMENT avec le prompt image en anglais. Aucune explication, aucun guillemet autour du prompt, aucun tiret.
 PROMPT;
 
-        $generated = $this->gemini->callRawText($aiPrompt, 'fast', 350, 1.5);
+        $generated = $this->gemini->callRawText($aiPrompt, 'fast', 400, 1.5);
 
-        // Fallback: abstract concept instead of title repeat
         return $generated
-            ?? "Abstract visual metaphor evoking {$style}, dynamic composition, intense atmosphere. "
-            . "No faces, no text, no real people. "
+            ?? "Abstract visual metaphor, {$style}, bold text overlay \"WATCH THIS\" in large display font, dynamic composition, intense atmosphere. "
+            . "No real faces, no logos. "
             . "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks.";
     }
 
