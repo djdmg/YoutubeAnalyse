@@ -50,7 +50,10 @@ class VideoController extends AbstractController
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
-    private function generateThumbnailPrompt(mixed $video): string
+    /**
+     * Returns ['prompt' => string, 'meta_prompt' => string].
+     */
+    private function generateThumbnailPrompt(mixed $video): array
     {
         $description = $video->getDescription()
             ? mb_substr($video->getDescription(), 0, 1200)
@@ -93,11 +96,13 @@ Reply with ONLY the image prompt.
 PROMPT;
 
         try {
-            return $this->gemini->callRawText($aiPrompt, $promptModel, 900, 1.0);
+            $prompt = $this->gemini->callRawText($aiPrompt, $promptModel, 900, 1.0);
         } catch (\Throwable $e) {
             $this->logger->warning('Thumbnail prompt generation failed, using PHP fallback', ['error' => $e->getMessage()]);
-            return $this->buildFallbackPrompt($video);
+            $prompt = $this->buildFallbackPrompt($video);
         }
+
+        return ['prompt' => $prompt, 'meta_prompt' => $aiPrompt];
     }
 
     private function buildFallbackPrompt(mixed $video): string
@@ -399,8 +404,8 @@ PROMPT;
         }
 
         try {
-            $prompt = $this->generateThumbnailPrompt($video);
-            return new JsonResponse(['success' => true, 'prompt' => $prompt]);
+            ['prompt' => $prompt, 'meta_prompt' => $metaPrompt] = $this->generateThumbnailPrompt($video);
+            return new JsonResponse(['success' => true, 'prompt' => $prompt, 'meta_prompt' => $metaPrompt]);
         } catch (\Throwable $e) {
             return new JsonResponse(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()]);
         }
