@@ -47,6 +47,11 @@ class AiProviderFactory implements AiProviderInterface
         return $this->active()->callText($prompt, $model, $maxTokens);
     }
 
+    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, int $maxTokens = 1024, ?\App\Entity\AiReport $report = null): mixed
+    {
+        return $this->active()->callJson($prompt, $schema, $model, $maxTokens, $report);
+    }
+
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
     {
         return $this->active()->callVision($imageUrl, $prompt, $model);

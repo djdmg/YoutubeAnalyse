@@ -247,6 +247,52 @@ class AnthropicService implements AiProviderInterface
         }
     }
 
+    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, int $maxTokens = 1024, ?\App\Entity\AiReport $report = null): mixed
+    {
+        $startTime     = microtime(true);
+        $resolvedModel = $this->resolveModel($model);
+
+        // Claude tool_use forces structured output matching the schema.
+        // Top-level must be an object; wrap arrays under "items".
+        $isArray  = ($schema['type'] ?? '') === 'array';
+        $toolSchema = $isArray
+            ? ['type' => 'object', 'properties' => ['items' => $schema], 'required' => ['items']]
+            : $schema;
+
+        try {
+            $response = $this->client->messages->create(
+                maxTokens:  $maxTokens,
+                messages:   [['role' => 'user', 'content' => $prompt]],
+                model:      $resolvedModel,
+                tools:      [['name' => 'output', 'description' => 'Structured JSON output', 'input_schema' => $toolSchema]],
+                toolChoice: ['type' => 'tool', 'name' => 'output'],
+            );
+
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            if ($report !== null) {
+                $report->setModelVersion($resolvedModel);
+                $report->setTokensInput($response->usage->inputTokens ?? 0);
+                $report->setTokensOutput($response->usage->outputTokens ?? 0);
+                $report->setDurationMs($durationMs);
+            }
+
+            foreach ($response->content as $block) {
+                if ($block->type === 'tool_use' && $block->name === 'output') {
+                    $input = is_array($block->input) ? $block->input : json_decode(json_encode($block->input), true);
+                    return $isArray ? ($input['items'] ?? $input) : $input;
+                }
+            }
+
+            $this->logger->error('Claude callJson: no tool_use block in response');
+            return null;
+
+        } catch (\Throwable $e) {
+            $this->logger->error('Claude callJson failed', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
     {
         $startTime     = microtime(true);

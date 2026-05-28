@@ -11,7 +11,9 @@ use App\Repository\RetentionPointRepository;
 use App\Repository\VideoRepository;
 use App\Repository\VideoMetaSnapshotRepository;
 use App\Repository\AppSettingRepository;
+use App\Entity\AiReport;
 use App\Entity\ThumbnailChange;
+use App\Enum\AiReportStatus;
 use App\Repository\VideoSearchTermRepository;
 use App\Service\GeminiService;
 use App\Service\YouTubeDataService;
@@ -98,12 +100,27 @@ Structure the prompt in this order:
 Reply with ONLY the image prompt.
 PROMPT;
 
+        $report = new AiReport();
+        $report->setType(AiReportType::ThumbnailPrompt);
+        $report->setVideo($video);
+        $report->setStatus(AiReportStatus::Pending);
+
         try {
-            $prompt = $this->gemini->callRawText($aiPrompt, $promptModel, 900, 1.0);
+            $result = $this->gemini->callRawTextFull($aiPrompt, $promptModel, 900, 1.0);
+            $prompt = $result['text'];
+            $report->setModelVersion($result['model']);
+            $report->setTokensInput($result['tokensInput']);
+            $report->setTokensOutput($result['tokensOutput']);
+            $report->setDurationMs($result['durationMs']);
+            $report->setStatus(AiReportStatus::Done);
         } catch (\Throwable $e) {
             $this->logger->warning('Thumbnail prompt generation failed, using PHP fallback', ['error' => $e->getMessage()]);
+            $report->setStatus(AiReportStatus::Failed);
             $prompt = $this->buildFallbackPrompt($video);
         }
+
+        $this->em->persist($report);
+        $this->em->flush();
 
         return ['prompt' => $prompt, 'meta_prompt' => $aiPrompt];
     }
@@ -780,12 +797,24 @@ PROMPT;
         ];
         $defaultPricing = ['input' => 1.0, 'output' => 4.0];
 
+        // Per-image pricing (model → USD/image) for image generation models
+        $imagePricing = [
+            'imagen-3.0-generate-001'      => 0.04,
+            'imagen-3.0-fast-generate-001' => 0.02,
+        ];
+
         $byModel  = $this->aiReportRepo->getMonthlyStatsByModel($user);
         $costUsd  = 0.0;
         foreach ($byModel as $row) {
-            $p        = $pricing[$row['model']] ?? $defaultPricing;
-            $costUsd += ($row['tokens_input'] / 1_000_000 * $p['input'])
-                      + ($row['tokens_output'] / 1_000_000 * $p['output']);
+            $model = $row['model'] ?? '';
+            if (isset($imagePricing[$model])) {
+                // tokensInput = 1 image generated (stored by GenerateThumbnailHandler)
+                $costUsd += ($row['tokens_input'] ?? 0) * $imagePricing[$model];
+            } else {
+                $p        = $pricing[$model] ?? $defaultPricing;
+                $costUsd += ($row['tokens_input'] / 1_000_000 * $p['input'])
+                          + ($row['tokens_output'] / 1_000_000 * $p['output']);
+            }
         }
         $costUsd      = round($costUsd, 4);
         $inputTokens  = (int)($monthly['tokens_input'] ?? 0);
@@ -799,9 +828,14 @@ PROMPT;
 
         if (!empty($lastMonthByModel)) {
             foreach ($lastMonthByModel as $row) {
-                $p             = $pricing[$row['model']] ?? $defaultPricing;
-                $forecastUsd  += ($row['tokens_input'] / 1_000_000 * $p['input'])
-                               + ($row['tokens_output'] / 1_000_000 * $p['output']);
+                $model = $row['model'] ?? '';
+                if (isset($imagePricing[$model])) {
+                    $forecastUsd += ($row['tokens_input'] ?? 0) * $imagePricing[$model];
+                } else {
+                    $p             = $pricing[$model] ?? $defaultPricing;
+                    $forecastUsd  += ($row['tokens_input'] / 1_000_000 * $p['input'])
+                                   + ($row['tokens_output'] / 1_000_000 * $p['output']);
+                }
             }
         } else {
             // No last month data: cost per run × runs done so far (extrapolate to end of month)

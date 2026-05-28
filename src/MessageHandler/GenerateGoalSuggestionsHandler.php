@@ -2,8 +2,12 @@
 
 namespace App\MessageHandler;
 
+use App\Entity\AiReport;
+use App\Enum\AiReportStatus;
+use App\Enum\AiReportType;
 use App\Message\GenerateGoalSuggestionsMessage;
 use App\Service\AiProviderFactory;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -12,13 +16,18 @@ use Symfony\Contracts\Cache\ItemInterface;
 class GenerateGoalSuggestionsHandler
 {
     public function __construct(
-        private readonly AiProviderFactory $ai,
-        private readonly CacheInterface    $cache,
+        private readonly AiProviderFactory     $ai,
+        private readonly CacheInterface        $cache,
+        private readonly EntityManagerInterface $em,
     ) {}
 
     public function __invoke(GenerateGoalSuggestionsMessage $msg): void
     {
         $cacheKey = 'goal_suggestions_' . $msg->jobId;
+
+        $report = new AiReport();
+        $report->setType(AiReportType::GoalSuggestions);
+        $report->setStatus(AiReportStatus::Pending);
 
         try {
             $prompt = <<<PROMPT
@@ -38,37 +47,26 @@ Rules:
 - Vary the types: mix subscribers, views, and watch_time goals
 - Deadlines must be in YYYY-MM-DD format, between 1 and 6 months from today
 - Label must be in French, concise (max 50 chars), motivating
-
-OUTPUT FORMAT — respond with ONLY a raw JSON array matching this schema exactly.
-Do NOT use markdown code fences. Do NOT add any explanation. Start with [ and end with ].
-
-Schema:
-[
-  {"label": "string (French, max 50 chars)", "type": "subscribers|views|watch_time", "targetValue": 1234, "deadline": "YYYY-MM-DD"},
-  ...
-]
-
-Example:
-[
-  {"label": "Atteindre 1 000 abonnés", "type": "subscribers", "targetValue": 1000, "deadline": "{$msg->today}"},
-  {"label": "1 000 vues en 30 jours", "type": "views", "targetValue": 1000, "deadline": "{$msg->today}"}
-]
 PROMPT;
 
-            $text = trim($this->ai->callText($prompt, $msg->model, 600));
+            $schema = [
+                'type'  => 'array',
+                'items' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'label'       => ['type' => 'string', 'description' => 'French label, max 50 chars'],
+                        'type'        => ['type' => 'string', 'enum' => ['subscribers', 'views', 'watch_time']],
+                        'targetValue' => ['type' => 'integer'],
+                        'deadline'    => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+                    ],
+                    'required' => ['label', 'type', 'targetValue', 'deadline'],
+                ],
+            ];
 
-            // Strip markdown fences if the model ignored instructions
-            $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
-            $text = preg_replace('/\s*```$/i', '', $text);
+            $items = $this->ai->callJson($prompt, $schema, $msg->model, 600, $report);
 
-            // Extract JSON array (handles any preamble the model may have added)
-            if (preg_match('/\[[\s\S]*\]/u', $text, $m)) {
-                $text = $m[0];
-            }
-
-            $items = json_decode($text, true);
             if (!is_array($items)) {
-                throw new \RuntimeException('Invalid JSON from AI: ' . substr($text, 0, 300));
+                throw new \RuntimeException('AI returned null or non-array for goal suggestions.');
             }
 
             $suggestions = [];
@@ -86,9 +84,17 @@ PROMPT;
                 ];
             }
 
+            $report->setStatus(AiReportStatus::Done);
+            $report->setPayload(['count' => count($suggestions)]);
+            $this->em->persist($report);
+            $this->em->flush();
+
             $this->store($cacheKey, ['status' => 'done', 'suggestions' => $suggestions]);
 
         } catch (\Throwable $e) {
+            $report->setStatus(AiReportStatus::Failed);
+            $this->em->persist($report);
+            $this->em->flush();
             $this->store($cacheKey, ['status' => 'error', 'message' => $e->getMessage()]);
             throw $e;
         }

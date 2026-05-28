@@ -154,8 +154,18 @@ class GeminiService implements AiProviderInterface
 
     public function callRawText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): string
     {
+        return $this->callRawTextFull($prompt, $model, $maxTokens, $temperature)['text'];
+    }
+
+    /**
+     * Like callRawText but also returns token counts, duration, resolved model.
+     * @return array{text:string, tokensInput:int, tokensOutput:int, durationMs:int, model:string}
+     */
+    public function callRawTextFull(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 512, float $temperature = 1.0): array
+    {
         $resolvedModel = $this->resolveModel($model);
-        $url      = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
+        $url           = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
+        $startTime     = microtime(true);
         $response = $this->httpClient->request('POST', $url, [
             'json' => [
                 'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
@@ -169,7 +179,49 @@ class GeminiService implements AiProviderInterface
             $reason = $data['candidates'][0]['finishReason'] ?? ($data['promptFeedback']['blockReason'] ?? 'unknown');
             throw new \RuntimeException("Gemini returned empty text (reason: {$reason}).");
         }
-        return $text;
+        return [
+            'text'         => $text,
+            'tokensInput'  => (int) ($data['usageMetadata']['promptTokenCount'] ?? 0),
+            'tokensOutput' => (int) ($data['usageMetadata']['candidatesTokenCount'] ?? 0),
+            'durationMs'   => (int) ((microtime(true) - $startTime) * 1000),
+            'model'        => $resolvedModel,
+        ];
+    }
+
+    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, int $maxTokens = 1024, ?\App\Entity\AiReport $report = null): mixed
+    {
+        $resolvedModel = $this->resolveModel($model);
+        $url           = self::BASE_URL . $resolvedModel . ':generateContent?key=' . urlencode($this->apiKey());
+        $startTime     = microtime(true);
+
+        $response = $this->httpClient->request('POST', $url, [
+            'json' => [
+                'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                'generationConfig' => [
+                    'maxOutputTokens'  => $maxTokens,
+                    'responseMimeType' => 'application/json',
+                    'responseSchema'   => $schema,
+                ],
+            ],
+            'timeout' => 60,
+        ]);
+
+        $data  = $response->toArray();
+        $text  = trim($data['candidates'][0]['content']['parts'][0]['text'] ?? '');
+        $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+        if ($report !== null) {
+            $report->setModelVersion($resolvedModel);
+            $report->setTokensInput((int) ($data['usageMetadata']['promptTokenCount'] ?? 0));
+            $report->setTokensOutput((int) ($data['usageMetadata']['candidatesTokenCount'] ?? 0));
+            $report->setDurationMs($durationMs);
+        }
+
+        $parsed = json_decode($text, true);
+        if ($parsed === null && $text !== '') {
+            $this->logger->error('Gemini callJson: invalid JSON', ['response' => substr($text, 0, 300)]);
+        }
+        return $parsed;
     }
 
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array

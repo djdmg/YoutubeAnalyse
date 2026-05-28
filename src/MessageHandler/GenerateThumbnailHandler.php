@@ -2,8 +2,13 @@
 
 namespace App\MessageHandler;
 
+use App\Entity\AiReport;
+use App\Enum\AiReportStatus;
+use App\Enum\AiReportType;
 use App\Message\GenerateThumbnailMessage;
+use App\Repository\VideoRepository;
 use App\Service\GeminiService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -13,8 +18,10 @@ use Symfony\Contracts\Cache\ItemInterface;
 class GenerateThumbnailHandler
 {
     public function __construct(
-        private readonly GeminiService $gemini,
-        private readonly CacheInterface $cache,
+        private readonly GeminiService          $gemini,
+        private readonly CacheInterface         $cache,
+        private readonly EntityManagerInterface  $em,
+        private readonly VideoRepository         $videoRepo,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
@@ -22,11 +29,27 @@ class GenerateThumbnailHandler
     {
         $cacheKey = 'thumbnail_job_' . $message->jobId;
 
+        $report = new AiReport();
+        $report->setType(AiReportType::ThumbnailGeneration);
+        $report->setStatus(AiReportStatus::Pending);
+        $report->setModelVersion($message->model);
+
+        $video = $this->videoRepo->findByYoutubeId($message->videoId);
+        if ($video) {
+            $report->setVideo($video);
+        }
+
+        $startTime = microtime(true);
+
         try {
             $base64 = $this->gemini->generateImage($message->prompt, $message->model);
 
             if (!$base64) {
                 $this->storeResult($cacheKey, ['status' => 'error', 'message' => 'Aucune image reçue du modèle.']);
+                $report->setStatus(AiReportStatus::Failed);
+                $report->setDurationMs((int)((microtime(true) - $startTime) * 1000));
+                $this->em->persist($report);
+                $this->em->flush();
                 throw new \RuntimeException('Aucune image reçue du modèle.');
             }
 
@@ -37,6 +60,14 @@ class GenerateThumbnailHandler
 
             $previewFile = $message->videoId . '_preview.png';
             file_put_contents($dir . $previewFile, base64_decode($base64));
+
+            $report->setStatus(AiReportStatus::Done);
+            $report->setDurationMs((int)((microtime(true) - $startTime) * 1000));
+            // Image generation: no token counts, but payload tracks 1 image generated
+            $report->setTokensInput(1);
+            $report->setTokensOutput(0);
+            $this->em->persist($report);
+            $this->em->flush();
 
             $this->storeResult($cacheKey, [
                 'status' => 'done',
@@ -49,8 +80,16 @@ class GenerateThumbnailHandler
             if (str_contains($msg, '429')) {
                 $msg = 'Quota API Gemini dépassé (429). Attendez quelques secondes et réessayez.';
             }
+
+            if ($report->getStatus() === AiReportStatus::Pending) {
+                $report->setStatus(AiReportStatus::Failed);
+                $report->setDurationMs((int)((microtime(true) - $startTime) * 1000));
+                $this->em->persist($report);
+                $this->em->flush();
+            }
+
             $this->storeResult($cacheKey, ['status' => 'error', 'message' => $msg]);
-            throw $e; // re-throw so Messenger marks the message as failed
+            throw $e;
         }
     }
 
