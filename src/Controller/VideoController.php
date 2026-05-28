@@ -60,18 +60,20 @@ class VideoController extends AbstractController
             ? round(array_sum(array_map(fn($m) => $m->getAvgRetentionPercent() ?? 0, $metrics)) / count($metrics), 1)
             : null;
 
-        $context = '';
-        if ($video->getDescription()) {
-            $context .= 'Description : ' . mb_substr($video->getDescription(), 0, 400) . "\n";
-        }
-        if ($video->getGenre()) {
-            $context .= 'Catégorie : ' . $video->getGenre() . "\n";
-        }
-        $context .= "Vues (30j) : {$totalViews}\n";
-        if ($avgCtr !== null)       $context .= "CTR moyen : {$avgCtr}%\n";
-        if ($avgRetention !== null)  $context .= "Rétention moyenne : {$avgRetention}%\n";
+        // Use up to 800 chars of description for richer context
+        $description = $video->getDescription()
+            ? mb_substr($video->getDescription(), 0, 800)
+            : null;
 
-        // Visual styles
+        $contextLines = [];
+        $contextLines[] = 'Titre : ' . $video->getTitle();
+        if ($description)                $contextLines[] = 'Description : ' . $description;
+        if ($video->getGenre())          $contextLines[] = 'Catégorie : ' . $video->getGenre();
+        if ($totalViews > 0)             $contextLines[] = "Vues (30j) : {$totalViews}";
+        if ($avgCtr !== null)            $contextLines[] = "CTR moyen : {$avgCtr}%";
+        if ($avgRetention !== null)      $contextLines[] = "Rétention moyenne : {$avgRetention}%";
+        $context = implode("\n", $contextLines);
+
         $styles = [
             'cinematic wide shot, dramatic volumetric lighting, film grain',
             'bold geometric flat illustration, strong contrast, vibrant palette',
@@ -83,7 +85,6 @@ class VideoController extends AbstractController
             'golden hour warm tones, lens flare, epic landscape scale',
         ];
 
-        // Conceptual angles — push Gemini away from literal title illustration
         $angles = [
             'Show the EMOTION or FEELING the video provokes, not its subject.',
             'Represent the concept as a metaphor or abstract symbol.',
@@ -98,28 +99,30 @@ class VideoController extends AbstractController
 
         $aiPrompt = <<<PROMPT
 Tu es un directeur artistique spécialisé en miniatures YouTube à très haut CTR.
-L'objectif UNIQUE de la miniature : faire cliquer l'utilisateur et lui donner envie de regarder la vidéo.
+L'objectif UNIQUE : faire cliquer l'utilisateur et lui donner envie de regarder la vidéo.
 
-Contexte de la vidéo :
-Titre (pour contexte uniquement) : {$video->getTitle()}
+--- CONTENU DE LA VIDÉO ---
 {$context}
-Angle créatif imposé : {$angle}
-Style visuel imposé : {$style}
+--- FIN DU CONTENU ---
 
-Génère un prompt en anglais pour un modèle de génération d'images.
+Étape 1 — Analyse (interne, ne pas écrire) :
+Lis attentivement la description. Identifie les 2-3 éléments visuels CONCRETS présents dans la vidéo (lieux, objets, ambiances, actions, instruments, sons, couleurs évoqués). Ces éléments doivent servir de base à l'image.
 
-Règles ABSOLUES (toutes obligatoires) :
-1. TEXTE INTÉGRÉ OBLIGATOIRE : inclure dans l'image un texte court (2 à 5 mots maximum), impactant et accrocheur rendu en typographie bold/display. Ce texte doit créer de la curiosité ou de l'urgence (ex : "YOU WON'T BELIEVE THIS", "BEFORE & AFTER", "GAME CHANGER", "INSANE DROP"). Précise exactement le texte entre guillemets dans le prompt.
-2. Aucun visage de personne réelle, célébrité ou artiste connu — utilise des silhouettes, formes abstraites, objets, paysages.
-3. Ne jamais illustrer le titre littéralement — évoque l'émotion ou le concept de manière visuelle et créative.
-4. Intégrer le style visuel imposé.
-5. Terminer par : "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks, no logos"
-6. Maximum 3 phrases.
+Étape 2 — Génère un prompt image en anglais basé sur ces éléments concrets, avec :
+- Style visuel : {$style}
+- Angle créatif : {$angle}
 
-Réponds UNIQUEMENT avec le prompt image en anglais. Aucune explication, aucun guillemet autour du prompt, aucun tiret.
+Règles ABSOLUES :
+1. TEXTE INTÉGRÉ OBLIGATOIRE : 2 à 5 mots en typographie bold/display créant curiosité ou urgence (ex : "FEEL THE BASS", "PURE ENERGY", "GAME CHANGER"). Précise le texte exact entre guillemets dans le prompt.
+2. L'image DOIT être visuellement liée au contenu réel de la vidéo (pas une image générique).
+3. Aucun visage de personne réelle, célébrité ou artiste connu — silhouettes, objets, lieux, lumières.
+4. Terminer par : "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks, no logos"
+5. Maximum 3 phrases.
+
+Réponds UNIQUEMENT avec le prompt image en anglais. Zéro explication, zéro guillemet autour du prompt.
 PROMPT;
 
-        $generated = $this->gemini->callRawText($aiPrompt, 'fast', 400, 1.5);
+        $generated = $this->gemini->callRawText($aiPrompt, 'balanced', 450, 1.4);
 
         return $generated
             ?? "Abstract visual metaphor, {$style}, bold text overlay \"WATCH THIS\" in large display font, dynamic composition, intense atmosphere. "
