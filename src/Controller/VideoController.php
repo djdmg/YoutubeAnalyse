@@ -113,7 +113,7 @@ Lis attentivement la description. Identifie les 2-3 éléments visuels CONCRETS 
 - Angle créatif : {$angle}
 
 Règles ABSOLUES :
-1. TEXTE INTÉGRÉ OBLIGATOIRE : 2 à 5 mots en typographie bold/display créant curiosité ou urgence (ex : "FEEL THE BASS", "PURE ENERGY", "GAME CHANGER"). Précise le texte exact entre guillemets dans le prompt.
+1. TEXTE INTÉGRÉ OBLIGATOIRE : 2 à 4 mots, typographie bold/display, intégré naturellement dans la composition. Le texte doit être spécifique au contenu (un mood, une info clé, une question intrigante tirée de la description) — pas un appel à l'action générique. Ex pour un mix techno : "2026 HARD TECHNO", pour un tuto : "THE SECRET METHOD", pour un vlog : "IT CHANGED EVERYTHING". Précise le texte exact entre guillemets dans le prompt.
 2. L'image DOIT être visuellement liée au contenu réel de la vidéo (pas une image générique).
 3. Aucun visage de personne réelle, célébrité ou artiste connu — silhouettes, objets, lieux, lumières.
 4. Terminer par : "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks, no logos"
@@ -125,7 +125,7 @@ PROMPT;
         $generated = $this->gemini->callRawText($aiPrompt, 'balanced', 450, 1.4);
 
         return $generated
-            ?? "Abstract visual metaphor, {$style}, bold text overlay \"WATCH THIS\" in large display font, dynamic composition, intense atmosphere. "
+            ?? "Abstract visual metaphor, {$style}, bold text overlay \"2026\" in large display font, dynamic composition, intense atmosphere. "
             . "No real faces, no logos. "
             . "16:9 aspect ratio, YouTube thumbnail composition, ultra high quality, no watermarks.";
     }
