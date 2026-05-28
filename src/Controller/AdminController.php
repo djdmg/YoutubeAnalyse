@@ -16,6 +16,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Psr\Log\LoggerInterface;
@@ -32,7 +33,22 @@ class AdminController extends AbstractController
         private readonly GeminiService          $gemini,
         private readonly LoggerInterface        $logger,
         private readonly MessengerLogRepository $messengerLogRepo,
+        private readonly KernelInterface        $kernel,
     ) {}
+
+    private function logFilePath(): string
+    {
+        $dir = $this->kernel->getLogDir();
+        $env = $this->kernel->getEnvironment();
+        // Try env-specific file first, then prod.log as fallback
+        foreach ([$env . '.log', 'prod.log', 'dev.log'] as $name) {
+            $path = $dir . '/' . $name;
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+        return $dir . '/' . $env . '.log';
+    }
 
     #[Route('', name: 'admin_users')]
     public function index(): Response
@@ -337,7 +353,7 @@ class AdminController extends AbstractController
     #[Route('/logs', name: 'admin_logs')]
     public function logs(Request $request): Response
     {
-        $logFile = $this->getParameter('kernel.logs_dir') . '/prod.log';
+        $logFile = $this->logFilePath();
         $lines   = [];
         $size    = 0;
         $exists  = file_exists($logFile);
@@ -360,7 +376,7 @@ class AdminController extends AbstractController
     #[Route('/logs/data', name: 'admin_logs_data')]
     public function logsData(Request $request): JsonResponse
     {
-        $logFile = $this->getParameter('kernel.logs_dir') . '/prod.log';
+        $logFile = $this->logFilePath();
         if (!file_exists($logFile)) {
             return new JsonResponse(['lines' => [], 'size' => 0]);
         }
@@ -373,7 +389,7 @@ class AdminController extends AbstractController
     #[Route('/logs/clear', name: 'admin_logs_clear', methods: ['POST'])]
     public function logsClear(): JsonResponse
     {
-        $logFile = $this->getParameter('kernel.logs_dir') . '/prod.log';
+        $logFile = $this->logFilePath();
         if (file_exists($logFile)) {
             file_put_contents($logFile, '');
         }
