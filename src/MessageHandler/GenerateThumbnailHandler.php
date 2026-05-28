@@ -58,8 +58,11 @@ class GenerateThumbnailHandler
                 mkdir($dir, 0755, true);
             }
 
-            $filename = $message->videoId . '_gen_' . $message->jobId . '.png';
-            file_put_contents($dir . $filename, base64_decode($base64));
+            $imageData = base64_decode($base64);
+            // Detect actual format from magic bytes — Gemini often returns JPEG despite PNG requests
+            $ext      = str_starts_with($imageData, "\x89PNG") ? 'png' : 'jpg';
+            $filename = $message->videoId . '_gen_' . $message->jobId . '.' . $ext;
+            file_put_contents($dir . $filename, $imageData);
 
             $report->setStatus(AiReportStatus::Done);
             $report->setDurationMs((int)((microtime(true) - $startTime) * 1000));

@@ -516,7 +516,7 @@ PROMPT;
         $filePath = $dir . $filename;
 
         // Security: only allow files belonging to this video
-        if (!str_starts_with($filename, $youtubeId . '_') || !str_ends_with($filename, '.png')) {
+        if (!str_starts_with($filename, $youtubeId . '_') || (!str_ends_with($filename, '.png') && !str_ends_with($filename, '.jpg'))) {
             return new JsonResponse(['success' => false, 'message' => 'Fichier invalide.']);
         }
 
@@ -562,7 +562,10 @@ PROMPT;
         }
 
         $dir   = $this->projectDir . '/public/uploads/thumbnails/';
-        $files = glob($dir . $youtubeId . '_gen_*.png') ?: [];
+        $files = array_merge(
+            glob($dir . $youtubeId . '_gen_*.jpg') ?: [],
+            glob($dir . $youtubeId . '_gen_*.png') ?: [],
+        );
 
         $results = [];
         foreach ($files as $path) {
@@ -593,7 +596,7 @@ PROMPT;
 
         $filename = basename((string) $request->request->get('filename', ''));
 
-        if (!str_starts_with($filename, $youtubeId . '_gen_') || !str_ends_with($filename, '.png')) {
+        if (!str_starts_with($filename, $youtubeId . '_gen_') || (!str_ends_with($filename, '.png') && !str_ends_with($filename, '.jpg'))) {
             return new JsonResponse(['success' => false, 'message' => 'Fichier invalide.']);
         }
 

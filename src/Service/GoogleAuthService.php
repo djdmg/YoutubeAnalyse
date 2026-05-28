@@ -41,13 +41,11 @@ class GoogleAuthService
     public function getAuthUrl(bool $forceConsent = false): string
     {
         $client = $this->createClient();
-        // 'consent' forces Google to re-ask for all scopes — use when new scopes were added
-        // 'select_account' only prompts account selection, skips consent if already granted
-        $client->setPrompt($forceConsent ? 'consent' : 'select_account');
-        if ($forceConsent) {
-            $client->setAccessType('offline');
-            $client->setIncludeGrantedScopes(true);
-        }
+        // Always use 'consent' to force Google to show both the account selector AND
+        // the YouTube channel selector — critical for Brand Account users
+        $client->setPrompt('consent');
+        $client->setAccessType('offline');
+        $client->setIncludeGrantedScopes(false); // request exact scopes, no merging with old grants
         return $client->createAuthUrl();
     }
 
