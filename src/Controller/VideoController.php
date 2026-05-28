@@ -41,6 +41,50 @@ class VideoController extends AbstractController
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {}
 
+    private function generateThumbnailPrompt(mixed $video): string
+    {
+        // Gather recent performance metrics (last 30 days)
+        $metrics     = $this->metricRepo->findForVideo($video, 30);
+        $totalViews  = array_sum(array_map(fn($m) => $m->getViews(), $metrics));
+        $avgCtr      = count($metrics) > 0
+            ? round(array_sum(array_map(fn($m) => $m->getCtr() ?? 0, $metrics)) / count($metrics), 2)
+            : null;
+        $avgRetention = count($metrics) > 0
+            ? round(array_sum(array_map(fn($m) => $m->getAvgRetentionPercent() ?? 0, $metrics)) / count($metrics), 1)
+            : null;
+
+        $context  = 'Titre : ' . $video->getTitle() . "\n";
+        if ($video->getDescription()) {
+            $context .= 'Description : ' . mb_substr($video->getDescription(), 0, 400) . "\n";
+        }
+        if ($video->getGenre()) {
+            $context .= 'Catégorie : ' . $video->getGenre() . "\n";
+        }
+        $context .= "Vues (30j) : {$totalViews}\n";
+        if ($avgCtr !== null)       $context .= "CTR moyen : {$avgCtr}%\n";
+        if ($avgRetention !== null)  $context .= "Rétention moyenne : {$avgRetention}%\n";
+
+        $aiPrompt = <<<PROMPT
+Tu es un expert en miniatures YouTube optimisées pour le CTR.
+Voici les données d'une vidéo :
+
+{$context}
+
+Génère un prompt en anglais pour un modèle de génération d'images (style Imagen/Gemini) qui produira une miniature YouTube percutante, cohérente avec le sujet de la vidéo.
+Le prompt doit :
+- Décrire précisément la scène visuelle, les couleurs dominantes, l'ambiance
+- Mentionner le style (réaliste, illustré, cinématique, etc.)
+- Préciser "16:9 aspect ratio, YouTube thumbnail, high quality, no watermarks"
+- Être concis (max 3 phrases)
+
+Réponds UNIQUEMENT avec le prompt en anglais, sans explication ni guillemets.
+PROMPT;
+
+        return $this->gemini->callRawText($aiPrompt, 'fast', 256)
+            ?? 'Stunning YouTube thumbnail for "' . $video->getTitle() . '". '
+            . 'Vibrant colors, professional design, 16:9 aspect ratio, high quality, no watermarks.';
+    }
+
     private function resolveThumbnailModelName(): string
     {
         $id = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
@@ -308,14 +352,13 @@ class VideoController extends AbstractController
         }
 
         $prompt = trim($request->request->get('prompt', ''));
+        $model  = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
+
         if ($prompt === '') {
-            $prompt = 'Stunning YouTube thumbnail for a video titled "' . $video->getTitle() . '". '
-                . 'High quality, eye-catching, vibrant colors, professional design, 16:9 aspect ratio, '
-                . 'clear text if included, no watermarks.';
+            $prompt = $this->generateThumbnailPrompt($video);
         }
 
         try {
-            $model  = $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001';
             $base64 = $this->gemini->generateImage($prompt, $model);
             if (!$base64) {
                 return new JsonResponse(['success' => false, 'message' => 'Génération échouée. Vérifiez la clé Gemini et le modèle sélectionné dans les paramètres.']);
