@@ -22,6 +22,9 @@ interface AiProviderInterface
 
     public function callRaw(string $prompt, string $model = self::MODEL_BALANCED, int $maxTokens = 4096): ?array;
 
+    /** Returns the model's raw text response (no JSON parsing). Throws on failure. */
+    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 1024): string;
+
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array;
 
     /**

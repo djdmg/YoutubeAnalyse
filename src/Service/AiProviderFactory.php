@@ -42,6 +42,11 @@ class AiProviderFactory implements AiProviderInterface
         return $this->active()->callRaw($prompt, $model, $maxTokens);
     }
 
+    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 1024): string
+    {
+        return $this->active()->callText($prompt, $model, $maxTokens);
+    }
+
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
     {
         return $this->active()->callVision($imageUrl, $prompt, $model);

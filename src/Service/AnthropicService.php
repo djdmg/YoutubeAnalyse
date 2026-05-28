@@ -227,6 +227,26 @@ class AnthropicService implements AiProviderInterface
     /**
      * Calls Claude Vision with an image URL and prompt. Returns parsed JSON or null.
      */
+    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 1024): string
+    {
+        $resolvedModel = $this->resolveModel($model);
+        try {
+            $response = $this->client->messages->create(
+                maxTokens: $maxTokens,
+                messages:  [['role' => 'user', 'content' => $prompt]],
+                model:     $resolvedModel,
+            );
+            $text = $response->content[0]->text ?? '';
+            if ($text === '') {
+                throw new \RuntimeException('Claude returned empty text.');
+            }
+            return $text;
+        } catch (\Throwable $e) {
+            $this->logger->error('Claude callText failed', ['error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
     {
         $startTime     = microtime(true);
