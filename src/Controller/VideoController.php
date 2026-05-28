@@ -214,7 +214,7 @@ PROMPT;
 
         $compareData = [];
         if (!empty($videos)) {
-            $rawData = $this->metricRepo->getCompareDataForVideos($videos, 30);
+            $rawData = $this->metricRepo->getCompareDataForVideos($videos);
             foreach ($videos as $video) {
                 $compareData[] = [
                     'video'      => $video,
