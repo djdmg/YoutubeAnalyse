@@ -3,6 +3,7 @@
 namespace App\Security;
 
 use App\Entity\User;
+use App\Repository\GoogleTokenRepository;
 use App\Repository\UserRepository;
 use App\Service\GoogleAuthService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -12,6 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
+use Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken;
 use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface;
 use Symfony\Component\Security\Http\Authenticator\AbstractAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
@@ -21,10 +23,11 @@ use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPasspor
 class GoogleAuthenticator extends AbstractAuthenticator implements AuthenticationEntryPointInterface
 {
     public function __construct(
-        private readonly GoogleAuthService $authService,
-        private readonly UserRepository $userRepository,
+        private readonly GoogleAuthService    $authService,
+        private readonly UserRepository       $userRepository,
+        private readonly GoogleTokenRepository $tokenRepo,
         private readonly EntityManagerInterface $em,
-        private readonly RouterInterface $router,
+        private readonly RouterInterface      $router,
         private readonly string $avatarDir,
     ) {}
 
@@ -118,15 +121,33 @@ class GoogleAuthenticator extends AbstractAuthenticator implements Authenticatio
             return new RedirectResponse($this->router->generate('pending_approval'));
         }
 
-        $this->authService->saveTokenForUser($user, $tokenData);
-
         if (count($channels) === 1) {
-            $this->authService->selectChannelForUser($user, $channels[0]['id'], $channels[0]['title']);
+            $channelId    = $channels[0]['id'];
+            $channelTitle = $channels[0]['title'];
+
+            // If this channel already belongs to another Symfony user, update that user's
+            // token and switch the session to them (Brand Account scenario)
+            $existingToken = $this->tokenRepo->findByChannelId($channelId);
+            if ($existingToken && $existingToken->getUser()->getId() !== $user->getId()) {
+                $targetUser = $existingToken->getUser();
+                $this->authService->saveTokenForUser($targetUser, $tokenData);
+                $this->authService->selectChannelForUser($targetUser, $channelId, $channelTitle);
+
+                $switchToken = new PostAuthenticationToken($targetUser, $firewallName, $targetUser->getRoles());
+                $request->getSession()->set('_security_' . $firewallName, serialize($switchToken));
+                $request->getSession()->remove('_pending_channels');
+                $request->getSession()->remove('_pending_token_data');
+                return new RedirectResponse($this->router->generate('dashboard'));
+            }
+
+            $this->authService->saveTokenForUser($user, $tokenData);
+            $this->authService->selectChannelForUser($user, $channelId, $channelTitle);
             $request->getSession()->remove('_pending_channels');
             $request->getSession()->remove('_pending_token_data');
             return new RedirectResponse($this->router->generate('dashboard'));
         }
 
+        $this->authService->saveTokenForUser($user, $tokenData);
         return new RedirectResponse($this->router->generate('auth_select_channel_page'));
     }
 

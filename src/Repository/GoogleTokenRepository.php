@@ -59,6 +59,17 @@ class GoogleTokenRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function findByChannelId(string $channelId): ?GoogleToken
+    {
+        return $this->createQueryBuilder('t')
+            ->where('t.channelId = :channelId')
+            ->setParameter('channelId', $channelId)
+            ->orderBy('t.updatedAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     /** @deprecated use findForUser */
     public function findLatest(): ?GoogleToken
     {

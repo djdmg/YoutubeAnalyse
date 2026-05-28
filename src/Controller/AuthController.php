@@ -3,17 +3,22 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Repository\GoogleTokenRepository;
 use App\Service\GoogleAuthService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken;
 
 #[Route('/auth')]
 class AuthController extends AbstractController
 {
-    public function __construct(private readonly GoogleAuthService $authService) {}
+    public function __construct(
+        private readonly GoogleAuthService $authService,
+        private readonly GoogleTokenRepository $tokenRepo,
+    ) {}
 
     #[Route('/google', name: 'auth_google')]
     public function connect(Request $request): Response
@@ -60,6 +65,26 @@ class AuthController extends AbstractController
         }
 
         try {
+            $tokenData = $request->getSession()->get('_pending_token_data', []);
+            $firewallName = 'main';
+
+            // Brand Account scenario: channel already belongs to another Symfony user
+            $existingToken = $this->tokenRepo->findByChannelId($channelId);
+            if ($existingToken && $existingToken->getUser()->getId() !== $user->getId()) {
+                $targetUser = $existingToken->getUser();
+                $this->authService->saveTokenForUser($targetUser, $tokenData);
+                $this->authService->selectChannelForUser($targetUser, $channelId, $channelTitle);
+
+                $switchToken = new PostAuthenticationToken($targetUser, $firewallName, $targetUser->getRoles());
+                $request->getSession()->set('_security_' . $firewallName, serialize($switchToken));
+                $request->getSession()->remove('_pending_channels');
+                $request->getSession()->remove('_pending_token_data');
+                $request->getSession()->remove('_google_user');
+                $this->addFlash('success', 'Chaîne connectée avec succès !');
+                return $this->redirectToRoute('dashboard');
+            }
+
+            $this->authService->saveTokenForUser($user, $tokenData);
             $this->authService->selectChannelForUser($user, $channelId, $channelTitle);
             $request->getSession()->remove('_pending_channels');
             $request->getSession()->remove('_pending_token_data');
