@@ -216,7 +216,9 @@ class YouTubeDataService
         }
 
         $youtube  = new YouTube($client);
-        $mimeType = mime_content_type($filePath) ?: 'image/png';
+        // Detect from magic bytes — mime_content_type() can disagree with file extension
+        $header   = file_get_contents($filePath, false, null, 0, 12);
+        $mimeType = str_starts_with($header, "\x89PNG") ? 'image/png' : 'image/jpeg';
 
         // Log token scopes and enforce youtube full scope
         $tokenData     = $client->getAccessToken();
