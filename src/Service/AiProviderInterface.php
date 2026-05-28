@@ -23,7 +23,7 @@ interface AiProviderInterface
     public function callRaw(string $prompt, string $model = self::MODEL_BALANCED, int $maxTokens = 4096): ?array;
 
     /** Returns the model's raw text response (no JSON parsing). Throws on failure. */
-    public function callText(string $prompt, string $model = self::MODEL_FAST, int $maxTokens = 8192): string;
+    public function callText(string $prompt, string $model = self::MODEL_FAST): string;
 
     /**
      * Returns a parsed JSON value constrained by $schema.
@@ -31,7 +31,7 @@ interface AiProviderInterface
      * is always valid JSON — no fence-stripping required.
      * Optionally fills $report with token usage, model, duration.
      */
-    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, int $maxTokens = 1024, ?AiReport $report = null): mixed;
+    public function callJson(string $prompt, array $schema, string $model = self::MODEL_FAST, ?AiReport $report = null): mixed;
 
     public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array;
 
