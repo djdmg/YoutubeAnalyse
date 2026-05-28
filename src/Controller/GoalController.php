@@ -7,7 +7,9 @@ use App\Entity\User;
 use App\Message\GenerateGoalSuggestionsMessage;
 use App\Repository\ChannelStatsRepository;
 use App\Repository\DailyMetricRepository;
+use App\Repository\AppSettingRepository;
 use App\Repository\GoalRepository;
+use App\Service\GeminiService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,6 +31,7 @@ class GoalController extends AbstractController
         private readonly DailyMetricRepository   $dailyMetricRepo,
         private readonly MessageBusInterface     $bus,
         private readonly CacheInterface          $cache,
+        private readonly AppSettingRepository    $settingRepo,
     ) {}
 
     #[Route('', name: 'goal_index', methods: ['GET'])]
@@ -121,6 +124,8 @@ class GoalController extends AbstractController
             return ['status' => 'pending'];
         });
 
+        $goalsModel = $this->settingRepo->get(GeminiService::SETTING_GOALS_MODEL) ?? 'fast';
+
         $this->bus->dispatch(new GenerateGoalSuggestionsMessage(
             jobId:         $jobId,
             userId:        $user->getId(),
@@ -131,6 +136,7 @@ class GoalController extends AbstractController
             avgCtr:        round((float)($stats30['avg_ctr'] ?? 0), 2),
             existingGoals: implode(', ', array_map(fn($g) => '"' . $g->getLabel() . '"', $activeGoals)),
             today:         (new \DateTimeImmutable())->format('Y-m-d'),
+            model:         $goalsModel,
         ));
 
         return new JsonResponse(['jobId' => $jobId]);

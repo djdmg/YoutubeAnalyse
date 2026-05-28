@@ -14,6 +14,9 @@
         <button onclick="messengerRefresh()" class="btn btn-outline btn-sm" id="btnRefresh">
             <i class="fas fa-sync-alt"></i> Actualiser
         </button>
+        <button onclick="clearLogs()" class="btn btn-sm" style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3)" id="btnClear">
+            <i class="fas fa-trash-alt"></i> Vider les logs
+        </button>
         <a href="{{ path('admin_settings') }}" class="btn btn-outline btn-sm">
             <i class="fas fa-cog"></i> Paramètres
         </a>
@@ -313,6 +316,24 @@ window.messengerRefresh = function() {
     var hasPending = {{ (counts.pending + counts.retry) > 0 ? 'true' : 'false' }};
     scheduleNext(hasPending);
 })();
+
+function clearLogs() {
+    if (!confirm('Vider tous les logs Messenger ? Cette action est irréversible.')) return;
+    var btn = document.getElementById('btnClear');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vidage…'; }
+    fetch('{{ path('admin_messenger_clear') }}', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { messengerRefresh(); }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash-alt"></i> Vider les logs'; }
+    })
+    .catch(function() {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash-alt"></i> Vider les logs'; }
+    });
+}
 
 function copyError(btn) {
     var text = btn.getAttribute('data-error');

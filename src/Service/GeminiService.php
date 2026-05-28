@@ -15,13 +15,18 @@ class GeminiService implements AiProviderInterface
     public const SETTING_API_KEY          = 'gemini_api_key';
     public const SETTING_THUMBNAIL_MODEL  = 'thumbnail_model';
     public const SETTING_PROMPT_MODEL     = 'thumbnail_prompt_model';
+    public const SETTING_GOALS_MODEL      = 'ai_goals_model';
+    public const SETTING_TIER_FAST        = 'gemini_tier_fast';
+    public const SETTING_TIER_BALANCED    = 'gemini_tier_balanced';
+    public const SETTING_TIER_FULL        = 'gemini_tier_full';
 
     private const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
-    private const TIER_MAP = [
-        AiProviderInterface::TIER_FAST     => 'gemini-2.0-flash',
+    // Default fallbacks — overridable from admin settings
+    private const TIER_DEFAULTS = [
+        AiProviderInterface::TIER_FAST     => 'gemini-1.5-flash',
         AiProviderInterface::TIER_BALANCED => 'gemini-1.5-pro',
-        AiProviderInterface::TIER_FULL     => 'gemini-2.5-pro',
+        AiProviderInterface::TIER_FULL     => 'gemini-2.0-flash',
     ];
 
     // Exact pricing per 1M tokens (input / output) in USD — only stable, non-preview model IDs
@@ -30,7 +35,6 @@ class GeminiService implements AiProviderInterface
     private const PRICING = [
         'gemini-2.0-flash'      => ['in' => 0.10,   'out' => 0.40],
         'gemini-2.0-flash-lite' => ['in' => 0.075,  'out' => 0.30],
-        'gemini-2.0-flash-exp'  => ['in' => 0.00,   'out' => 0.00],
         'gemini-1.5-flash'      => ['in' => 0.075,  'out' => 0.30],
         'gemini-1.5-flash-8b'   => ['in' => 0.0375, 'out' => 0.15],
         'gemini-1.5-pro'        => ['in' => 1.25,   'out' => 5.00],
@@ -215,8 +219,18 @@ class GeminiService implements AiProviderInterface
 
     private function resolveModel(string $model): string
     {
-        // Tier alias → real model; otherwise pass-through (specific model ID)
-        return self::TIER_MAP[$model] ?? $model;
+        $settingKey = match($model) {
+            AiProviderInterface::TIER_FAST     => self::SETTING_TIER_FAST,
+            AiProviderInterface::TIER_BALANCED => self::SETTING_TIER_BALANCED,
+            AiProviderInterface::TIER_FULL     => self::SETTING_TIER_FULL,
+            default                            => null,
+        };
+
+        if ($settingKey !== null) {
+            return $this->settingRepo->get($settingKey) ?? self::TIER_DEFAULTS[$model];
+        }
+
+        return $model;
     }
 
     public function getAvailableModels(bool $forceRefresh = false): array

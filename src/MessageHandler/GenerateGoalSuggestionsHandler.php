@@ -4,7 +4,6 @@ namespace App\MessageHandler;
 
 use App\Message\GenerateGoalSuggestionsMessage;
 use App\Service\AiProviderFactory;
-use App\Service\AiProviderInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -56,7 +55,7 @@ Example:
 ]
 PROMPT;
 
-            $text = trim($this->ai->callText($prompt, AiProviderInterface::TIER_FAST, 600));
+            $text = trim($this->ai->callText($prompt, $msg->model, 600));
 
             // Strip markdown fences if the model ignored instructions
             $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
