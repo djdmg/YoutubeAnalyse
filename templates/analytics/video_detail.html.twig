@@ -552,6 +552,20 @@ switchTab(_activeTab);
                    placeholder="Décrivez la miniature souhaitée, ou cliquez sur « Suggérer » pour en générer une automatiquement…"
                    style="flex:1;min-width:200px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text-primary);font-size:13px;outline:none;resize:vertical;line-height:1.5"></textarea>
         </div>
+        {# Meta-prompt viewer — hidden until a suggestion is generated #}
+        <details id="metaPromptDetails" style="display:none;margin-bottom:10px">
+            <summary style="font-size:.75rem;color:var(--text-muted);cursor:pointer;user-select:none;padding:.35rem 0;list-style:none;display:flex;align-items:center;gap:.4rem">
+                <i class="fas fa-code" style="font-size:.7em"></i> Voir la demande envoyée à l'IA
+            </summary>
+            <div style="position:relative;margin-top:.5rem">
+                <pre id="metaPromptPre" style="background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:.875rem 1rem;font-size:.72rem;color:var(--text-secondary);white-space:pre-wrap;line-height:1.55;max-height:320px;overflow-y:auto;margin:0"></pre>
+                <button id="copyMetaBtn" onclick="copyMetaPrompt()" title="Copier"
+                    style="position:absolute;top:.5rem;right:.5rem;background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--text-muted);border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.72rem;transition:.15s">
+                    <i class="fas fa-copy"></i> Copier
+                </button>
+            </div>
+        </details>
+
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
             <button id="suggestBtn" onclick="suggestPromptImagen()" class="btn btn-secondary" style="white-space:nowrap">
                 <i class="fas fa-lightbulb"></i> Suggérer un prompt
@@ -664,6 +678,13 @@ switchTab(_activeTab);
             if (data.success) {
                 textarea.value = data.prompt;
                 textarea.focus();
+                // Show meta-prompt
+                var details = document.getElementById('metaPromptDetails');
+                var pre     = document.getElementById('metaPromptPre');
+                if (details && pre && data.meta_prompt) {
+                    pre.textContent = data.meta_prompt;
+                    details.style.display = '';
+                }
             } else {
                 errorDiv.textContent   = data.message || 'Erreur inconnue.';
                 errorDiv.style.display = '';
@@ -851,6 +872,26 @@ switchTab(_activeTab);
             errorDiv.textContent   = 'Erreur réseau.';
             errorDiv.style.display = '';
         });
+    }
+
+    function copyMetaPrompt() {
+        var pre = document.getElementById('metaPromptPre');
+        var btn = document.getElementById('copyMetaBtn');
+        if (!pre || !btn) return;
+        var text = pre.textContent;
+        var done = function() {
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copié';
+            btn.style.color = '#22c55e';
+            setTimeout(function() { btn.innerHTML = orig; btn.style.color = ''; }, 1800);
+        };
+        if (navigator.clipboard) { navigator.clipboard.writeText(text).then(done); }
+        else {
+            var ta = document.createElement('textarea');
+            ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta); done();
+        }
     }
 
     function triggerAnalysis(type) {
