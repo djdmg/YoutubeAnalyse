@@ -37,6 +37,8 @@ class MessengerLogRepository extends ServiceEntityRepository
         foreach ($rows as $row) {
             $result[$row['status']] = (int) $row['cnt'];
         }
+        // Merge legacy 'pending' into 'processing' so old records appear in the right KPI card
+        $result['processing'] += $result['pending'];
         return $result;
     }
 
