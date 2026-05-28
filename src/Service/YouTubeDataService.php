@@ -239,15 +239,36 @@ class YouTubeDataService
             );
         }
 
-        // Pre-flight: check the video exists and is not a Short (Shorts reject custom thumbnails)
+        // Pre-flight: verify ownership and check for Shorts restriction
         try {
             $videoResponse = $youtube->videos->listVideos('contentDetails,snippet', ['id' => $youtubeId]);
             $items = $videoResponse->getItems();
             if (empty($items)) {
                 throw new \RuntimeException("Vidéo introuvable via l'API YouTube (id={$youtubeId}).");
             }
-            $duration = $items[0]->getContentDetails()->getDuration() ?? '';
-            // ISO 8601 duration: PT60S or less = Short candidate
+
+            $videoChannelId = $items[0]->getSnippet()->getChannelId() ?? '';
+            $duration       = $items[0]->getContentDetails()->getDuration() ?? '';
+
+            // Verify the authenticated channel owns this video
+            $myChannelResponse = $youtube->channels->listChannels('id', ['mine' => true]);
+            $myChannelId       = $myChannelResponse->getItems()[0]->getId() ?? '';
+
+            $this->logger->info('Video pre-flight', [
+                'youtubeId'       => $youtubeId,
+                'videoChannelId'  => $videoChannelId,
+                'myChannelId'     => $myChannelId,
+                'channelMatch'    => ($videoChannelId === $myChannelId) ? 'YES' : 'NO — MISMATCH',
+                'duration'        => $duration,
+            ]);
+
+            if ($myChannelId && $videoChannelId && $videoChannelId !== $myChannelId) {
+                throw new \RuntimeException(
+                    "La vidéo appartient au channel {$videoChannelId} mais le token est authentifié pour {$myChannelId}. "
+                    . "Reconnectez le bon compte Google."
+                );
+            }
+
             preg_match('/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/', $duration, $m);
             $seconds = (int)($m[1] ?? 0) * 3600 + (int)($m[2] ?? 0) * 60 + (int)($m[3] ?? 0);
             if ($seconds > 0 && $seconds <= 60) {
@@ -255,7 +276,6 @@ class YouTubeDataService
                     "Cette vidéo dure {$seconds}s — les YouTube Shorts (≤ 60s) n'acceptent pas de miniatures personnalisées."
                 );
             }
-            $this->logger->info('Video pre-flight OK', ['youtubeId' => $youtubeId, 'duration' => $duration, 'seconds' => $seconds]);
         } catch (\Google\Service\Exception $e) {
             $this->logger->warning('Video pre-flight API error (continuing)', ['error' => $e->getMessage()]);
         }
