@@ -249,6 +249,15 @@ class GeminiService implements AiProviderInterface
 
     public function generateImage(string $prompt, string $model = 'imagen-3.0-generate-001'): ?string
     {
+        // Imagen models use the /predict endpoint; Gemini native image-gen models use /generateContent
+        if (str_contains(strtolower($model), 'imagen')) {
+            return $this->generateImageWithPredict($prompt, $model);
+        }
+        return $this->generateImageWithGenerateContent($prompt, $model);
+    }
+
+    private function generateImageWithPredict(string $prompt, string $model): ?string
+    {
         $url = self::BASE_URL . $model . ':predict?key=' . urlencode($this->apiKey());
 
         $response = $this->httpClient->request('POST', $url, [
@@ -261,6 +270,28 @@ class GeminiService implements AiProviderInterface
 
         $data = $response->toArray();
         return $data['predictions'][0]['bytesBase64Encoded'] ?? null;
+    }
+
+    private function generateImageWithGenerateContent(string $prompt, string $model): ?string
+    {
+        $url = self::BASE_URL . $model . ':generateContent?key=' . urlencode($this->apiKey());
+
+        $response = $this->httpClient->request('POST', $url, [
+            'json'    => [
+                'contents'         => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                'generationConfig' => ['responseModalities' => ['IMAGE', 'TEXT']],
+            ],
+            'timeout' => 60,
+        ]);
+
+        $data  = $response->toArray();
+        $parts = $data['candidates'][0]['content']['parts'] ?? [];
+        foreach ($parts as $part) {
+            if (isset($part['inlineData']['data'])) {
+                return $part['inlineData']['data'];
+            }
+        }
+        return null;
     }
 
     public function validateApiKey(string $key): bool
@@ -325,7 +356,8 @@ class GeminiService implements AiProviderInterface
     private function detectType(string $id): string
     {
         $lower = strtolower($id);
-        if (str_contains($lower, 'imagen')) return 'image';
+        if (str_contains($lower, 'imagen'))            return 'image';
+        if (str_contains($lower, 'image-generation'))  return 'image';
         if (str_contains($lower, 'embedding') || str_contains($lower, 'retrieval')) return 'embedding';
         return 'text';
     }
