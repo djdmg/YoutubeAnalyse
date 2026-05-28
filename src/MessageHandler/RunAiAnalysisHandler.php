@@ -1,0 +1,78 @@
+<?php
+
+namespace App\MessageHandler;
+
+use App\Enum\AiReportType;
+use App\Message\RunAiAnalysisMessage;
+use App\Repository\UserRepository;
+use App\Repository\VideoRepository;
+use App\Service\AiAnalysisService;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
+
+#[AsMessageHandler]
+class RunAiAnalysisHandler
+{
+    public function __construct(
+        private readonly UserRepository    $userRepo,
+        private readonly VideoRepository   $videoRepo,
+        private readonly AiAnalysisService $aiService,
+        private readonly CacheInterface    $cache,
+    ) {}
+
+    public function __invoke(RunAiAnalysisMessage $message): void
+    {
+        $cacheKey = 'job_' . $message->jobId;
+
+        $user = $this->userRepo->find($message->userId);
+        if (!$user) {
+            $this->storeResult($cacheKey, ['status' => 'error', 'message' => 'Utilisateur introuvable.']);
+            return;
+        }
+
+        if ($message->force) {
+            $this->aiService->setForce(true);
+        }
+
+        try {
+            if ($message->youtubeId) {
+                // Single-video analysis
+                $video = $this->videoRepo->findByYoutubeId($message->youtubeId);
+                if (!$video || $video->getUser() !== $user) {
+                    $this->storeResult($cacheKey, ['status' => 'error', 'message' => 'Vidéo introuvable.']);
+                    return;
+                }
+                $type   = $message->type ? AiReportType::from($message->type) : null;
+                $result = $type
+                    ? $this->aiService->analyzeType($user, $type)
+                    : $this->aiService->analyzeAll($user);
+            } else {
+                // All videos
+                $type   = $message->type ? AiReportType::from($message->type) : null;
+                $result = $type
+                    ? $this->aiService->analyzeType($user, $type)
+                    : $this->aiService->analyzeAll($user);
+            }
+
+            $total = array_sum($result['counts'] ?? []);
+            $this->storeResult($cacheKey, [
+                'status'  => 'done',
+                'message' => sprintf('%d analyse(s) générée(s).', $total),
+                'counts'  => $result['counts'] ?? [],
+            ]);
+        } catch (\Throwable $e) {
+            $this->storeResult($cacheKey, ['status' => 'error', 'message' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
+    private function storeResult(string $key, array $data): void
+    {
+        $this->cache->delete($key);
+        $this->cache->get($key, function (ItemInterface $item) use ($data) {
+            $item->expiresAfter(300);
+            return $data;
+        });
+    }
+}

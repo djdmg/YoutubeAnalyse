@@ -21,6 +21,8 @@ framework:
 
         routing:
             App\Message\GenerateThumbnailMessage: async
+            App\Message\SyncYouTubeMessage:       async
+            App\Message\RunAiAnalysisMessage:     async
 
 when@test:
     framework:

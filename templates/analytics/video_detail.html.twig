@@ -272,7 +272,11 @@ switchTab(_activeTab);
         <div class="empty-state">
             <i class="fas fa-robot fa-3x"></i>
             <h3>Aucune analyse IA</h3>
-            <p>Lance <strong>app:ai:analyze</strong> pour générer des analyses sur cette vidéo.</p>
+            <p>Lancez l'analyse complète pour générer prédictions, anomalies et commentaires.</p>
+            <button class="btn btn-primary" style="margin-top:1rem" onclick="triggerAnalysis()">
+                <i class="fas fa-play"></i> Lancer l'analyse complète
+            </button>
+            <div id="aiAnalysisStatus" style="margin-top:.75rem;font-size:.85em;color:var(--text-muted);display:none"></div>
         </div>
     </div>
     {% else %}
@@ -437,7 +441,11 @@ switchTab(_activeTab);
         <div class="empty-state">
             <i class="fas fa-magic fa-3x"></i>
             <h3>Aucune suggestion d'optimisation</h3>
-            <p>Lance <strong>app:ai:analyze</strong> pour obtenir des recommandations SEO et titre.</p>
+            <p>Lancez l'analyse pour obtenir des recommandations SEO et titre.</p>
+            <button class="btn btn-primary" style="margin-top:1rem" onclick="triggerAnalysis()">
+                <i class="fas fa-play"></i> Lancer l'analyse complète
+            </button>
+            <div id="aiAnalysisStatusOpti" style="margin-top:.75rem;font-size:.85em;color:var(--text-muted);display:none"></div>
         </div>
     </div>
     {% endif %}
@@ -842,6 +850,64 @@ switchTab(_activeTab);
             applyBtn.innerHTML = '<i class="fas fa-check"></i> Appliquer comme miniature';
             errorDiv.textContent   = 'Erreur réseau.';
             errorDiv.style.display = '';
+        });
+    }
+
+    function triggerAnalysis(type) {
+        var statusEls = ['aiAnalysisStatus', 'aiAnalysisStatusOpti']
+            .map(function(id) { return document.getElementById(id); })
+            .filter(Boolean);
+
+        statusEls.forEach(function(el) {
+            el.style.display = '';
+            el.style.color   = 'var(--text-muted)';
+            el.innerHTML     = '<i class="fas fa-spinner fa-spin"></i> Analyse en cours…';
+        });
+
+        var body = new URLSearchParams();
+        if (type) body.append('type', type);
+
+        fetch('{{ path('analytics_video_trigger_analysis', {youtubeId: video.youtubeId}) }}', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) {
+                statusEls.forEach(function(el) {
+                    el.style.color   = '#ef4444';
+                    el.textContent   = '✗ ' + (data.message || 'Erreur');
+                });
+                return;
+            }
+            var attempts = 0;
+            var pollUrl = '{{ path('analytics_video_analysis_status', {youtubeId: video.youtubeId, jobId: '__JOB__'}) }}'
+                .replace('__JOB__', data.jobId);
+            var poll = setInterval(function() {
+                attempts++;
+                fetch(pollUrl)
+                    .then(function(r) { return r.json(); })
+                    .then(function(status) {
+                        if (status.status === 'pending' && attempts < 90) return;
+                        clearInterval(poll);
+                        var ok = status.status === 'done';
+                        statusEls.forEach(function(el) {
+                            el.style.color = ok ? '#22c55e' : '#ef4444';
+                            el.textContent = ok
+                                ? '✓ ' + status.message + ' — rechargement…'
+                                : '✗ ' + (status.message || 'Erreur');
+                        });
+                        if (ok) setTimeout(function() { window.location.reload(); }, 1500);
+                    })
+                    .catch(function() { if (attempts >= 90) clearInterval(poll); });
+            }, 2000);
+        })
+        .catch(function() {
+            statusEls.forEach(function(el) {
+                el.style.color = '#ef4444';
+                el.textContent = '✗ Erreur réseau';
+            });
         });
     }
     </script>

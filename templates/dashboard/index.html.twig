@@ -396,16 +396,35 @@
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            overlay.classList.remove('visible');
-            toast.textContent = data.success
-                ? '✓ ' + data.message
-                : '✗ ' + data.message;
-            toast.style.borderColor = data.success ? 'rgba(34,197,94,.4)' : 'rgba(239,68,68,.4)';
-            toast.classList.add('show');
-            setTimeout(function() {
-                toast.classList.remove('show');
-                if (data.success) window.location.reload();
-            }, 2500);
+            if (!data.success || !data.jobId) {
+                overlay.classList.remove('visible');
+                toast.textContent = '✗ ' + (data.message || 'Erreur');
+                toast.style.borderColor = 'rgba(239,68,68,.4)';
+                toast.classList.add('show');
+                setTimeout(function() { toast.classList.remove('show'); }, 3000);
+                return;
+            }
+            // Poll until done
+            var attempts = 0;
+            var poll = setInterval(function() {
+                attempts++;
+                fetch('{{ path('sync_status', {jobId: '__JOB__'}) }}'.replace('__JOB__', data.jobId))
+                    .then(function(r) { return r.json(); })
+                    .then(function(status) {
+                        if (status.status === 'pending' && attempts < 90) return;
+                        clearInterval(poll);
+                        overlay.classList.remove('visible');
+                        var ok = status.status === 'done';
+                        toast.textContent = ok ? '✓ ' + status.message : '✗ ' + (status.message || 'Erreur');
+                        toast.style.borderColor = ok ? 'rgba(34,197,94,.4)' : 'rgba(239,68,68,.4)';
+                        toast.classList.add('show');
+                        setTimeout(function() {
+                            toast.classList.remove('show');
+                            if (ok) window.location.reload();
+                        }, 2500);
+                    })
+                    .catch(function() { if (attempts >= 90) clearInterval(poll); });
+            }, 2000);
         })
         .catch(function() {
             overlay.classList.remove('visible');
