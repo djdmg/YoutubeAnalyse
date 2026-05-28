@@ -213,9 +213,19 @@ class YouTubeDataService
             throw new \RuntimeException('Non authentifié avec Google.');
         }
 
-        $accessToken = $client->getAccessToken()['access_token'] ?? null;
+        $tokenData   = $client->getAccessToken();
+        $accessToken = $tokenData['access_token'] ?? null;
         if (!$accessToken) {
             throw new \RuntimeException('Access token manquant — reconnectez votre compte Google.');
+        }
+
+        // Log granted scopes so we can verify youtube.force-ssl is present
+        $grantedScopes = $tokenData['scope'] ?? 'unknown';
+        $hasForceSsl   = str_contains((string) $grantedScopes, 'youtube.force-ssl');
+        if (!$hasForceSsl) {
+            throw new \RuntimeException(
+                'Scope youtube.force-ssl manquant dans le token. Reconnectez votre compte via /auth/google?force_consent=1'
+            );
         }
 
         $response = $this->httpClient->request('POST',
