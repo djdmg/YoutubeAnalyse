@@ -155,11 +155,13 @@ class AdminController extends AbstractController
         }
 
         return $this->render('admin/settings.html.twig', [
-            'telegram_token' => $this->settingRepo->get(TelegramNotificationService::SETTING_KEY),
-            'ai_provider'    => $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE,
-            'gemini_api_key' => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
-            'task_models'    => $taskModels,
-            'ai_tasks_json'  => json_encode($aiTasks),
+            'telegram_token'   => $this->settingRepo->get(TelegramNotificationService::SETTING_KEY),
+            'ai_provider'      => $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE,
+            'gemini_api_key'   => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
+            'thumbnail_model'  => $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001',
+            'image_models'     => $this->gemini->getImageModels(),
+            'task_models'      => $taskModels,
+            'ai_tasks_json'    => json_encode($aiTasks),
         ]);
     }
 
@@ -228,6 +230,12 @@ class AdminController extends AbstractController
             }
 
             $this->settingRepo->set(AiProviderFactory::SETTING_PROVIDER, $provider);
+
+            $thumbnailModel = trim((string) $request->request->get('thumbnail_model', ''));
+            if ($thumbnailModel !== '') {
+                $this->settingRepo->set(GeminiService::SETTING_THUMBNAIL_MODEL, $thumbnailModel);
+            }
+
             $this->gemini->clearModelsCache();
         }
 
