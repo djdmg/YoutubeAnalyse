@@ -218,9 +218,9 @@ class YouTubeDataService
 
         $youtube = new YouTube($client);
 
+        // setDefer(true) must stay active for the entire upload — only reset after
         $client->setDefer(true);
         $setRequest = $youtube->thumbnails->set($youtubeId);
-        $client->setDefer(false);
 
         $media = new \Google\Http\MediaFileUpload(
             $client,
@@ -241,6 +241,7 @@ class YouTubeDataService
             }
         } finally {
             fclose($handle);
+            $client->setDefer(false);
         }
     }
 
