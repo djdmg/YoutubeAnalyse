@@ -142,7 +142,19 @@ class DashboardController extends AbstractController
             return ['status' => 'pending'];
         });
 
-        $this->bus->dispatch(new SyncYouTubeMessage($user->getId(), $jobId));
+        try {
+            $this->bus->dispatch(new SyncYouTubeMessage($user->getId(), $jobId));
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'messenger_messages') || str_contains($msg, "doesn't exist") || str_contains($msg, 'Base table')) {
+                $msg = 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate';
+            }
+            if ($request->isXmlHttpRequest()) {
+                return new JsonResponse(['success' => false, 'message' => $msg], 500);
+            }
+            $this->addFlash('error', $msg);
+            return $this->redirectToRoute('dashboard');
+        }
 
         if ($request->isXmlHttpRequest()) {
             return new JsonResponse(['success' => true, 'jobId' => $jobId]);
