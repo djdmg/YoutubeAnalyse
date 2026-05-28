@@ -661,6 +661,30 @@ switchTab(_activeTab);
 
 </div>{# /tab-opti #}
 
+{# Modal confirmation suppression miniature #}
+<div id="modalDeleteThumb" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center">
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px)" onclick="closeDeleteModal()"></div>
+    <div style="position:relative;background:var(--surface,#1e1e2e);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <span style="width:40px;height:40px;border-radius:50%;background:rgba(239,68,68,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fas fa-trash-alt" style="color:#f87171;font-size:16px"></i>
+            </span>
+            <h3 style="margin:0;font-size:1.05rem;font-weight:600">Supprimer la miniature</h3>
+        </div>
+        <p style="margin:0 0 24px;color:var(--text-muted);font-size:.9rem;line-height:1.5">
+            Cette miniature sauvegardée sera supprimée définitivement. Cette action est irréversible.
+        </p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button onclick="closeDeleteModal()" style="padding:8px 18px;border-radius:7px;border:1px solid rgba(255,255,255,.15);background:transparent;color:var(--text-muted);cursor:pointer;font-size:.875rem">
+                Annuler
+            </button>
+            <button id="modalDeleteConfirmBtn" style="padding:8px 18px;border-radius:7px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-size:.875rem;font-weight:600">
+                <i class="fas fa-trash-alt" style="margin-right:6px"></i>Supprimer
+            </button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block javascripts %}
@@ -947,14 +971,7 @@ switchTab(_activeTab);
                 btnDel.title     = 'Supprimer';
                 btnDel.style.cssText = 'background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px';
                 btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>';
-                btnDel.onclick   = function() {
-                    if (!confirm('Supprimer cette miniature sauvegardée ?')) return;
-                    fetch('{{ path('analytics_video_delete_thumbnail', {youtubeId: video.youtubeId}) }}', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
-                        body: 'filename=' + encodeURIComponent(item.filename)
-                    }).then(function() { loadThumbGallery(); });
-                };
+                btnDel.onclick   = (function(fn) { return function() { openDeleteModal(fn); }; })(item.filename);
 
                 footer.appendChild(time);
                 footer.appendChild(btnApply);
@@ -1046,5 +1063,26 @@ switchTab(_activeTab);
             });
         });
     }
+
+    function openDeleteModal(filename) {
+        var modal = document.getElementById('modalDeleteThumb');
+        modal.style.display = 'flex';
+        document.getElementById('modalDeleteConfirmBtn').onclick = function() {
+            closeDeleteModal();
+            fetch('{{ path('analytics_video_delete_thumbnail', {youtubeId: video.youtubeId}) }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                body: 'filename=' + encodeURIComponent(filename)
+            }).then(function() { loadThumbGallery(); });
+        };
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('modalDeleteThumb').style.display = 'none';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeDeleteModal();
+    });
     </script>
 {% endblock %}
