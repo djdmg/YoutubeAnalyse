@@ -238,6 +238,8 @@ class YouTubeSyncService
 
     private function recordSnapshotIfChanged(Video $video, string $newTitle, ?string $newDescription): void
     {
+        if ($video->getId() === null) return; // new video — nothing to compare against
+
         $last = $this->snapshotRepo->findLatestForVideo($video);
 
         $titleChanged = $last === null || $last->getTitle() !== $newTitle;

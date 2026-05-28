@@ -330,7 +330,14 @@ class GeminiService implements AiProviderInterface
             throw new \RuntimeException("Prompt bloqué par le filtre de sécurité Gemini : {$blocked}.");
         }
         if ($finishReason && $finishReason !== 'STOP') {
-            throw new \RuntimeException("Génération arrêtée (finishReason: {$finishReason}). Le modèle n'a pas produit d'image.");
+            $hint = match($finishReason) {
+                'IMAGE_OTHER'   => "Le modèle a refusé de générer l'image (raison inconnue). Essayez un prompt différent ou moins détaillé.",
+                'SAFETY'        => "Le prompt a été bloqué par le filtre de sécurité. Reformulez sans termes sensibles.",
+                'RECITATION'    => "Le contenu a été bloqué pour cause de récitation. Modifiez le prompt.",
+                'MAX_TOKENS'    => "Le prompt est trop long. Raccourcissez-le.",
+                default         => "Génération arrêtée (finishReason: {$finishReason}). Essayez un autre prompt.",
+            };
+            throw new \RuntimeException($hint);
         }
         if ($textFallback) {
             throw new \RuntimeException("Le modèle a répondu en texte au lieu d'une image : \"{$textFallback}\"");
