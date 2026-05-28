@@ -119,6 +119,7 @@ class GoogleAuthService
         $token->setChannelId($channelId)
             ->setChannelTitle($channelTitle)
             ->setUpdatedAt(new \DateTimeImmutable());
+        $user->setActiveChannelId($channelId);
         $this->em->flush();
     }
 
