@@ -372,7 +372,6 @@
 {% endif %}{# end is_connected #}
 
 {# ── Sync overlay ──────────────────────────────────────────────────────── #}
-{% if is_connected %}
 <div class="sync-overlay" id="syncOverlay">
     <div class="sync-spinner"></div>
     <div class="sync-overlay-text">Synchronisation en cours…</div>
@@ -404,7 +403,6 @@
                 setTimeout(function() { toast.classList.remove('show'); }, 3000);
                 return;
             }
-            // Poll until done
             var attempts = 0;
             var poll = setInterval(function() {
                 attempts++;
@@ -436,7 +434,6 @@
     });
 })();
 </script>
-{% endif %}
 
 {% endblock %}
 
