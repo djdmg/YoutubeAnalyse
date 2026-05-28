@@ -21,27 +21,36 @@
 
 {# ── KPI cards ───────────────────────────────────────────────────────────── #}
 {% set total = counts.pending + counts.success + counts.failed + counts.retry %}
+{% set cards = [
+    {label: 'En attente', key: 'pending', icon: 'fa-hourglass-half',  color: '#94a3b8', glow: 'rgba(148,163,184,.15)'},
+    {label: 'Réussis',    key: 'success', icon: 'fa-check-circle',    color: '#22c55e', glow: 'rgba(34,197,94,.15)'},
+    {label: 'En retry',   key: 'retry',   icon: 'fa-redo',            color: '#f59e0b', glow: 'rgba(245,158,11,.15)'},
+    {label: 'Échoués',    key: 'failed',  icon: 'fa-times-circle',    color: '#ef4444', glow: 'rgba(239,68,68,.15)'},
+] %}
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
-    {% set cards = [
-        {label: 'En attente', key: 'pending', icon: 'fa-hourglass-half',  color: '#94a3b8', bg: 'rgba(148,163,184,.1)'},
-        {label: 'Réussis',    key: 'success', icon: 'fa-check-circle',    color: '#22c55e', bg: 'rgba(34,197,94,.1)'},
-        {label: 'En retry',   key: 'retry',   icon: 'fa-redo',            color: '#f59e0b', bg: 'rgba(245,158,11,.1)'},
-        {label: 'Échoués',    key: 'failed',  icon: 'fa-times-circle',    color: '#ef4444', bg: 'rgba(239,68,68,.1)'},
-    ] %}
-    {% for c in cards %}
-    <div class="metric-card" style="border-color:{{ c.color }}33;background:{{ c.bg }}">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-            <span style="font-size:.75em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">{{ c.label }}</span>
-            <i class="fas {{ c.icon }}" style="color:{{ c.color }};font-size:.9em;opacity:.7"></i>
+{% for c in cards %}
+{% set val = attribute(counts, c.key) %}
+<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.25rem 1rem;position:relative;overflow:hidden;transition:.2s">
+    {# accent stripe top #}
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:{{ c.color }};border-radius:12px 12px 0 0;opacity:{{ val > 0 ? '1' : '.25' }}"></div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.75rem">
+        <span style="font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">{{ c.label }}</span>
+        <div style="width:32px;height:32px;border-radius:8px;background:{{ c.glow }};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fas {{ c.icon }}" style="color:{{ c.color }};font-size:.85em"></i>
         </div>
-        <div class="metric-value" style="color:{{ c.color }};font-size:2rem">{{ attribute(counts, c.key) }}</div>
-        {% if total > 0 %}
-        <div style="margin-top:.5rem;height:3px;background:var(--bg-secondary);border-radius:2px">
-            <div style="height:3px;width:{{ total > 0 ? ((attribute(counts, c.key) / total * 100)|round) : 0 }}%;background:{{ c.color }};border-radius:2px;transition:width .3s"></div>
-        </div>
-        {% endif %}
     </div>
-    {% endfor %}
+    <div style="font-size:2.25rem;font-weight:700;color:{{ val > 0 ? c.color : 'var(--text-muted)' }};line-height:1;margin-bottom:.6rem;font-variant-numeric:tabular-nums">{{ val }}</div>
+    {% if total > 0 %}
+    <div style="height:4px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">
+        <div style="height:4px;width:{{ (val / total * 100)|round }}%;background:{{ c.color }};border-radius:4px;transition:width .4s ease;opacity:{{ val > 0 ? '.85' : '0' }}"></div>
+    </div>
+    <div style="font-size:.7em;color:var(--text-muted);margin-top:.35rem">{{ total > 0 ? (val / total * 100)|round : 0 }}% du total</div>
+    {% else %}
+    <div style="height:4px;background:rgba(255,255,255,.06);border-radius:4px"></div>
+    <div style="font-size:.7em;color:var(--text-muted);margin-top:.35rem">—</div>
+    {% endif %}
+</div>
+{% endfor %}
 </div>
 
 {# ── Worker hint ─────────────────────────────────────────────────────────── #}
