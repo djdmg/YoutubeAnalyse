@@ -558,6 +558,10 @@ switchTab(_activeTab);
                 <i class="fas fa-redo"></i> Regénérer
             </button>
         </div>
+        <div id="imagenPromptUsed" style="display:none;margin-top:12px;background:var(--bg-secondary);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--text-muted);line-height:1.5">
+            <span style="color:var(--text-secondary);font-weight:600;display:block;margin-bottom:3px"><i class="fas fa-terminal" style="margin-right:4px"></i>Prompt utilisé</span>
+            <span id="imagenPromptUsedText" style="font-style:italic"></span>
+        </div>
         <div id="imagenSuccess" style="display:none;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:8px 12px;font-size:13px;color:#4ade80;margin-top:10px"></div>
     </div>
 
@@ -622,22 +626,25 @@ switchTab(_activeTab);
     {{ encore_entry_script_tags('video_detail') }}
     <script>
     function generateThumbnailImagen() {
-        var btn         = document.getElementById('imagenBtn');
-        var regenBtn    = document.getElementById('imagenRegenBtn');
-        var prompt      = document.getElementById('imagenPrompt').value;
-        var errorDiv    = document.getElementById('imagenError');
-        var previewImg  = document.getElementById('imagenPreviewImg');
-        var placeholder = document.getElementById('imagenPreviewPlaceholder');
-        var actions     = document.getElementById('imagenActions');
-        var successDiv  = document.getElementById('imagenSuccess');
+        var btn            = document.getElementById('imagenBtn');
+        var regenBtn       = document.getElementById('imagenRegenBtn');
+        var prompt         = document.getElementById('imagenPrompt').value;
+        var errorDiv       = document.getElementById('imagenError');
+        var previewImg     = document.getElementById('imagenPreviewImg');
+        var placeholder    = document.getElementById('imagenPreviewPlaceholder');
+        var actions        = document.getElementById('imagenActions');
+        var successDiv     = document.getElementById('imagenSuccess');
+        var promptUsed     = document.getElementById('imagenPromptUsed');
+        var promptUsedText = document.getElementById('imagenPromptUsedText');
 
         btn.disabled = true;
         if (regenBtn) regenBtn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération…';
-        errorDiv.style.display   = 'none';
-        successDiv.style.display = 'none';
-        actions.style.display    = 'none';
-        previewImg.style.display = 'none';
+        errorDiv.style.display    = 'none';
+        successDiv.style.display  = 'none';
+        actions.style.display     = 'none';
+        promptUsed.style.display  = 'none';
+        previewImg.style.display  = 'none';
         placeholder.style.display = '';
 
         fetch('{{ path('analytics_video_generate_thumbnail', {youtubeId: video.youtubeId}) }}', {
@@ -655,6 +662,10 @@ switchTab(_activeTab);
                 previewImg.style.display  = '';
                 placeholder.style.display = 'none';
                 actions.style.display     = 'flex';
+                if (data.prompt) {
+                    promptUsedText.textContent = data.prompt;
+                    promptUsed.style.display   = '';
+                }
             } else {
                 errorDiv.textContent   = data.message || 'Erreur inconnue.';
                 errorDiv.style.display = '';
