@@ -36,7 +36,7 @@
             <i class="fas fa-chart-bar"></i> Analytics
         </a>
         <a href="{{ path('analytics_alerts') }}" class="{{ app.request.attributes.get('_route') == 'analytics_alerts' ? 'active' : '' }}">
-            <i class="fas fa-exclamation-triangle"></i> Alertes
+            <i class="fas fa-tasks"></i> Actions
         </a>
         <a href="{{ path('analytics_ai_costs') }}" class="{{ app.request.attributes.get('_route') == 'analytics_ai_costs' ? 'active' : '' }}">
             <i class="fas fa-robot"></i> Coûts IA
@@ -95,65 +95,58 @@
     {{ encore_entry_script_tags('app') }}
 {% endblock %}
 
-{# All scripts below run after the webpack bundle — jQuery is available here #}
 <script>
-$(function() {
+document.addEventListener('DOMContentLoaded', function() {
 
     // ── Nav hamburger ────────────────────────────────────────────────────────
-    $('#navToggle').on('click', function() {
-        var open = $('#navLinks').toggleClass('open').hasClass('open');
-        $(this).find('i').attr('class', open ? 'fas fa-times' : 'fas fa-bars');
-    });
-
-    // ── Global AJAX helper ───────────────────────────────────────────────────
-    window.ajaxPost = function(url, data, onSuccess, onError) {
-        $.ajax({
-            url: url,
-            method: 'POST',
-            data: data,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            success: function(res) {
-                if (res && res.success) { onSuccess(res); }
-                else { (onError || showToast)((res && res.message) || 'Erreur', 'error'); }
-            },
-            error: function(xhr) {
-                var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Erreur réseau';
-                (onError || showToast)(msg, 'error');
-            }
+    var navToggle = document.getElementById('navToggle');
+    var navLinks  = document.getElementById('navLinks');
+    if (navToggle) {
+        navToggle.addEventListener('click', function() {
+            var open = navLinks.classList.toggle('open');
+            navToggle.querySelector('i').className = open ? 'fas fa-times' : 'fas fa-bars';
         });
-    };
+    }
 
     // ── Toast notification ───────────────────────────────────────────────────
     window.showToast = function(message, type) {
         type = type || 'success';
         var icon = type === 'success' ? 'check-circle' : 'exclamation-circle';
-        var $el = $('<div class="alert alert-' + type + '">')
-            .css({ position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
-                   minWidth: '280px', maxWidth: '420px', display: 'none' })
-            .html('<i class="fas fa-' + icon + '"></i> ' + message);
-        $('body').append($el);
-        $el.fadeIn(200);
-        setTimeout(function() { $el.fadeOut(300, function() { $el.remove(); }); }, 4000);
+        var el = document.createElement('div');
+        el.className = 'alert alert-' + type;
+        el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;min-width:280px;max-width:420px';
+        el.innerHTML = '<i class="fas fa-' + icon + '"></i> ' + message;
+        document.body.appendChild(el);
+        setTimeout(function() { if (el.parentNode) el.remove(); }, 4000);
     };
 
-    // ── Sync button (dashboard + /videos) ────────────────────────────────────
-    $('.js-sync-form').on('submit', function(e) {
-        e.preventDefault();
-        var $form = $(this);
-        var $btn  = $form.find('button[type=submit]');
-        var orig  = $btn.html();
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Synchronisation…');
+    // ── Sync button (/videos and other pages without overlay) ────────────────
+    document.querySelectorAll('.js-sync-form').forEach(function(form) {
+        if (document.getElementById('syncOverlay')) return; // dashboard overlay handles it
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var btn  = form.querySelector('button[type=submit]');
+            var orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Synchronisation…';
 
-        ajaxPost($form.attr('action'), $form.serialize(),
-            function(data) {
-                $btn.prop('disabled', false).html(orig);
-                showToast(data.message, 'success');
-            },
-            function(msg) {
-                $btn.prop('disabled', false).html(orig);
-                showToast(msg, 'error');
-            }
-        );
+            fetch(form.getAttribute('action'), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                window.showToast(data.message, data.success ? 'success' : 'error');
+                if (data.success) setTimeout(function() { window.location.reload(); }, 2500);
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                window.showToast('Erreur réseau', 'error');
+            });
+        });
     });
 
 });

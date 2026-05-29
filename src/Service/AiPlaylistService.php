@@ -8,7 +8,7 @@ use App\Entity\Video;
 class AiPlaylistService
 {
     public function __construct(
-        private readonly AnthropicService $anthropic,
+        private readonly AiProviderInterface $anthropic,
     ) {}
 
     /**
@@ -33,7 +33,7 @@ class AiPlaylistService
 
         $prompt = $this->buildPrompt($videosList, $userPrompt);
 
-        return $this->anthropic->callRaw($prompt, AnthropicService::MODEL_BALANCED, 4096);
+        return $this->anthropic->callRaw($prompt, AiProviderInterface::MODEL_BALANCED, 4096);
     }
 
     private function buildPrompt(array $videos, string $userPrompt): string

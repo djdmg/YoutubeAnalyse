@@ -1,51 +1,165 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Alertes — YouTube Analyse{% endblock %}
+{% block title %}Actions — YouTube Analyse{% endblock %}
 
 {% block body %}
 <div class="dashboard-header">
     <div>
-        <h1><i class="fas fa-exclamation-triangle" style="color:#eab308"></i> Alertes</h1>
-        <span class="last-sync">{{ anomalies|length }} anomalie(s) détectée(s)</span>
+        <h1><i class="fas fa-tasks" style="color:var(--blue)"></i> Actions</h1>
+        <span class="last-sync">
+            {{ urgent|length }} urgent{{ urgent|length > 1 ? 's' : '' }} ·
+            {{ conseil|length }} conseil{{ conseil|length > 1 ? 's' : '' }}
+        </span>
     </div>
 </div>
 
-{% if anomalies|length == 0 %}
+{% set total = urgent|length + conseil|length %}
+
+{% if total == 0 %}
 <div class="section-card">
     <div class="empty-state">
-        <i class="fas fa-check-circle fa-3x" style="color:#22c55e"></i>
-        <h3>Aucune anomalie</h3>
-        <p>Tout semble normal sur tes vidéos récentes.</p>
+        <i class="fas fa-check-circle fa-3x" style="color:var(--green)"></i>
+        <h3>Aucune action en attente</h3>
+        <p>Lance <strong>app:ai:analyze</strong> pour générer de nouvelles recommandations.</p>
     </div>
 </div>
 {% else %}
-<div class="alerts-list">
-    {% for report in anomalies %}
-    {% set payload = report.payload %}
-    <div class="alert-card alert-{{ payload.type == 'surperformance' ? 'success' : 'danger' }}">
-        <div class="alert-card-header">
-            <div class="alert-type-badge">
-                <i class="fas fa-{{ payload.type == 'surperformance' ? 'rocket' : 'arrow-down' }}"></i>
-                {{ payload.type == 'surperformance' ? 'Surperformance' : 'Sous-performance' }}
+
+<div class="action-filters" id="actionFilters">
+    <button class="action-filter-btn" data-filter="all">Tout <strong>{{ total }}</strong></button>
+    {% if urgent|length > 0 %}
+    <button class="action-filter-btn urgent" data-filter="urgent">🔴 Urgent <strong>{{ urgent|length }}</strong></button>
+    {% endif %}
+    {% if conseil|length > 0 %}
+    <button class="action-filter-btn conseil" data-filter="conseil">🟡 Conseil <strong>{{ conseil|length }}</strong></button>
+    {% endif %}
+</div>
+
+<div class="actions-list" id="actionsList">
+
+    {% for report in urgent %}
+    {% set p = report.payload %}
+    <div class="action-card urgency-urgent" data-urgency="urgent" data-id="{{ report.id }}">
+        <div class="action-card-header">
+            <div class="action-urgency-icon urgent"><i class="fas fa-exclamation"></i></div>
+            <div style="flex:1;min-width:0">
+                <div class="action-card-title">
+                    {{ p.type == 'surperformance' ? 'Surperformance détectée' : 'Sous-performance détectée' }}
+                </div>
+                {% if report.video %}
+                <div class="action-card-video" title="{{ report.video.title }}">
+                    <i class="fas fa-video" style="font-size:10px;margin-right:3px"></i>{{ report.video.title }}
+                </div>
+                {% endif %}
             </div>
+            <div class="action-card-date">{{ report.generatedAt|date('d/m/Y') }}</div>
+        </div>
+        <div class="action-card-body">
+            <p style="margin:0 0 6px"><strong>Cause :</strong> {{ p.cause_probable }}</p>
+            <p style="margin:0"><i class="fas fa-lightbulb" style="color:var(--yellow);margin-right:4px"></i>{{ p.action_recommandee }}</p>
+        </div>
+        <div class="action-card-footer">
             {% if report.video %}
-            <div class="alert-video-title">{{ report.video.title|length > 60 ? report.video.title|slice(0,60) ~ '…' : report.video.title }}</div>
-            {% endif %}
-            <div class="alert-date">{{ report.generatedAt|date('d/m/Y H:i') }}</div>
-        </div>
-        <div class="alert-card-body">
-            <p class="alert-cause"><strong>Cause probable :</strong> {{ payload.cause_probable }}</p>
-            <p class="alert-action"><i class="fas fa-lightbulb"></i> <strong>Action :</strong> {{ payload.action_recommandee }}</p>
-        </div>
-        {% if report.video %}
-        <div class="alert-card-footer">
             <a href="{{ path('analytics_video_detail', {youtubeId: report.video.youtubeId}) }}" class="btn btn-outline btn-sm">
                 <i class="fas fa-chart-line"></i> Voir la vidéo
             </a>
+            {% endif %}
+            <button class="btn-dismiss" onclick="dismissAction(this, {{ report.id }})"><i class="fas fa-check"></i> Fait</button>
         </div>
-        {% endif %}
     </div>
     {% endfor %}
+
+    {% for report in conseil %}
+    {% set p = report.payload %}
+    <div class="action-card urgency-conseil" data-urgency="conseil" data-id="{{ report.id }}">
+        <div class="action-card-header">
+            <div class="action-urgency-icon conseil"><i class="fas fa-lightbulb"></i></div>
+            <div style="flex:1;min-width:0">
+                <div class="action-card-title">
+                    {% if report.type.value == 'title_optimization' %}Optimisation du titre
+                    {% elseif report.type.value == 'seo_optimization' %}Amélioration SEO
+                    {% elseif report.type.value == 'comment_analysis' %}Feedback audience
+                    {% elseif report.type.value == 'prediction' %}Prévision de performance
+                    {% else %}Recommandation IA{% endif %}
+                </div>
+                {% if report.video %}
+                <div class="action-card-video" title="{{ report.video.title }}">
+                    <i class="fas fa-video" style="font-size:10px;margin-right:3px"></i>{{ report.video.title }}
+                </div>
+                {% endif %}
+            </div>
+            <div class="action-card-date">{{ report.generatedAt|date('d/m/Y') }}</div>
+        </div>
+        <div class="action-card-body">
+            {% if p.diagnostic is defined %}
+            <p style="margin:0 0 4px">{{ p.diagnostic }}</p>
+            {% elseif p.resume is defined %}
+            <p style="margin:0 0 4px">{{ p.resume }}</p>
+            {% elseif p.facteurs is defined %}
+            <p style="margin:0 0 4px">{{ p.facteurs|first }}</p>
+            {% endif %}
+            {% if p.action_recommandee is defined %}
+            <p style="margin:4px 0 0"><i class="fas fa-arrow-right" style="color:var(--yellow);font-size:11px;margin-right:4px"></i>{{ p.action_recommandee }}</p>
+            {% elseif p.suggestions_titres is defined and p.suggestions_titres|length > 0 %}
+            <p style="margin:4px 0 0"><i class="fas fa-arrow-right" style="color:var(--yellow);font-size:11px;margin-right:4px"></i>Titre suggéré : <em>{{ p.suggestions_titres|first }}</em></p>
+            {% endif %}
+        </div>
+        <div class="action-card-footer">
+            {% if report.video %}
+            <a href="{{ path('analytics_video_detail', {youtubeId: report.video.youtubeId}) }}" class="btn btn-outline btn-sm">
+                <i class="fas fa-chart-line"></i> Voir la vidéo
+            </a>
+            {% endif %}
+            <button class="btn-dismiss" onclick="dismissAction(this, {{ report.id }})"><i class="fas fa-check"></i> Fait</button>
+        </div>
+    </div>
+    {% endfor %}
+
 </div>
 {% endif %}
+
+<script>
+(function() {
+    var dismissed = JSON.parse(localStorage.getItem('dismissed_actions') || '[]');
+    dismissed.forEach(function(id) {
+        var card = document.querySelector('[data-id="' + id + '"]');
+        if (card) card.classList.add('dismissed');
+    });
+
+    window.dismissAction = function(btn, id) {
+        dismissed.push(id);
+        localStorage.setItem('dismissed_actions', JSON.stringify(dismissed));
+        var card = btn.closest('.action-card');
+        card.style.transition = 'opacity .3s, max-height .4s';
+        card.style.opacity = '0';
+        card.style.maxHeight = card.offsetHeight + 'px';
+        setTimeout(function() { card.style.maxHeight = '0'; card.style.padding = '0'; card.style.margin = '0'; card.style.overflow = 'hidden'; }, 50);
+        setTimeout(function() { card.remove(); }, 450);
+    };
+
+    function applyFilter(filter) {
+        document.querySelectorAll('.action-filter-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.filter === filter);
+        });
+        document.querySelectorAll('.action-card').forEach(function(card) {
+            card.style.display = (filter === 'all' || card.dataset.urgency === filter) ? '' : 'none';
+        });
+        var url = new URL(window.location.href);
+        if (filter === 'all') { url.searchParams.delete('filter'); }
+        else { url.searchParams.set('filter', filter); }
+        history.replaceState(null, '', url.toString());
+    }
+
+    // Init from URL param
+    var params  = new URLSearchParams(window.location.search);
+    var initial = params.get('filter') || 'all';
+    applyFilter(initial);
+
+    document.getElementById('actionFilters') && document.getElementById('actionFilters').addEventListener('click', function(e) {
+        var btn = e.target.closest('.action-filter-btn');
+        if (!btn) return;
+        applyFilter(btn.dataset.filter);
+    });
+})();
+</script>
 {% endblock %}

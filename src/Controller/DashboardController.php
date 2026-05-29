@@ -3,7 +3,10 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Enum\AiReportType;
+use App\Repository\AiReportRepository;
 use App\Repository\ChannelStatsRepository;
+use App\Repository\DailyMetricRepository;
 use App\Repository\GoogleTokenRepository;
 use App\Repository\VideoStatsRepository;
 use App\Service\GoogleAuthService;
@@ -24,6 +27,8 @@ class DashboardController extends AbstractController
         private readonly ChannelStatsRepository $channelStatsRepo,
         private readonly VideoStatsRepository $videoStatsRepo,
         private readonly GoogleTokenRepository $tokenRepo,
+        private readonly DailyMetricRepository $metricRepo,
+        private readonly AiReportRepository $aiReportRepo,
     ) {}
 
     #[Route('/', name: 'dashboard')]
@@ -68,11 +73,24 @@ class DashboardController extends AbstractController
             }
         }
 
+        $periodStats  = [];
+        $actionsCount = 0;
+        if ($isConnected && $latestStats) {
+            $now         = new \DateTimeImmutable();
+            $periodStats = $this->metricRepo->getTotalsForRange($user, $now->modify('-30 days'), $now);
+            $actionsCount = count(array_filter(
+                $this->aiReportRepo->findForUser($user, 100),
+                fn($r) => $r->getStatus()->value === 'done'
+            ));
+        }
+
         return $this->render('dashboard/index.html.twig', [
-            'is_connected' => $isConnected,
-            'latest_stats' => $latestStats,
-            'top_videos' => array_slice($topVideos, 0, 10),
-            'chart_data' => $chartData,
+            'is_connected'  => $isConnected,
+            'latest_stats'  => $latestStats,
+            'top_videos'    => array_slice($topVideos, 0, 10),
+            'chart_data'    => $chartData,
+            'period_stats'  => $periodStats,
+            'actions_count' => $actionsCount,
         ]);
     }
 
@@ -99,6 +117,32 @@ class DashboardController extends AbstractController
         }
 
         return $this->redirectToRoute('dashboard');
+    }
+
+    #[Route('/api/kpi-data', name: 'api_kpi_data')]
+    public function kpiData(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $days = min(365, max(1, (int) $request->query->get('days', 30)));
+        $now  = new \DateTimeImmutable();
+        $from = $now->modify("-{$days} days");
+        $prev = $from->modify("-{$days} days");
+
+        $curr = $this->metricRepo->getTotalsForRange($user, $from, $now);
+        $prevData = $this->metricRepo->getTotalsForRange($user, $prev, $from);
+
+        $pct = fn($c, $p) => ($p && (float)$p > 0) ? round(((float)$c - (float)$p) / (float)$p * 100, 1) : null;
+
+        return new JsonResponse([
+            'views'        => (int)($curr['views'] ?? 0),
+            'watch_time'   => (int)($curr['watch_time'] ?? 0),
+            'subscribers'  => (int)($curr['subscribers'] ?? 0),
+            'avg_ctr'      => $curr['avg_ctr'] !== null ? round((float)$curr['avg_ctr'], 2) : null,
+            'delta_views'  => $pct($curr['views'] ?? 0, $prevData['views'] ?? 0),
+            'delta_watch'  => $pct($curr['watch_time'] ?? 0, $prevData['watch_time'] ?? 0),
+            'delta_subs'   => $pct($curr['subscribers'] ?? 0, $prevData['subscribers'] ?? 0),
+        ]);
     }
 
     #[Route('/videos', name: 'videos')]

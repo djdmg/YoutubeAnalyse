@@ -1,0 +1,225 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Meilleur moment de publication — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-clock"></i> Meilleur moment de publication</h1>
+        <span class="last-sync">Analyse sur {{ analyzed }} vidéo(s) · 7 premiers jours</span>
+    </div>
+    <div class="header-actions">
+        <a href="{{ path('analytics_videos') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-arrow-left"></i> Retour
+        </a>
+    </div>
+</div>
+
+{% if analyzed < 3 %}
+<div class="section-card" style="border-color:rgba(234,179,8,0.3)">
+    <div style="display:flex;align-items:center;gap:12px;color:var(--yellow)">
+        <i class="fas fa-info-circle fa-lg"></i>
+        <div>
+            <strong>Données insuffisantes</strong>
+            <p style="margin:4px 0 0;color:var(--text-secondary);font-size:13px">
+                Il faut au moins 3 vidéos avec des métriques pour calculer des tendances. Actuellement : {{ analyzed }}.
+                Lance <strong>app:youtube:sync</strong> pour synchroniser plus de données.
+            </p>
+        </div>
+    </div>
+</div>
+{% else %}
+
+{% set dow_names = {1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi', 7: 'Dimanche'} %}
+{% set hour_labels = {0: '0h–3h', 1: '3h–6h', 2: '6h–9h', 3: '9h–12h', 4: '12h–15h', 5: '15h–18h', 6: '18h–21h', 7: '21h–24h'} %}
+
+{# Best day card #}
+{% if dow_stats|length > 0 %}
+{% set best_dow = dow_stats|keys|reduce((best, k) => dow_stats[k].avg > dow_stats[best].avg ? k : best, dow_stats|keys|first) %}
+{% set best_hour_bucket = hour_stats|length > 0 ? hour_stats|keys|reduce((best, k) => hour_stats[k].avg > hour_stats[best].avg ? k : best, hour_stats|keys|first) : null %}
+
+<div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:28px">
+    <div class="section-card" style="border-color:rgba(34,197,94,0.3);margin-bottom:0">
+        <div style="display:flex;align-items:center;gap:16px">
+            <div class="kpi-icon views" style="background:rgba(34,197,94,0.12);color:var(--green)">
+                <i class="fas fa-calendar-check"></i>
+            </div>
+            <div>
+                <div class="kpi-label">Meilleur jour</div>
+                <div class="kpi-value" style="color:var(--green)">{{ dow_names[best_dow] ?? best_dow }}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+                    ~{{ dow_stats[best_dow].avg|number_format(0, ',', ' ') }} vues/semaine · {{ dow_stats[best_dow].count }} vidéos
+                </div>
+            </div>
+        </div>
+    </div>
+    {% if best_hour_bucket is not null %}
+    <div class="section-card" style="border-color:rgba(59,130,246,0.3);margin-bottom:0">
+        <div style="display:flex;align-items:center;gap:16px">
+            <div class="kpi-icon views" style="background:rgba(59,130,246,0.12);color:var(--blue)">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div>
+                <div class="kpi-label">Meilleur créneau</div>
+                <div class="kpi-value" style="color:var(--blue)">{{ hour_labels[best_hour_bucket] ?? best_hour_bucket }}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+                    ~{{ hour_stats[best_hour_bucket].avg|number_format(0, ',', ' ') }} vues/semaine · {{ hour_stats[best_hour_bucket].count }} vidéos
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Day of week chart #}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-calendar-week"></i> Vues 7 premiers jours par jour de publication</h3>
+        <span style="font-size:12px;color:var(--text-muted)">Moyenne par vidéo publiée ce jour-là</span>
+    </div>
+    <div class="best-time-grid">
+        {% for dow in 1..7 %}
+        {% set stat = dow_stats[dow] ?? null %}
+        {% set barPct = stat ? (stat.avg / max_dow_avg * 100)|round : 0 %}
+        {% set isTop = stat and max_dow_avg > 0 and stat.avg == max_dow_avg %}
+        <div class="bt-day-col {{ isTop ? 'bt-best' : '' }}">
+            <div class="bt-bar-wrap">
+                <div class="bt-bar" style="height:{{ barPct }}%"></div>
+            </div>
+            <div class="bt-label">{{ dow_names[dow]|slice(0,3) }}</div>
+            {% if stat %}
+            <div class="bt-value">{{ stat.avg|number_format(0, ',', ' ') }}</div>
+            <div class="bt-count">{{ stat.count }}v</div>
+            {% else %}
+            <div class="bt-value" style="color:var(--text-muted)">—</div>
+            <div class="bt-count">0v</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# Hour slot chart #}
+{% if hour_stats|length > 0 %}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-sun"></i> Vues 7 premiers jours par créneau horaire</h3>
+        <span style="font-size:12px;color:var(--text-muted)">Heure locale de publication</span>
+    </div>
+    <div class="best-time-grid" style="grid-template-columns:repeat(8,1fr)">
+        {% for bucket in 0..7 %}
+        {% set stat = hour_stats[bucket] ?? null %}
+        {% set barPct = stat ? (stat.avg / max_hour_avg * 100)|round : 0 %}
+        {% set isTop = stat and max_hour_avg > 0 and stat.avg == max_hour_avg %}
+        <div class="bt-day-col {{ isTop ? 'bt-best' : '' }}">
+            <div class="bt-bar-wrap">
+                <div class="bt-bar" style="height:{{ barPct }}%"></div>
+            </div>
+            <div class="bt-label" style="font-size:10px">{{ hour_labels[bucket] }}</div>
+            {% if stat %}
+            <div class="bt-value">{{ stat.avg|number_format(0, ',', ' ') }}</div>
+            <div class="bt-count">{{ stat.count }}v</div>
+            {% else %}
+            <div class="bt-value" style="color:var(--text-muted)">—</div>
+            <div class="bt-count">0v</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# Heatmap jour × créneau horaire #}
+{% if heatmap|length > 0 %}
+{% set dow_names = {1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 7: 'Dim'} %}
+{% set hour_labels = {0: '0–3h', 1: '3–6h', 2: '6–9h', 3: '9–12h', 4: '12–15h', 5: '15–18h', 6: '18–21h', 7: '21–24h'} %}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-th"></i> Heatmap : jour × créneau horaire</h3>
+        <span style="font-size:12px;color:var(--text-muted)">Moyenne vues J+7 — intensité = performance</span>
+    </div>
+    <div class="heatmap-grid">
+        {# Header row #}
+        <div></div>
+        {% for bucket in 0..7 %}
+        <div class="heatmap-col-header">{{ hour_labels[bucket] }}</div>
+        {% endfor %}
+        {# Data rows #}
+        {% for dow in 1..7 %}
+        <div class="heatmap-row-label">{{ dow_names[dow] }}</div>
+        {% for bucket in 0..7 %}
+        {% set cell = heatmap[dow][bucket] ?? null %}
+        {% if cell %}
+            {% set intensity = max_heatmap > 0 ? (cell.avg / max_heatmap) : 0 %}
+            {% set alpha = (0.08 + intensity * 0.82)|round(2) %}
+            <div class="heatmap-cell" style="background:rgba(59,130,246,{{ alpha }})"
+                 title="{{ dow_names[dow] }} {{ hour_labels[bucket] }} — ~{{ cell.avg|number_format(0,',',' ') }} vues · {{ cell.count }}v">
+                <span class="heatmap-cell-val">{{ cell.avg >= 1000 ? (cell.avg / 1000)|number_format(1) ~ 'k' : cell.avg }}</span>
+                <span class="heatmap-cell-cnt">{{ cell.count }}v</span>
+            </div>
+        {% else %}
+            <div class="heatmap-cell heatmap-empty" title="Aucune donnée"></div>
+        {% endif %}
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="section-card" style="border-color:rgba(59,130,246,0.15)">
+    <div style="display:flex;gap:10px;align-items:flex-start">
+        <i class="fas fa-info-circle" style="color:var(--blue);margin-top:2px;flex-shrink:0"></i>
+        <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">
+            <strong style="color:var(--text-primary)">Comment lire ces données ?</strong><br>
+            Chaque barre représente la <em>moyenne des vues obtenues dans les 7 jours suivant la publication</em> pour les vidéos publiées ce jour/créneau.
+            Un échantillon faible (1-2 vidéos) rend le résultat peu fiable — cherche les jours avec au moins 3+ vidéos.
+            Les données manquantes (—) signifient qu'aucune vidéo n'a été publiée dans ce créneau.
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+<style>
+.best-time-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    align-items: end;
+    padding: 8px 0;
+}
+
+.bt-day-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.bt-bar-wrap {
+    width: 100%;
+    height: 120px;
+    display: flex;
+    align-items: flex-end;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px 6px 0 0;
+    overflow: hidden;
+}
+
+.bt-bar {
+    width: 100%;
+    background: var(--blue);
+    border-radius: 4px 4px 0 0;
+    min-height: 2px;
+    transition: height 0.4s ease;
+}
+
+.bt-best .bt-bar { background: var(--green); }
+.bt-best .bt-value { color: var(--green); font-weight: 700; }
+
+.bt-label { font-size:11px; font-weight:600; color:var(--text-secondary); }
+.bt-value  { font-size:11px; color:var(--text-primary); }
+.bt-count  { font-size:10px; color:var(--text-muted); }
+</style>
+{% endblock %}

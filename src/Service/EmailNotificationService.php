@@ -68,6 +68,30 @@ class EmailNotificationService
         return $this->send($user, $email);
     }
 
+    public function sendWeeklyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $weekStart, \DateTimeImmutable $weekEnd): ?string
+    {
+        if (!$user->hasSmtpConfigured()) return null;
+
+        $html = $this->twig->render('email/weekly_report.html.twig', [
+            'user'        => $user,
+            'stats'       => $stats,
+            'top_videos'  => $topVideos,
+            'week_start'  => $weekStart,
+            'week_end'    => $weekEnd,
+        ]);
+
+        $email = (new Email())
+            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->to($user->getNotifEmail())
+            ->subject(sprintf('📅 Bilan semaine du %s — %s vues',
+                $weekStart->format('d/m'),
+                number_format((int) ($stats['views'] ?? 0), 0, ',', ' ')
+            ))
+            ->html($html);
+
+        return $this->send($user, $email);
+    }
+
     public function sendDailyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $date, bool $isDelayed = false): ?string
     {
         if (!$user->hasSmtpConfigured()) return null;

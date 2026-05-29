@@ -1,0 +1,130 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Comparaison vidéos — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-exchange-alt"></i> Comparaison vidéos</h1>
+        <span class="last-sync">{{ compare_data|length }} vidéo(s) · 30 derniers jours</span>
+    </div>
+    <div class="header-actions">
+        <a href="{{ path('analytics_videos') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-arrow-left"></i> Retour
+        </a>
+    </div>
+</div>
+
+{% if compare_data|length < 2 %}
+<div class="section-card">
+    <div style="text-align:center;padding:48px 24px;color:var(--text-secondary)">
+        <i class="fas fa-exchange-alt fa-3x" style="margin-bottom:16px;opacity:.3"></i>
+        <h3 style="margin-bottom:8px;color:var(--text-primary)">Sélectionne au moins 2 vidéos</h3>
+        <p style="margin-bottom:24px">Coche des vidéos sur la page analytics et clique sur "Comparer".</p>
+        <a href="{{ path('analytics_videos') }}" class="btn btn-primary">
+            <i class="fas fa-video"></i> Choisir des vidéos
+        </a>
+    </div>
+</div>
+{% else %}
+
+{% set palette = ['#3b82f6','#ef4444','#22c55e','#a855f7'] %}
+
+{# ── Legend cards ─────────────────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat({{ compare_data|length }},1fr);gap:16px;margin-bottom:24px">
+{% for item in compare_data %}
+    {% set color = palette[loop.index0] %}
+    <div class="section-card" style="border-color:{{ color }}44;margin-bottom:0">
+        <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:12px;height:40px;border-radius:4px;background:{{ color }};flex-shrink:0"></div>
+            {% if item.video.thumbnailUrl %}
+            <img src="{{ item.video.thumbnailUrl }}" alt="" style="width:64px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0">
+            {% endif %}
+            <div style="min-width:0">
+                <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:{{ color }}">
+                    {{ item.video.title|length > 50 ? item.video.title|slice(0,50) ~ '…' : item.video.title }}
+                </div>
+                {% if item.video.publishedAt %}
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+                    {{ item.video.publishedAt|date('d/m/Y') }}
+                </div>
+                {% endif %}
+                <div style="font-size:11px;color:var(--text-muted)">{{ item.daily_data|length }} jours de données</div>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+</div>
+
+{# ── Chart ─────────────────────────────────────────────────────────────────── #}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-chart-line"></i> Vues quotidiennes</h3>
+    </div>
+    <div style="position:relative;height:320px">
+        <canvas id="compareChart"></canvas>
+    </div>
+</div>
+
+{# ── Stats table ───────────────────────────────────────────────────────────── #}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-table"></i> Récapitulatif (30 jours)</h3>
+    </div>
+    <table class="videos-table">
+        <thead>
+            <tr>
+                <th>Vidéo</th>
+                <th><i class="fas fa-eye"></i> Vues totales</th>
+                <th><i class="fas fa-chart-line"></i> Pic (1 jour)</th>
+                <th><i class="fas fa-calendar-check"></i> Jours actifs</th>
+                <th><i class="fas fa-calculator"></i> Moy/jour</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in compare_data %}
+            {% set color = palette[loop.index0] %}
+            {% set totalViews = 0 %}
+            {% set peakViews = 0 %}
+            {% set activeDays = 0 %}
+            {% for row in item.daily_data %}
+                {% set totalViews = totalViews + row.views %}
+                {% if row.views > peakViews %}{% set peakViews = row.views %}{% endif %}
+                {% if row.views > 0 %}{% set activeDays = activeDays + 1 %}{% endif %}
+            {% endfor %}
+            {% set avgViews = activeDays > 0 ? (totalViews / activeDays)|round : 0 %}
+            <tr>
+                <td>
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{{ color }};margin-right:8px"></span>
+                    <strong>{{ item.video.title|length > 45 ? item.video.title|slice(0,45) ~ '…' : item.video.title }}</strong>
+                </td>
+                <td class="num">{{ totalViews|number_format(0, ',', ' ') }}</td>
+                <td class="num">{{ peakViews|number_format(0, ',', ' ') }}</td>
+                <td class="num">{{ activeDays }}</td>
+                <td class="num">{{ avgViews|number_format(0, ',', ' ') }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# ── Chart data (global var consumed by compare.js webpack entry) ─────────── #}
+<script>
+var compareDatasets = [
+{% for item in compare_data %}
+    {
+        title: {{ item.video.title|json_encode|raw }},
+        dates: [{% for row in item.daily_data %}"{{ row.date }}"{% if not loop.last %},{% endif %}{% endfor %}],
+        views: [{% for row in item.daily_data %}{{ row.views }}{% if not loop.last %},{% endif %}{% endfor %}]
+    }{{ not loop.last ? ',' : '' }}
+{% endfor %}
+];
+</script>
+
+{% endif %}
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+{{ encore_entry_script_tags('compare') }}
+{% endblock %}

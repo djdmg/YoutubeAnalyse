@@ -7,13 +7,23 @@ use App\Enum\AiReportStatus;
 use App\Enum\AiReportType;
 use Anthropic\Client;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class AnthropicService
+class AnthropicService implements AiProviderInterface
 {
-    // Modèles par usage — du plus léger au plus puissant
-    public const MODEL_FAST     = 'claude-haiku-4-5-20251001';   // Rapide, économique (prédictions)
-    public const MODEL_BALANCED = 'claude-sonnet-4-6';            // Équilibré (optimisation titres)
-    public const MODEL_FULL     = 'claude-sonnet-4-20250514';     // Défaut (analyses complexes)
+    // Tier → actual Claude model name
+    private const TIER_MAP = [
+        AiProviderInterface::TIER_FAST     => 'claude-haiku-4-5-20251001',
+        AiProviderInterface::TIER_BALANCED => 'claude-sonnet-4-6',
+        AiProviderInterface::TIER_FULL     => 'claude-sonnet-4-20250514',
+    ];
+
+    // Keep for legacy call-sites that might still use these directly
+    public const MODEL_FAST     = AiProviderInterface::TIER_FAST;
+    public const MODEL_BALANCED = AiProviderInterface::TIER_BALANCED;
+    public const MODEL_FULL     = AiProviderInterface::TIER_FULL;
 
     private const MAX_TOKENS = 2048;
 
@@ -22,8 +32,45 @@ class AnthropicService
     public function __construct(
         private readonly string $apiKey,
         private readonly LoggerInterface $logger,
+        private readonly HttpClientInterface $httpClient,
+        private readonly CacheInterface $cache,
     ) {
         $this->client = new Client(apiKey: $this->apiKey);
+    }
+
+    private function resolveModel(string $model): string
+    {
+        // Tier alias → real model; otherwise pass-through (specific model ID)
+        return self::TIER_MAP[$model] ?? $model;
+    }
+
+    public function getAvailableModels(): array
+    {
+        return $this->cache->get('anthropic_models', function (ItemInterface $item) {
+            $item->expiresAfter(86400);
+            try {
+                $response = $this->httpClient->request('GET', 'https://api.anthropic.com/v1/models', [
+                    'headers' => [
+                        'x-api-key'         => $this->apiKey,
+                        'anthropic-version' => '2023-06-01',
+                    ],
+                ]);
+                $data   = $response->toArray();
+                $models = [];
+                foreach ($data['data'] ?? [] as $m) {
+                    $id   = $m['id'] ?? '';
+                    $name = $m['display_name'] ?? $id;
+                    $tier = $this->detectTier($id);
+                    $models[] = ['id' => $id, 'name' => $name, 'tier' => $tier];
+                }
+                // Sort: fast first, then balanced, then full, then null
+                usort($models, fn($a, $b) => $this->tierOrder($a['tier']) <=> $this->tierOrder($b['tier']));
+                return $models;
+            } catch (\Throwable $e) {
+                $this->logger->warning('Could not fetch Anthropic models: ' . $e->getMessage());
+                return $this->defaultModels();
+            }
+        });
     }
 
     /**
@@ -50,11 +97,13 @@ class AnthropicService
     {
         $startTime = microtime(true);
 
+        $resolvedModel = $this->resolveModel($model);
+
         try {
             $response = $this->client->messages->create(
                 maxTokens: $maxTokens,
                 messages:  [['role' => 'user', 'content' => $prompt]],
-                model:     $model,
+                model:     $resolvedModel,
             );
 
             $text   = $response->content[0]->text ?? '';
@@ -66,7 +115,7 @@ class AnthropicService
             }
 
             $this->logger->info('Claude callRaw successful', [
-                'model'          => $model,
+                'model'          => $resolvedModel,
                 'tokens_input'   => $response->usage->inputTokens ?? 0,
                 'tokens_output'  => $response->usage->outputTokens ?? 0,
                 'duration_ms'    => (int) ((microtime(true) - $startTime) * 1000),
@@ -86,19 +135,20 @@ class AnthropicService
      */
     public function call(AiReport $report, string $prompt, string $model = self::MODEL_FULL): ?array
     {
-        $startTime = microtime(true);
+        $startTime     = microtime(true);
+        $resolvedModel = $this->resolveModel($model);
 
         try {
             $response = $this->client->messages->create(
                 maxTokens: self::MAX_TOKENS,
                 messages:  [['role' => 'user', 'content' => $prompt]],
-                model:     $model,
+                model:     $resolvedModel,
             );
 
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
             $text = $response->content[0]->text ?? '';
 
-            $report->setModelVersion($model);
+            $report->setModelVersion($resolvedModel);
             $report->setTokensInput($response->usage->inputTokens ?? 0);
             $report->setTokensOutput($response->usage->outputTokens ?? 0);
             $report->setDurationMs($durationMs);
@@ -118,6 +168,7 @@ class AnthropicService
 
             $this->logger->info('Claude call successful', [
                 'type'           => $report->getType()->value,
+                'model'          => $resolvedModel,
                 'tokens_input'   => $response->usage->inputTokens ?? 0,
                 'tokens_output'  => $response->usage->outputTokens ?? 0,
                 'duration_ms'    => $durationMs,
@@ -130,16 +181,105 @@ class AnthropicService
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
             $report->setStatus(AiReportStatus::Failed);
             $report->setDurationMs($durationMs);
-            $report->setModelVersion($model);
+            $report->setModelVersion($resolvedModel);
 
             $this->logger->error('Claude call failed', [
                 'type'        => $report->getType()->value,
-                'model'       => $model,
+                'model'       => $resolvedModel,
                 'error'       => $e->getMessage(),
                 'duration_ms' => $durationMs,
                 'status'      => 'failed',
             ]);
             return null;
         }
+    }
+
+    /**
+     * Calls Claude Vision with an image URL and prompt. Returns parsed JSON or null.
+     */
+    public function callVision(string $imageUrl, string $prompt, string $model = self::MODEL_FAST): ?array
+    {
+        $startTime     = microtime(true);
+        $resolvedModel = $this->resolveModel($model);
+
+        try {
+            $imageData = @file_get_contents($imageUrl);
+            if ($imageData === false) {
+                $this->logger->error('callVision: failed to fetch image', ['url' => $imageUrl]);
+                return null;
+            }
+
+            $base64    = base64_encode($imageData);
+            $mediaType = 'image/jpeg';
+            if (str_starts_with($imageData, "\x89PNG")) {
+                $mediaType = 'image/png';
+            }
+
+            $response = $this->client->messages->create(
+                maxTokens: 512,
+                model:     $resolvedModel,
+                messages:  [[
+                    'role'    => 'user',
+                    'content' => [
+                        [
+                            'type'   => 'image',
+                            'source' => [
+                                'type'       => 'base64',
+                                'media_type' => $mediaType,
+                                'data'       => $base64,
+                            ],
+                        ],
+                        ['type' => 'text', 'text' => $prompt],
+                    ],
+                ]],
+            );
+
+            $text   = $response->content[0]->text ?? '';
+            $parsed = json_decode($text, true);
+
+            if (!is_array($parsed)) {
+                $this->logger->error('callVision: invalid JSON', ['response' => substr($text, 0, 500)]);
+                return null;
+            }
+
+            $this->logger->info('callVision successful', [
+                'model'       => $resolvedModel,
+                'duration_ms' => (int) ((microtime(true) - $startTime) * 1000),
+            ]);
+
+            return $parsed;
+
+        } catch (\Throwable $e) {
+            $this->logger->error('callVision failed', ['error' => $e->getMessage(), 'url' => $imageUrl]);
+            return null;
+        }
+    }
+
+    private function detectTier(string $id): ?string
+    {
+        $id = strtolower($id);
+        if (str_contains($id, 'haiku'))  return AiProviderInterface::TIER_FAST;
+        if (str_contains($id, 'sonnet')) return AiProviderInterface::TIER_BALANCED;
+        if (str_contains($id, 'opus'))   return AiProviderInterface::TIER_FULL;
+        return null;
+    }
+
+    private function tierOrder(?string $tier): int
+    {
+        return match($tier) {
+            AiProviderInterface::TIER_FAST     => 0,
+            AiProviderInterface::TIER_BALANCED => 1,
+            AiProviderInterface::TIER_FULL     => 2,
+            default                            => 3,
+        };
+    }
+
+    private function defaultModels(): array
+    {
+        return [
+            ['id' => 'fast',     'name' => 'Fast (Haiku)',   'tier' => AiProviderInterface::TIER_FAST],
+            ['id' => 'balanced', 'name' => 'Balanced (Sonnet)', 'tier' => AiProviderInterface::TIER_BALANCED],
+            ['id' => 'full',     'name' => 'Full (Sonnet)',  'tier' => AiProviderInterface::TIER_FULL],
+        ];
     }
 }

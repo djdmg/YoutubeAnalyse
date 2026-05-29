@@ -6,53 +6,40 @@
 
 {% if not is_connected %}
 <div class="connect-card">
-    <div class="connect-icon">
-        <i class="fab fa-youtube"></i>
-    </div>
+    <div class="connect-icon"><i class="fab fa-youtube"></i></div>
     <h1>YouTube Analyse</h1>
     <p>Connecte ta chaîne YouTube pour commencer l'analyse.</p>
     <div class="feature-list">
-        <div class="feature-item"><i class="fas fa-chart-bar"></i> Vues & Watch Time</div>
+        <div class="feature-item"><i class="fas fa-chart-bar"></i> Vues &amp; Watch Time</div>
         <div class="feature-item"><i class="fas fa-users"></i> Évolution des abonnés</div>
-        <div class="feature-item"><i class="fas fa-euro-sign"></i> Revenus AdSense</div>
-        <div class="feature-item"><i class="fas fa-trophy"></i> Top vidéos & CTR</div>
+        <div class="feature-item"><i class="fas fa-robot"></i> Analyses IA</div>
+        <div class="feature-item"><i class="fas fa-trophy"></i> Top vidéos &amp; CTR</div>
     </div>
     <a href="{{ path('auth_google') }}" class="btn-connect">
-        <i class="fab fa-youtube"></i>
-        Connecter ma chaîne YouTube
+        <i class="fab fa-youtube"></i> Connecter ma chaîne YouTube
     </a>
-    <p class="connect-note">
-        <i class="fas fa-lock"></i>
-        Tes données restent privées et stockées sur ta base de données.
-    </p>
+    <p class="connect-note"><i class="fas fa-lock"></i> Données privées, stockées sur ta base de données.</p>
 </div>
 
 {% else %}
-{# Header #}
+
+{# ── Header ──────────────────────────────────────────────────────────── #}
 <div class="dashboard-header">
     <div>
         <h1>
             <i class="fab fa-youtube" style="color:#ff0000"></i>
-            {% if latest_stats %}
-                {{ latest_stats.channelTitle }}
-            {% else %}
-                Tableau de bord
-            {% endif %}
+            {{ latest_stats ? latest_stats.channelTitle : 'Tableau de bord' }}
         </h1>
         {% if latest_stats %}
-            <span class="last-sync">Dernière sync : {{ latest_stats.recordedAt|date('d/m/Y H:i') }}</span>
+        <span class="last-sync">Dernière sync : {{ latest_stats.recordedAt|date('d/m/Y H:i') }}</span>
         {% endif %}
     </div>
     <div class="header-actions">
         <form method="post" action="{{ path('sync_data') }}" class="js-sync-form" style="display:inline">
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-sync-alt"></i> Synchroniser
-            </button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-sync-alt"></i> Synchroniser</button>
         </form>
         <form method="post" action="{{ path('auth_google_revoke') }}" style="display:inline">
-            <button type="submit" class="btn btn-outline">
-                <i class="fas fa-sign-out-alt"></i> Déconnecter
-            </button>
+            <button type="submit" class="btn btn-outline"><i class="fas fa-sign-out-alt"></i> Déconnecter</button>
         </form>
     </div>
 </div>
@@ -63,66 +50,99 @@
     <h3>Aucune donnée</h3>
     <p>Clique sur <strong>Synchroniser</strong> pour récupérer les métriques de ta chaîne.</p>
 </div>
+
 {% else %}
 
-{# KPI Cards #}
-<div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-icon views">
-            <i class="fas fa-eye"></i>
-        </div>
-        <div class="kpi-content">
-            <div class="kpi-value">{{ latest_stats.viewCount|number_format(0, ',', ' ') }}</div>
-            <div class="kpi-label">Vues totales</div>
-        </div>
+{# ── À faire banner ──────────────────────────────────────────────────── #}
+{% if actions_count > 0 %}
+<a href="{{ path('analytics_alerts') }}" class="actions-banner">
+    <i class="fas fa-exclamation-triangle" style="color:var(--yellow);font-size:18px;flex-shrink:0"></i>
+    <div>
+        <strong>{{ actions_count }} action{{ actions_count > 1 ? 's' : '' }} en attente</strong>
+        <span style="color:var(--text-secondary);font-size:12px;margin-left:8px">Alertes et recommandations IA →</span>
     </div>
+</a>
+{% endif %}
 
-    <div class="kpi-card">
-        <div class="kpi-icon subscribers">
-            <i class="fas fa-users"></i>
+{# ── Period selector + KPIs ──────────────────────────────────────────── #}
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <span style="font-size:13px;color:var(--text-muted)">Période :</span>
+    <div class="period-selector" id="kpiPeriodSelector">
+        <button class="period-btn active" data-days="7">7j</button>
+        <button class="period-btn" data-days="30">30j</button>
+        <button class="period-btn" data-days="90">90j</button>
+    </div>
+    <span style="font-size:12px;color:var(--text-muted)" id="periodCompareLabel">vs 30j précédents</span>
+</div>
+
+<div class="period-kpi-grid" id="periodKpiGrid">
+    <div class="period-kpi-card">
+        <div class="period-kpi-label"><i class="fas fa-eye" style="color:var(--blue)"></i> Vues</div>
+        <div class="period-kpi-value" id="kpi-views">{{ period_stats.views|default(0)|number_format(0, ',', ' ') }}</div>
+        <div class="period-kpi-delta" id="delta-views"><span class="delta-neutral">—</span></div>
+    </div>
+    <div class="period-kpi-card">
+        <div class="period-kpi-label"><i class="fas fa-clock" style="color:var(--orange)"></i> Watch Time</div>
+        <div class="period-kpi-value" id="kpi-watch">
+            {% set wt = period_stats.watch_time|default(0) %}
+            {{ wt >= 60 ? (wt / 60)|round(1) ~ 'h' : wt ~ ' min' }}
         </div>
+        <div class="period-kpi-delta" id="delta-watch"><span class="delta-neutral">—</span></div>
+    </div>
+    <div class="period-kpi-card">
+        <div class="period-kpi-label"><i class="fas fa-user-plus" style="color:var(--purple)"></i> Abonnés gagnés</div>
+        <div class="period-kpi-value" id="kpi-subs">
+            {% set s = period_stats.subscribers|default(0) %}
+            {{ s >= 0 ? '+' : '' }}{{ s }}
+        </div>
+        <div class="period-kpi-delta" id="delta-subs"><span class="delta-neutral">—</span></div>
+    </div>
+    <div class="period-kpi-card">
+        <div class="period-kpi-label"><i class="fas fa-percentage" style="color:var(--yellow)"></i> CTR moyen</div>
+        <div class="period-kpi-value" id="kpi-ctr">
+            {{ period_stats.avg_ctr is not null ? period_stats.avg_ctr|number_format(2) ~ '%' : '—' }}
+        </div>
+        <div class="period-kpi-delta" id="delta-ctr"><span class="delta-neutral">—</span></div>
+    </div>
+</div>
+
+{# ── Channel totals (static) ─────────────────────────────────────────── #}
+<div class="kpi-grid" style="margin-bottom:28px">
+    <div class="kpi-card">
+        <div class="kpi-icon subscribers"><i class="fas fa-users"></i></div>
         <div class="kpi-content">
             <div class="kpi-value">{{ latest_stats.subscriberCount|number_format(0, ',', ' ') }}</div>
-            <div class="kpi-label">Abonnés</div>
+            <div class="kpi-label">Abonnés total</div>
         </div>
     </div>
-
     <div class="kpi-card">
-        <div class="kpi-icon videos">
-            <i class="fas fa-video"></i>
-        </div>
+        <div class="kpi-icon videos"><i class="fas fa-video"></i></div>
         <div class="kpi-content">
             <div class="kpi-value">{{ latest_stats.videoCount|number_format(0, ',', ' ') }}</div>
             <div class="kpi-label">Vidéos publiées</div>
         </div>
     </div>
-
-    {% if latest_stats.watchTimeMinutes %}
-    <div class="kpi-card">
-        <div class="kpi-icon watchtime">
-            <i class="fas fa-clock"></i>
-        </div>
-        <div class="kpi-content">
-            <div class="kpi-value">{{ (latest_stats.watchTimeMinutes / 60)|number_format(0, ',', ' ') }}h</div>
-            <div class="kpi-label">Watch Time (30j)</div>
-        </div>
-    </div>
-    {% endif %}
-
     {% if latest_stats.likes %}
     <div class="kpi-card">
-        <div class="kpi-icon likes">
-            <i class="fas fa-thumbs-up"></i>
-        </div>
+        <div class="kpi-icon likes"><i class="fas fa-thumbs-up"></i></div>
         <div class="kpi-content">
             <div class="kpi-value">{{ latest_stats.likes|number_format(0, ',', ' ') }}</div>
             <div class="kpi-label">Likes (30j)</div>
         </div>
     </div>
     {% endif %}
+    {% if latest_stats.comments %}
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:rgba(34,197,94,0.15);color:var(--green)"><i class="fas fa-comment"></i></div>
+        <div class="kpi-content">
+            <div class="kpi-value">{{ latest_stats.comments|number_format(0, ',', ' ') }}</div>
+            <div class="kpi-label">Commentaires (30j)</div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
-{# Charts #}
+{# ── Charts ──────────────────────────────────────────────────────────── #}
 {% if chart_data.labels|length > 0 %}
 <div class="charts-grid">
     <div class="chart-card">
@@ -135,32 +155,26 @@
         </div>
         <canvas id="viewsChart" height="120"></canvas>
     </div>
-
     <div class="chart-card">
-        <div class="chart-header">
-            <h3><i class="fas fa-users"></i> Abonnés</h3>
-        </div>
+        <div class="chart-header"><h3><i class="fas fa-users"></i> Abonnés</h3></div>
         <canvas id="subscribersChart" height="120"></canvas>
     </div>
-
     {% if chart_data.watchTime|filter(v => v > 0)|length > 0 %}
     <div class="chart-card">
-        <div class="chart-header">
-            <h3><i class="fas fa-clock"></i> Watch Time (heures)</h3>
-        </div>
+        <div class="chart-header"><h3><i class="fas fa-clock"></i> Watch Time (heures)</h3></div>
         <canvas id="watchTimeChart" height="120"></canvas>
     </div>
     {% endif %}
 </div>
 {% endif %}
 
-{# Top Videos #}
+{# ── Top Videos ──────────────────────────────────────────────────────── #}
 {% if top_videos|length > 0 %}
 <div class="section-card">
     <div class="section-header">
-        <h3><i class="fas fa-trophy"></i> Top 10 vidéos</h3>
-        <a href="{{ path('videos') }}" class="btn btn-outline btn-sm">
-            Voir tout <i class="fas fa-arrow-right"></i>
+        <h3><i class="fas fa-trophy"></i> Top vidéos</h3>
+        <a href="{{ path('analytics_videos') }}" class="btn btn-outline btn-sm">
+            Analytics <i class="fas fa-arrow-right"></i>
         </a>
     </div>
     <div class="video-list">
@@ -194,17 +208,118 @@
 </div>
 {% endif %}
 
-{% endif %} {# end latest_stats #}
-{% endif %} {# end is_connected #}
+{% endif %}{# end latest_stats #}
+{% endif %}{# end is_connected #}
+
+{# ── Sync overlay ──────────────────────────────────────────────────────── #}
+{% if is_connected %}
+<div class="sync-overlay" id="syncOverlay">
+    <div class="sync-spinner"></div>
+    <div class="sync-overlay-text">Synchronisation en cours…</div>
+    <div class="sync-overlay-sub">Récupération des métriques YouTube</div>
+</div>
+<div class="sync-toast" id="syncToast"></div>
+
+<script>
+(function() {
+    var form = document.querySelector('.js-sync-form');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var overlay = document.getElementById('syncOverlay');
+        var toast   = document.getElementById('syncToast');
+        overlay.classList.add('visible');
+
+        fetch('{{ path('sync_data') }}', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            overlay.classList.remove('visible');
+            toast.textContent = data.success
+                ? '✓ ' + data.message
+                : '✗ ' + data.message;
+            toast.style.borderColor = data.success ? 'rgba(34,197,94,.4)' : 'rgba(239,68,68,.4)';
+            toast.classList.add('show');
+            setTimeout(function() {
+                toast.classList.remove('show');
+                if (data.success) window.location.reload();
+            }, 2500);
+        })
+        .catch(function() {
+            overlay.classList.remove('visible');
+            toast.textContent = '✗ Erreur réseau';
+            toast.style.borderColor = 'rgba(239,68,68,.4)';
+            toast.classList.add('show');
+            setTimeout(function() { toast.classList.remove('show'); }, 3000);
+        });
+    });
+})();
+</script>
+{% endif %}
 
 {% endblock %}
 
 {% block javascripts %}
     {{ parent() }}
     {% if is_connected and chart_data.labels|length > 0 %}
-    <script>
-        const chartData = {{ chart_data|json_encode|raw }};
-    </script>
+    <script>const chartData = {{ chart_data|json_encode|raw }};</script>
     {{ encore_entry_script_tags('dashboard') }}
+    {% endif %}
+    {% if is_connected and latest_stats %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var activeDays = 30;
+
+        function renderDelta(elId, pct) {
+            var el = document.getElementById(elId);
+            if (!el) return;
+            if (pct === null || pct === undefined) { el.innerHTML = '<span class="delta-neutral">—</span>'; return; }
+            var cls  = pct > 0 ? 'delta-up' : (pct < 0 ? 'delta-down' : 'delta-neutral');
+            var icon = pct > 0 ? '↑' : (pct < 0 ? '↓' : '');
+            el.innerHTML = '<span class="' + cls + '">' + icon + ' ' + Math.abs(pct) + '%</span>';
+        }
+
+        function fmtViews(n) { return n.toLocaleString('fr-FR'); }
+        function fmtWatch(min) { return min >= 60 ? Math.round(min / 60 * 10) / 10 + 'h' : min + ' min'; }
+        function fmtSubs(n)  { return (n >= 0 ? '+' : '') + n; }
+        function fmtCtr(v)   { return v !== null ? v.toFixed(2) + '%' : '—'; }
+
+        function loadKpis(days) {
+            document.querySelectorAll('#periodKpiGrid .period-kpi-value').forEach(function(el) { el.style.opacity = '0.4'; });
+            fetch('/api/kpi-data?days=' + days, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var kv = document.getElementById('kpi-views'),
+                    kw = document.getElementById('kpi-watch'),
+                    ks = document.getElementById('kpi-subs'),
+                    kc = document.getElementById('kpi-ctr'),
+                    lb = document.getElementById('periodCompareLabel');
+                if (kv) { kv.textContent = fmtViews(d.views); kv.style.opacity = '1'; }
+                if (kw) { kw.textContent = fmtWatch(d.watch_time); kw.style.opacity = '1'; }
+                if (ks) { ks.textContent = fmtSubs(d.subscribers); ks.style.opacity = '1'; }
+                if (kc) { kc.textContent = fmtCtr(d.avg_ctr); kc.style.opacity = '1'; }
+                renderDelta('delta-views', d.delta_views);
+                renderDelta('delta-watch', d.delta_watch);
+                renderDelta('delta-subs', d.delta_subs);
+                if (lb) lb.textContent = 'vs ' + days + 'j précédents';
+            });
+        }
+
+        var selector = document.getElementById('kpiPeriodSelector');
+        if (selector) {
+            selector.addEventListener('click', function(e) {
+                var btn = e.target.closest('.period-btn');
+                if (!btn) return;
+                var days = parseInt(btn.dataset.days);
+                if (days === activeDays) return;
+                activeDays = days;
+                selector.querySelectorAll('.period-btn').forEach(function(b) { b.classList.toggle('active', b === btn); });
+                loadKpis(days);
+            });
+        }
+    });
+    </script>
     {% endif %}
 {% endblock %}

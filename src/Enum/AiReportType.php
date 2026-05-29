@@ -9,6 +9,8 @@ enum AiReportType: string
     case Prediction        = 'prediction';
     case UploadSchedule    = 'upload_schedule';
     case SeoOptimization   = 'seo_optimization';
+    case ThumbnailAnalysis = 'thumbnail_analysis';
+    case DescriptionOptimization = 'description_optimization';
 
     public function label(): string
     {
@@ -19,6 +21,8 @@ enum AiReportType: string
             self::Prediction        => 'Prédiction J+30',
             self::UploadSchedule    => 'Stratégie publication',
             self::SeoOptimization   => 'SEO — Requêtes de recherche',
+            self::ThumbnailAnalysis => 'Analyse miniature',
+            self::DescriptionOptimization => 'Optimisation description',
         };
     }
 }
