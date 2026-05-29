@@ -6,9 +6,15 @@
 <div class="dashboard-header">
     <div>
         <h1><i class="fas fa-robot"></i> Coûts IA</h1>
-        <span class="last-sync">Haiku · Sonnet · tarifs Anthropic</span>
+        <span class="last-sync">Claude · Gemini · estimation standard</span>
     </div>
 </div>
+
+{% if missing_pricing_models|length > 0 %}
+<div class="alert alert-warning" style="margin-bottom:1rem">
+    Tarif non configuré pour {{ missing_pricing_models|join(', ') }}. Ces lignes sont exclues des totaux estimés.
+</div>
+{% endif %}
 
 {# Monthly Summary #}
 <div class="kpi-grid">
@@ -75,16 +81,16 @@
             </thead>
             <tbody>
                 {% for row in by_model %}
-                {% set p = pricing[row.model] ?? {input: 3.0, output: 15.0} %}
-                {% set rowCost = (row.tokens_input / 1000000 * p.input) + (row.tokens_output / 1000000 * p.output) %}
+                {% set p = pricing[row.model] ?? null %}
+                {% set rowCost = p ? (row.tokens_input / 1000000 * p.input) + (row.tokens_output / 1000000 * p.output) : null %}
                 <tr>
                     <td><code>{{ row.model }}</code></td>
                     <td class="num">{{ row.calls }}</td>
                     <td class="num">{{ row.tokens_input|number_format(0, ',', ' ') }}</td>
                     <td class="num">{{ row.tokens_output|number_format(0, ',', ' ') }}</td>
-                    <td class="num">${{ p.input }}/M</td>
-                    <td class="num">${{ p.output }}/M</td>
-                    <td class="num"><strong>${{ rowCost|number_format(4, '.') }}</strong></td>
+                    <td class="num">{{ p ? '$' ~ p.input ~ '/M' : '—' }}</td>
+                    <td class="num">{{ p ? '$' ~ p.output ~ '/M' : '—' }}</td>
+                    <td class="num"><strong>{{ rowCost is not null ? '$' ~ rowCost|number_format(4, '.') : 'Non estimé' }}</strong></td>
                 </tr>
                 {% endfor %}
             </tbody>

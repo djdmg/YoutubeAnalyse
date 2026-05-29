@@ -167,14 +167,15 @@ class AdminController extends AbstractController
     {
         $taskModels = [];
         $aiTasks    = [];
+        $provider   = $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE;
         foreach (AiReportType::cases() as $type) {
-            $taskModels[$type->value] = $this->settingRepo->get('ai_model_' . $type->value) ?? '';
+            $taskModels[$type->value] = $this->settingRepo->get(sprintf('ai_model_%s_%s', $provider, $type->value)) ?? '';
             $aiTasks[]                = ['value' => $type->value, 'label' => $type->label()];
         }
 
         return $this->render('admin/settings.html.twig', [
             'telegram_token'   => $this->settingRepo->get(TelegramNotificationService::SETTING_KEY),
-            'ai_provider'      => $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE,
+            'ai_provider'      => $provider,
             'gemini_api_key'   => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
             'thumbnail_model'        => $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001',
             'thumbnail_prompt_model' => $this->settingRepo->get(GeminiService::SETTING_PROMPT_MODEL) ?? 'balanced',
@@ -227,9 +228,10 @@ class AdminController extends AbstractController
             $token = trim((string) $request->request->get('telegram_token', ''));
             $this->settingRepo->set(TelegramNotificationService::SETTING_KEY, $token ?: null);
         } elseif ($section === 'models') {
+            $provider = $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE;
             foreach (AiReportType::cases() as $type) {
                 $model = trim((string) $request->request->get('ai_model_' . $type->value, ''));
-                $this->settingRepo->set('ai_model_' . $type->value, $model ?: null);
+                $this->settingRepo->set(sprintf('ai_model_%s_%s', $provider, $type->value), $model ?: null);
             }
             // Special-task model settings (thumbnail, goals) live in this section
             $thumbnailModel = trim((string) $request->request->get('thumbnail_model', ''));

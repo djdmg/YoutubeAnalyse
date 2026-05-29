@@ -155,6 +155,17 @@ class AiReportRepository extends ServiceEntityRepository
         });
     }
 
+    public function invalidateMonthlyStats(User $user): void
+    {
+        $currentMonth = (new \DateTimeImmutable())->format('Y-m');
+        $lastMonth    = (new \DateTimeImmutable('first day of last month'))->format('Y-m');
+
+        $this->cache->delete('ai_monthly_stats_' . $user->getId() . '_' . $currentMonth);
+        $this->cache->delete('ai_monthly_by_model_' . $user->getId() . '_' . $currentMonth);
+        $this->cache->delete('ai_run_days_' . $user->getId() . '_' . $currentMonth);
+        $this->cache->delete('ai_last_month_by_model_' . $user->getId() . '_' . $lastMonth);
+    }
+
     public function deleteOlderThan(\DateTimeImmutable $before): int
     {
         return (int) $this->createQueryBuilder('r')
