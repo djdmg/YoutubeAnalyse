@@ -24,9 +24,9 @@ class GeminiService implements AiProviderInterface
 
     // Default fallbacks — overridable from admin settings
     private const TIER_DEFAULTS = [
-        AiProviderInterface::TIER_FAST     => 'gemini-1.5-flash',
-        AiProviderInterface::TIER_BALANCED => 'gemini-1.5-pro',
-        AiProviderInterface::TIER_FULL     => 'gemini-2.0-flash',
+        AiProviderInterface::TIER_FAST     => 'gemini-2.5-flash-lite',
+        AiProviderInterface::TIER_BALANCED => 'gemini-2.5-flash',
+        AiProviderInterface::TIER_FULL     => 'gemini-2.5-pro',
     ];
 
     // Exact pricing per 1M tokens (input / output) in USD — only stable, non-preview model IDs
@@ -38,6 +38,9 @@ class GeminiService implements AiProviderInterface
         'gemini-1.5-flash'      => ['in' => 0.075,  'out' => 0.30],
         'gemini-1.5-flash-8b'   => ['in' => 0.0375, 'out' => 0.15],
         'gemini-1.5-pro'        => ['in' => 1.25,   'out' => 5.00],
+        'gemini-2.5-flash-lite' => ['in' => 0.10,   'out' => 0.40],
+        'gemini-2.5-flash'      => ['in' => 0.30,   'out' => 2.50],
+        'gemini-2.5-pro'        => ['in' => 1.25,   'out' => 10.0],
     ];
 
     // Hardcoded image generation models (use /predict, not /generateContent — not in API model list)

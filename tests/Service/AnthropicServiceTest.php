@@ -6,14 +6,18 @@ use App\Entity\AiReport;
 use App\Enum\AiReportStatus;
 use App\Enum\AiReportType;
 use App\Service\AnthropicService;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
+#[AllowMockObjectsWithoutExpectations]
 class AnthropicServiceTest extends TestCase
 {
     public function testLoadPromptReplacesVariables(): void
     {
-        $service = new AnthropicService('dummy-key', new NullLogger());
+        $service = new AnthropicService('dummy-key', new NullLogger(), $this->createMock(HttpClientInterface::class), new ArrayAdapter());
 
         // The prompt file must exist; we test with title_optimization
         $promptFile = __DIR__ . '/../../config/prompts/title_optimization.txt';
@@ -39,7 +43,7 @@ class AnthropicServiceTest extends TestCase
 
     public function testLoadPromptThrowsForUnknownPrompt(): void
     {
-        $service = new AnthropicService('dummy-key', new NullLogger());
+        $service = new AnthropicService('dummy-key', new NullLogger(), $this->createMock(HttpClientInterface::class), new ArrayAdapter());
         $this->expectException(\RuntimeException::class);
         $service->loadPrompt('nonexistent_prompt_xyz');
     }

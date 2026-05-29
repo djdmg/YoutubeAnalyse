@@ -3,11 +3,13 @@
 namespace App\Tests\Service;
 
 use App\Service\QuotaGuardService;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\NullLogger;
 
+#[AllowMockObjectsWithoutExpectations]
 class QuotaGuardServiceTest extends TestCase
 {
     private function makeCache(int $currentUsage = 0): CacheItemPoolInterface

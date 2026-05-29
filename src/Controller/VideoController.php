@@ -883,27 +883,40 @@ PROMPT;
             'gemini-1.5-pro'             => ['input' => 1.25,  'output' => 5.0],
             'gemini-2.0-flash'           => ['input' => 0.10,  'output' => 0.40],
             'gemini-2.0-flash-lite'      => ['input' => 0.075, 'output' => 0.30],
+            'gemini-2.5-flash-lite'      => ['input' => 0.10,  'output' => 0.40],
+            'gemini-2.5-flash'           => ['input' => 0.30,  'output' => 2.50],
+            'gemini-2.5-pro'             => ['input' => 1.25,  'output' => 10.0],
         ];
-        $defaultPricing = ['input' => 1.0, 'output' => 4.0];
 
         // Per-image pricing (model → USD/image) for image generation models
         $imagePricing = [
             'imagen-3.0-generate-001'      => 0.04,
             'imagen-3.0-fast-generate-001' => 0.02,
         ];
-
-        $byModel  = $this->aiReportRepo->getMonthlyStatsByModel($user);
-        $costUsd  = 0.0;
-        foreach ($byModel as $row) {
-            $model = $row['model'] ?? '';
+        $estimateCost = static function (array $row) use ($pricing, $imagePricing): ?float {
+            $model = (string) ($row['model'] ?? '');
             if (isset($imagePricing[$model])) {
-                // tokensInput = 1 image generated (stored by GenerateThumbnailHandler)
-                $costUsd += ($row['tokens_input'] ?? 0) * $imagePricing[$model];
-            } else {
-                $p        = $pricing[$model] ?? $defaultPricing;
-                $costUsd += ($row['tokens_input'] / 1_000_000 * $p['input'])
-                          + ($row['tokens_output'] / 1_000_000 * $p['output']);
+                return ($row['tokens_input'] ?? 0) * $imagePricing[$model];
             }
+            if (!isset($pricing[$model])) {
+                return null;
+            }
+
+            $p = $pricing[$model];
+            return ($row['tokens_input'] / 1_000_000 * $p['input'])
+                + ($row['tokens_output'] / 1_000_000 * $p['output']);
+        };
+
+        $byModel              = $this->aiReportRepo->getMonthlyStatsByModel($user);
+        $costUsd              = 0.0;
+        $missingPricingModels = [];
+        foreach ($byModel as $row) {
+            $rowCost = $estimateCost($row);
+            if ($rowCost === null) {
+                $missingPricingModels[] = (string) ($row['model'] ?? '');
+                continue;
+            }
+            $costUsd += $rowCost;
         }
         $costUsd      = round($costUsd, 4);
         $inputTokens  = (int)($monthly['tokens_input'] ?? 0);
@@ -917,21 +930,19 @@ PROMPT;
 
         if (!empty($lastMonthByModel)) {
             foreach ($lastMonthByModel as $row) {
-                $model = $row['model'] ?? '';
-                if (isset($imagePricing[$model])) {
-                    $forecastUsd += ($row['tokens_input'] ?? 0) * $imagePricing[$model];
-                } else {
-                    $p             = $pricing[$model] ?? $defaultPricing;
-                    $forecastUsd  += ($row['tokens_input'] / 1_000_000 * $p['input'])
-                                   + ($row['tokens_output'] / 1_000_000 * $p['output']);
+                $rowCost = $estimateCost($row);
+                if ($rowCost === null) {
+                    $missingPricingModels[] = (string) ($row['model'] ?? '');
+                    continue;
                 }
+                $forecastUsd += $rowCost;
             }
         } else {
             // No last month data: cost per run × runs done so far (extrapolate to end of month)
             // A "run" = a distinct day where analyses were generated
             $runsThisMonth = $this->aiReportRepo->countDistinctRunDaysThisMonth($user);
             $forecastBasis = 'runs';
-            if ($runsThisMonth > 0) {
+            if ($runsThisMonth > 0 && $costUsd > 0) {
                 $costPerRun  = $costUsd / $runsThisMonth;
                 $today       = new \DateTimeImmutable();
                 $dayOfMonth  = (int) $today->format('j');
@@ -959,6 +970,7 @@ PROMPT;
             'output_tokens'  => $outputTokens,
             'by_model'       => $byModel,
             'pricing'        => $pricing,
+            'missing_pricing_models' => array_values(array_unique(array_filter($missingPricingModels))),
         ]);
     }
 }

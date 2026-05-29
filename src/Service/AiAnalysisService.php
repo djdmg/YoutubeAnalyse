@@ -50,7 +50,23 @@ class AiAnalysisService
     /** Returns the configured model for a given task, falling back to the provided default tier. */
     private function modelFor(AiReportType $type, string $default = AiProviderInterface::MODEL_BALANCED): string
     {
-        return $this->settingRepo->get('ai_model_' . $type->value) ?? $default;
+        $provider = $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE;
+
+        $providerModel = $this->settingRepo->get(sprintf('ai_model_%s_%s', $provider, $type->value));
+        if ($providerModel) {
+            return $providerModel;
+        }
+
+        $legacyModel = $this->settingRepo->get('ai_model_' . $type->value);
+        if (in_array($legacyModel, [
+            AiProviderInterface::TIER_FAST,
+            AiProviderInterface::TIER_BALANCED,
+            AiProviderInterface::TIER_FULL,
+        ], true)) {
+            return $legacyModel;
+        }
+
+        return $default;
     }
 
     /** Run all analyses (except upload_schedule which is weekly-only). */
@@ -66,6 +82,10 @@ class AiAnalysisService
             'thumbnail_analysis'       => $this->runThumbnailAnalysis($user, $skipped),
             'description_optimization' => $this->runDescriptionOptimization($user, $skipped),
         ];
+        if (array_sum($counts) > 0) {
+            $this->aiReportRepo->invalidateMonthlyStats($user);
+        }
+
         return ['counts' => $counts, 'skipped' => $skipped];
     }
 
@@ -83,6 +103,10 @@ class AiAnalysisService
             AiReportType::ThumbnailAnalysis      => $this->runThumbnailAnalysis($user, $skipped),
             AiReportType::DescriptionOptimization => $this->runDescriptionOptimization($user, $skipped),
         };
+        if ($count > 0) {
+            $this->aiReportRepo->invalidateMonthlyStats($user);
+        }
+
         return ['counts' => [$type->value => $count], 'skipped' => $skipped];
     }
 

@@ -1,4 +1,6 @@
 {
+    "name": "dimitrigrard/youtube-analyse",
+    "description": "Dashboard Symfony d'analyse YouTube avec synchronisation, rapports IA et visualisations.",
     "type": "project",
     "license": "proprietary",
     "minimum-stability": "stable",
@@ -14,7 +16,7 @@
         "egulias/email-validator": "^4.0",
         "google/apiclient": "^2.15",
         "knplabs/knp-paginator-bundle": "^6.10",
-        "symfony/apache-pack": "*",
+        "symfony/apache-pack": "^1.0",
         "symfony/cache": "7.2.*",
         "symfony/console": "7.2.*",
         "symfony/doctrine-messenger": "7.2.*",
@@ -29,6 +31,7 @@
         "symfony/monolog-bundle": "^3.11",
         "symfony/runtime": "7.2.*",
         "symfony/security-bundle": "7.2.*",
+        "symfony/translation": "7.2.*",
         "symfony/validator": "7.2.*",
         "symfony/webpack-encore-bundle": "^2.4",
         "symfony/yaml": "7.2.*",
