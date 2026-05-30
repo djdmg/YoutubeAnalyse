@@ -59,7 +59,7 @@ class GenerateEditorialPlanHandler
             foreach ($topVideos as $v) {
                 $terms = $this->searchTermRepo->findTopForVideo($v, 5);
                 foreach ($terms as $t) {
-                    $allSearchTerms[] = $t->getTerm();
+                    $allSearchTerms[] = $t->getQuery();
                 }
             }
             $searchTermsSummary = implode(', ', array_unique(array_slice($allSearchTerms, 0, 20)));
