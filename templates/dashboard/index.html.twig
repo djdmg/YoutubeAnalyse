@@ -409,11 +409,18 @@
                 fetch('{{ path('sync_status', {jobId: '__JOB__'}) }}'.replace('__JOB__', data.jobId))
                     .then(function(r) { return r.json(); })
                     .then(function(status) {
-                        if (status.status === 'pending' && attempts < 90) return;
+                        if ((status.status === 'pending' || status.status === 'processing') && attempts < 720) {
+                            if (status.message) {
+                                var sub = overlay.querySelector('.sync-overlay-sub');
+                                if (sub) sub.textContent = status.message;
+                            }
+                            return;
+                        }
                         clearInterval(poll);
                         overlay.classList.remove('visible');
                         var ok = status.status === 'done';
-                        toast.textContent = ok ? '✓ ' + status.message : '✗ ' + (status.message || 'Erreur');
+                        var timedOut = status.status === 'pending' || status.status === 'processing';
+                        toast.textContent = ok ? '✓ ' + status.message : '✗ ' + (timedOut ? 'Synchronisation arrêtée : délai maximum dépassé.' : (status.message || 'Erreur'));
                         toast.style.borderColor = ok ? 'rgba(34,197,94,.4)' : 'rgba(239,68,68,.4)';
                         toast.classList.add('show');
                         setTimeout(function() {
@@ -421,8 +428,16 @@
                             if (ok) window.location.reload();
                         }, 2500);
                     })
-                    .catch(function() { if (attempts >= 90) clearInterval(poll); });
-            }, 2000);
+                    .catch(function() {
+                        if (attempts >= 720) {
+                            clearInterval(poll);
+                            overlay.classList.remove('visible');
+                            toast.textContent = '✗ Synchronisation arrêtée : statut indisponible.';
+                            toast.style.borderColor = 'rgba(239,68,68,.4)';
+                            toast.classList.add('show');
+                        }
+                    });
+            }, 5000);
         })
         .catch(function() {
             overlay.classList.remove('visible');

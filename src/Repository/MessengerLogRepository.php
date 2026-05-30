@@ -58,4 +58,34 @@ class MessengerLogRepository extends ServiceEntityRepository
             ->getQuery()
             ->execute();
     }
+
+    public function failStaleProcessing(\DateTimeImmutable $before, string $reason): int
+    {
+        return (int) $this->createQueryBuilder('m')
+            ->update()
+            ->set('m.status', ':failed')
+            ->set('m.error', ':reason')
+            ->set('m.finishedAt', ':now')
+            ->where('m.status IN (:statuses)')
+            ->andWhere('m.createdAt < :before')
+            ->setParameter('failed', 'failed')
+            ->setParameter('reason', $reason)
+            ->setParameter('now', new \DateTimeImmutable())
+            ->setParameter('statuses', ['processing', 'retry'])
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->execute();
+    }
+
+    public function countStaleProcessing(\DateTimeImmutable $before): int
+    {
+        return (int) $this->createQueryBuilder('m')
+            ->select('COUNT(m.id)')
+            ->where('m.status IN (:statuses)')
+            ->andWhere('m.createdAt < :before')
+            ->setParameter('statuses', ['processing', 'retry'])
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

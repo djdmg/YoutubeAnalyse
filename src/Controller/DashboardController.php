@@ -138,8 +138,12 @@ class DashboardController extends AbstractController
         $cacheKey = 'job_' . $jobId;
 
         $this->cache->get($cacheKey, function (ItemInterface $item) {
-            $item->expiresAfter(300);
-            return ['status' => 'pending'];
+            $item->expiresAfter(7200);
+            return [
+                'status'     => 'pending',
+                'message'    => 'Synchronisation en attente de traitement...',
+                'started_at' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            ];
         });
 
         try {
@@ -167,6 +171,7 @@ class DashboardController extends AbstractController
     #[Route('/sync-status/{jobId}', name: 'sync_status', methods: ['GET'])]
     public function syncStatus(string $jobId): JsonResponse
     {
+        $cacheKey = 'job_' . $jobId;
         $result = $this->cache->get('job_' . $jobId, function (ItemInterface $item) {
             $item->expiresAfter(0);
             return null;
@@ -174,6 +179,23 @@ class DashboardController extends AbstractController
 
         if ($result === null) {
             return new JsonResponse(['status' => 'error', 'message' => 'Job introuvable ou expiré.']);
+        }
+
+        $startedAt = isset($result['started_at']) ? new \DateTimeImmutable($result['started_at']) : null;
+        if (
+            $startedAt
+            && in_array($result['status'] ?? null, ['pending', 'processing'], true)
+            && $startedAt < new \DateTimeImmutable('-1 hour')
+        ) {
+            $result = [
+                'status'  => 'error',
+                'message' => 'Synchronisation arrêtée : le traitement a dépassé 1 heure.',
+            ];
+            $this->cache->delete($cacheKey);
+            $this->cache->get($cacheKey, function (ItemInterface $item) use ($result) {
+                $item->expiresAfter(3600);
+                return $result;
+            });
         }
 
         return new JsonResponse($result);

@@ -13,6 +13,7 @@ use App\Repository\DailyMetricRepository;
 use App\Repository\VideoRepository;
 use App\Repository\VideoSearchTermRepository;
 use App\Service\AiAnalysisService;
+use App\Service\AiProviderFactory;
 use App\Service\AiProviderInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -26,6 +27,7 @@ class AiAnalysisServiceTest extends TestCase
         array $videos = [],
         ?AiReport $existingReport = null,
         ?array $claudePayload = [],
+        array $settings = [],
     ): AiAnalysisService {
         $em = $this->createMock(EntityManagerInterface::class);
 
@@ -61,7 +63,7 @@ class AiAnalysisServiceTest extends TestCase
         $searchTermRepo->method('findTopForVideo')->willReturn([]);
 
         $settingRepo = $this->createMock(AppSettingRepository::class);
-        $settingRepo->method('get')->willReturn(null);
+        $settingRepo->method('get')->willReturnCallback(fn(string $key) => $settings[$key] ?? null);
 
         return new AiAnalysisService($anthropic, $em, $aiReportRepo, $videoRepo, $metricRepo, $commentRepo, $searchTermRepo, $settingRepo, new NullLogger());
     }
@@ -106,5 +108,18 @@ class AiAnalysisServiceTest extends TestCase
 
         $count = $service->runUploadSchedule($user);
         $this->assertSame(0, $count);
+    }
+
+    public function testModelForPreservesExactLegacyModelForActiveProvider(): void
+    {
+        $service = $this->makeService(settings: [
+            AiProviderFactory::SETTING_PROVIDER => AiProviderFactory::PROVIDER_GEMINI,
+            'ai_model_title_optimization' => 'gemini-1.5-pro',
+        ]);
+
+        $ref = new \ReflectionMethod(AiAnalysisService::class, 'modelFor');
+        $model = $ref->invoke($service, AiReportType::TitleOptimization, AiProviderInterface::MODEL_BALANCED);
+
+        $this->assertSame('gemini-1.5-pro', $model);
     }
 }

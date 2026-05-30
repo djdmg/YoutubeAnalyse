@@ -61,6 +61,9 @@
         <span style="color:var(--text-muted)">·</span>
         <span style="color:var(--text-secondary);margin-left:.4rem">Rejouer les échoués :</span>
         <code style="background:rgba(0,0,0,.35);padding:.15rem .5rem;border-radius:4px;margin-left:.4rem">messenger:failed:retry</code>
+        <span style="color:var(--text-muted)">·</span>
+        <span style="color:var(--text-secondary);margin-left:.4rem">Tuer les bloqués &gt; 1h :</span>
+        <code style="background:rgba(0,0,0,.35);padding:.15rem .5rem;border-radius:4px;margin-left:.4rem">php bin/console app:messenger:cleanup-stale</code>
     </div>
     <span id="workerBadge" style="margin-left:auto;display:{{ (counts.processing + counts.pending + counts.retry) > 0 ? 'inline-flex' : 'none' }};background:rgba(167,139,250,.15);color:#a78bfa;padding:.2rem .6rem;border-radius:20px;font-size:.9em;font-weight:600;white-space:nowrap;align-items:center;gap:.3rem">
         <i class="fas fa-circle-notch fa-spin"></i><span id="workerBadgeText">{{ counts.processing + counts.pending + counts.retry }} en cours</span>

@@ -29,10 +29,20 @@ class SyncYouTubeHandler
         }
 
         try {
+            $this->storeResult($cacheKey, [
+                'status'     => 'processing',
+                'message'    => 'Synchronisation YouTube en cours...',
+                'started_at' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            ]);
+
             $result = $this->syncService->syncForUser($user);
             $this->storeResult($cacheKey, [
                 'status'  => 'done',
-                'message' => sprintf('Synchronisation réussie : %d vidéos synchronisées.', $result['videos_synced'] ?? 0),
+                'message' => sprintf(
+                    'Synchronisation réussie : %d vidéos, %d métriques quotidiennes sauvegardées.',
+                    $result['videos_synced'] ?? 0,
+                    $result['daily_metrics_synced'] ?? 0,
+                ),
                 'result'  => $result,
             ]);
         } catch (\Throwable $e) {
@@ -45,7 +55,7 @@ class SyncYouTubeHandler
     {
         $this->cache->delete($key);
         $this->cache->get($key, function (ItemInterface $item) use ($data) {
-            $item->expiresAfter(300);
+            $item->expiresAfter(7200);
             return $data;
         });
     }
