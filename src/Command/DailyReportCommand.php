@@ -42,8 +42,8 @@ class DailyReportCommand extends Command
             $user = $token->getUser();
             $io->section(sprintf('%s (%s)', $user->getDisplayName(), $token->getChannelTitle() ?? $token->getChannelId()));
 
-            if (!$user->hasSmtpConfigured()) {
-                $io->writeln('  SMTP non configuré — email ignoré.');
+            if (!$this->emailService->isConfiguredForUser($user)) {
+                $io->writeln('  Email non configuré — email ignoré.');
                 continue;
             }
 
@@ -72,13 +72,11 @@ class DailyReportCommand extends Command
                 count($topVideos),
             ));
 
-            if ($user->hasSmtpConfigured()) {
-                $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
-                if ($error) {
-                    $io->error('Email non envoyé : ' . $error);
-                } else {
-                    $io->writeln('  ✉ Email envoyé à ' . $user->getNotifEmail());
-                }
+            $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
+            if ($error) {
+                $io->error('Email non envoyé : ' . $error);
+            } else {
+                $io->writeln('  ✉ Email envoyé à ' . $user->getNotifEmail());
             }
 
             $this->telegramService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);

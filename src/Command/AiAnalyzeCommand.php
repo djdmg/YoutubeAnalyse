@@ -87,7 +87,7 @@ class AiAnalyzeCommand extends Command
                 if ($total > 0) {
                     $newReports = $this->aiReportRepo->findGeneratedSince($user, $runStartedAt);
 
-                    if ($user->hasSmtpConfigured()) {
+                    if ($this->emailService->isConfiguredForUser($user)) {
                         $error = $this->emailService->sendAiRecommendations($user, $newReports);
                         if ($error) {
                             $io->warning('Email non envoyé : ' . $error);

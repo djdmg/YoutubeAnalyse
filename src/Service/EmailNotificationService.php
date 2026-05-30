@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Entity\AiReport;
 use App\Entity\User;
 use App\Enum\AiReportType;
+use App\Repository\AppSettingRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\Mailer;
 use Symfony\Component\Mailer\Transport;
@@ -14,10 +15,34 @@ use Twig\Environment;
 
 class EmailNotificationService
 {
+    public const SETTING_SMTP_HOST = 'smtp_host';
+    public const SETTING_SMTP_PORT = 'smtp_port';
+    public const SETTING_SMTP_ENCRYPTION = 'smtp_encryption';
+    public const SETTING_SMTP_USER = 'smtp_user';
+    public const SETTING_SMTP_PASSWORD = 'smtp_password';
+    public const SETTING_SMTP_FROM_EMAIL = 'smtp_from_email';
+    public const SETTING_SMTP_FROM_NAME = 'smtp_from_name';
+
     public function __construct(
         private readonly Environment $twig,
         private readonly LoggerInterface $logger,
+        private readonly AppSettingRepository $settingRepo,
     ) {}
+
+    public function isConfigured(): bool
+    {
+        return (bool) (
+            $this->settingRepo->get(self::SETTING_SMTP_HOST)
+            && $this->settingRepo->get(self::SETTING_SMTP_USER)
+            && $this->settingRepo->get(self::SETTING_SMTP_PASSWORD)
+            && $this->fromEmail()
+        );
+    }
+
+    public function isConfiguredForUser(User $user): bool
+    {
+        return $this->isConfigured() && (bool) $user->getNotifEmail();
+    }
 
     /**
      * Sends a digest email with all new AI recommendations.
@@ -26,7 +51,7 @@ class EmailNotificationService
      */
     public function sendAiRecommendations(User $user, array $reports): ?string
     {
-        if (empty($reports) || !$user->hasSmtpConfigured()) return null;
+        if (empty($reports) || !$this->isConfiguredForUser($user)) return null;
 
         $html = $this->twig->render('email/ai_recommendations.html.twig', [
             'user'    => $user,
@@ -35,7 +60,7 @@ class EmailNotificationService
         ]);
 
         $email = (new Email())
-            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->from(new Address($this->fromEmail(), $this->fromName()))
             ->to($user->getNotifEmail())
             ->subject(sprintf('🎬 %d nouvelles recommandations IA — %s', count($reports), (new \DateTimeImmutable())->format('d/m/Y')))
             ->html($html);
@@ -45,7 +70,7 @@ class EmailNotificationService
 
     public function sendSyncSummary(User $user, array $result, string $channel, int $quotaUsed): ?string
     {
-        if (!$user->hasSmtpConfigured()) return null;
+        if (!$this->isConfiguredForUser($user)) return null;
 
         $html = $this->twig->render('email/sync_summary.html.twig', [
             'user'       => $user,
@@ -56,7 +81,7 @@ class EmailNotificationService
         ]);
 
         $email = (new Email())
-            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->from(new Address($this->fromEmail(), $this->fromName()))
             ->to($user->getNotifEmail())
             ->subject(sprintf('🔄 Sync YouTube — %d vidéos, %d commentaires — %s',
                 $result['videos_synced'],
@@ -70,7 +95,7 @@ class EmailNotificationService
 
     public function sendWeeklyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $weekStart, \DateTimeImmutable $weekEnd): ?string
     {
-        if (!$user->hasSmtpConfigured()) return null;
+        if (!$this->isConfiguredForUser($user)) return null;
 
         $html = $this->twig->render('email/weekly_report.html.twig', [
             'user'        => $user,
@@ -81,7 +106,7 @@ class EmailNotificationService
         ]);
 
         $email = (new Email())
-            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->from(new Address($this->fromEmail(), $this->fromName()))
             ->to($user->getNotifEmail())
             ->subject(sprintf('📅 Bilan semaine du %s — %s vues',
                 $weekStart->format('d/m'),
@@ -94,7 +119,7 @@ class EmailNotificationService
 
     public function sendDailyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $date, bool $isDelayed = false): ?string
     {
-        if (!$user->hasSmtpConfigured()) return null;
+        if (!$this->isConfiguredForUser($user)) return null;
 
         $html = $this->twig->render('email/daily_report.html.twig', [
             'user'       => $user,
@@ -109,7 +134,7 @@ class EmailNotificationService
             : sprintf('📊 Rapport du %s — %s vues', $date->format('d/m/Y'), number_format((int) ($stats['views'] ?? 0), 0, ',', ' '));
 
         $email = (new Email())
-            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->from(new Address($this->fromEmail(), $this->fromName()))
             ->to($user->getNotifEmail())
             ->subject($subject)
             ->html($html);
@@ -129,7 +154,7 @@ class EmailNotificationService
         ]);
 
         $email = (new Email())
-            ->from(new Address($user->getSmtpUser(), 'YouTube Analyse'))
+            ->from(new Address($this->fromEmail(), $this->fromName()))
             ->to($user->getNotifEmail())
             ->subject('🧪 [TEST] Recommandations IA — YouTube Analyse')
             ->html($html);
@@ -209,7 +234,7 @@ class EmailNotificationService
     private function send(User $user, Email $email): ?string
     {
         try {
-            $transport = Transport::fromDsn($this->buildDsn($user));
+            $transport = Transport::fromDsn($this->buildDsn());
             $mailer    = new Mailer($transport);
             $mailer->send($email);
             $this->logger->info('Email sent', ['to' => $user->getNotifEmail()]);
@@ -220,14 +245,27 @@ class EmailNotificationService
         }
     }
 
-    private function buildDsn(User $user): string
+    private function buildDsn(): string
     {
-        $scheme   = $user->getSmtpEncryption() === 'ssl' ? 'smtps' : 'smtp';
-        $userEnc  = rawurlencode($user->getSmtpUser() ?? '');
-        $passEnc  = rawurlencode($user->getSmtpPassword() ?? '');
-        $host     = $user->getSmtpHost();
-        $port     = $user->getSmtpPort() ?? 587;
+        $encryption = $this->settingRepo->get(self::SETTING_SMTP_ENCRYPTION) ?: 'starttls';
+        $scheme     = $encryption === 'ssl' ? 'smtps' : 'smtp';
+        $userEnc    = rawurlencode($this->settingRepo->get(self::SETTING_SMTP_USER) ?? '');
+        $passEnc    = rawurlencode($this->settingRepo->get(self::SETTING_SMTP_PASSWORD) ?? '');
+        $host       = $this->settingRepo->get(self::SETTING_SMTP_HOST);
+        $port       = (int) ($this->settingRepo->get(self::SETTING_SMTP_PORT) ?: ($encryption === 'ssl' ? 465 : 587));
+        $query      = $encryption === 'none' ? '?auto_tls=false' : '';
 
-        return sprintf('%s://%s:%s@%s:%d', $scheme, $userEnc, $passEnc, $host, $port);
+        return sprintf('%s://%s:%s@%s:%d%s', $scheme, $userEnc, $passEnc, $host, $port, $query);
+    }
+
+    private function fromEmail(): ?string
+    {
+        return $this->settingRepo->get(self::SETTING_SMTP_FROM_EMAIL)
+            ?: $this->settingRepo->get(self::SETTING_SMTP_USER);
+    }
+
+    private function fromName(): string
+    {
+        return $this->settingRepo->get(self::SETTING_SMTP_FROM_NAME) ?: 'YouTube Analyse';
     }
 }

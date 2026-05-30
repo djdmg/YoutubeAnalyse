@@ -77,6 +77,93 @@
     {% endif %}
 </div>
 
+<div class="section-card" style="max-width:640px;margin-top:24px">
+    <div class="section-header">
+        <h3><i class="fas fa-envelope"></i> SMTP global</h3>
+        {% if smtp_configured %}
+            <span class="badge badge-green" style="background:rgba(34,197,94,.15);color:#86efac;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">
+                <i class="fas fa-circle" style="font-size:8px;vertical-align:middle;margin-right:4px"></i> Configuré
+            </span>
+        {% else %}
+            <span style="background:rgba(239,68,68,.1);color:#fca5a5;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">
+                <i class="fas fa-circle" style="font-size:8px;vertical-align:middle;margin-right:4px"></i> Non configuré
+            </span>
+        {% endif %}
+    </div>
+
+    <p style="color:var(--text-secondary);font-size:13px;margin:0 0 20px">
+        Serveur SMTP utilisé pour tous les emails. Les utilisateurs configurent uniquement leur adresse de réception dans leur profil.
+    </p>
+
+    <form method="post" action="{{ path('admin_settings_save') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_settings') }}">
+        <input type="hidden" name="section" value="smtp">
+
+        <div class="form-grid-2" style="margin-bottom:16px">
+            <div class="form-field">
+                <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Hôte SMTP</label>
+                <input type="text" name="smtp_host" class="form-control" value="{{ smtp_host }}" placeholder="mail.exemple.com">
+            </div>
+            <div class="form-field">
+                <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Port SMTP</label>
+                <input type="number" name="smtp_port" class="form-control" value="{{ smtp_port }}" min="1" max="65535" placeholder="587">
+            </div>
+        </div>
+
+        <div class="form-field" style="margin-bottom:16px">
+            <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Chiffrement</label>
+            <select name="smtp_encryption" class="form-control">
+                <option value="starttls" {{ smtp_encryption == 'starttls' ? 'selected' : '' }}>STARTTLS (port 587)</option>
+                <option value="ssl" {{ smtp_encryption == 'ssl' ? 'selected' : '' }}>SSL/TLS (port 465)</option>
+                <option value="none" {{ smtp_encryption == 'none' ? 'selected' : '' }}>Aucun</option>
+            </select>
+        </div>
+
+        <div class="form-grid-2" style="margin-bottom:16px">
+            <div class="form-field">
+                <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Utilisateur SMTP</label>
+                <input type="text" name="smtp_user" class="form-control" value="{{ smtp_user }}" placeholder="user@exemple.com">
+            </div>
+            <div class="form-field">
+                <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Mot de passe SMTP</label>
+                <input
+                    type="password"
+                    name="smtp_password"
+                    class="form-control"
+                    autocomplete="new-password"
+                    placeholder="{{ smtp_password ? '••••••••' : 'Mot de passe' }}"
+                >
+                {% if smtp_password %}
+                <span class="help-text">Mot de passe enregistré. Laisser vide pour le conserver.</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="form-grid-2" style="margin-bottom:20px">
+            <div class="form-field">
+                <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Email expéditeur</label>
+                <input type="email" name="smtp_from_email" class="form-control" value="{{ smtp_from_email }}" placeholder="{{ smtp_user ?: 'noreply@exemple.com' }}">
+                <span class="help-text">Si vide, l'utilisateur SMTP sera utilisé.</span>
+            </div>
+            <div class="form-field">
+                <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Nom expéditeur</label>
+                <input type="text" name="smtp_from_name" class="form-control" value="{{ smtp_from_name }}" placeholder="YouTube Analyse">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Enregistrer
+        </button>
+    </form>
+
+    {% if smtp_configured %}
+    <div class="smtp-status active" style="margin-top:20px">
+        <i class="fas fa-check-circle"></i>
+        SMTP global actif — les emails partiront aux adresses configurées dans les profils.
+    </div>
+    {% endif %}
+</div>
+
 {# ── AI Provider ─────────────────────────────────────────────────────────── #}
 <div class="section-card" style="max-width:640px;margin-top:24px">
     <div class="section-header">
