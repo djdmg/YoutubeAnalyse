@@ -75,6 +75,7 @@ class ProfileController extends AbstractController
         $chatId = trim((string) $request->request->get('telegram_chat_id', ''));
         if ($chatId !== '') {
             $user->setTelegramChatId($chatId);
+            $this->em->persist($user);
             $this->em->flush();
         }
 
@@ -86,7 +87,7 @@ class ProfileController extends AbstractController
         if ($error) {
             return $this->testResponse($request, false, 'Telegram : ' . $error);
         }
-        return $this->testResponse($request, true, 'Message Telegram envoyé au chat ' . $user->getTelegramChatId() . ' ✓');
+        return $this->testResponse($request, true, 'Message Telegram mis en file — vérifiez le chat ' . $user->getTelegramChatId() . ' dans quelques secondes.');
     }
 
     private function testResponse(Request $request, bool $success, string $message): Response

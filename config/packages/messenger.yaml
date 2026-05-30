@@ -26,6 +26,7 @@ framework:
             App\Message\GenerateGoalSuggestionsMessage:  async
             App\Message\GenerateEditorialPlanMessage:    async
             App\Message\SendEmailMessage:                async
+            App\Message\SendTelegramMessage:            async
 
 when@test:
     framework:

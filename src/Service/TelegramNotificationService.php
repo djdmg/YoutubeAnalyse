@@ -4,19 +4,22 @@ namespace App\Service;
 
 use App\Entity\AiReport;
 use App\Entity\User;
+use App\Message\SendTelegramMessage;
 use App\Repository\AppSettingRepository;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class TelegramNotificationService
 {
-    private const API_BASE   = 'https://api.telegram.org/bot';
-    public  const SETTING_KEY = 'telegram_bot_token';
+    public const API_BASE   = 'https://api.telegram.org/bot';
+    public const SETTING_KEY = 'telegram_bot_token';
 
     public function __construct(
-        private readonly HttpClientInterface   $httpClient,
-        private readonly AppSettingRepository  $settingRepo,
-        private readonly LoggerInterface       $logger,
+        private readonly HttpClientInterface  $httpClient,
+        private readonly AppSettingRepository $settingRepo,
+        private readonly LoggerInterface      $logger,
+        private readonly MessageBusInterface  $bus,
     ) {}
 
     private function botToken(): ?string
@@ -25,7 +28,7 @@ class TelegramNotificationService
         return ($token !== null && $token !== '') ? $token : null;
     }
 
-    /** Sends a test message; returns null on success or an error string on failure. */
+    /** Queues a test message; returns null on success or an error string on failure. */
     public function sendTest(User $user): ?string
     {
         if (!$this->botToken()) {
@@ -35,9 +38,11 @@ class TelegramNotificationService
             return 'Chat ID non renseigné.';
         }
 
-        return $this->sendRaw($user->getTelegramChatId(),
+        $this->dispatch(
+            $user->getTelegramChatId(),
             "✅ *YouTube Analyse* — test de notification Telegram réussi\\!"
         );
+        return null;
     }
 
     public function sendDailyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $date, bool $isDelayed = false): void
@@ -71,7 +76,7 @@ class TelegramNotificationService
             }
         }
 
-        $this->sendRaw($user->getTelegramChatId(), implode("\n", $lines));
+        $this->dispatch($user->getTelegramChatId(), implode("\n", $lines));
     }
 
     public function sendWeeklyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $weekStart, \DateTimeImmutable $weekEnd): void
@@ -101,7 +106,7 @@ class TelegramNotificationService
             }
         }
 
-        $this->sendRaw($user->getTelegramChatId(), implode("\n", $lines));
+        $this->dispatch($user->getTelegramChatId(), implode("\n", $lines));
     }
 
     /** @param AiReport[] $reports */
@@ -121,7 +126,7 @@ class TelegramNotificationService
             }
         }
 
-        $this->sendRaw($user->getTelegramChatId(), implode("\n", $lines));
+        $this->dispatch($user->getTelegramChatId(), implode("\n", $lines));
     }
 
     public function sendSyncSummary(User $user, array $result, string $channel): void
@@ -136,35 +141,15 @@ class TelegramNotificationService
             sprintf('🔍 Termes de recherche : *%d*', $result['search_terms_synced'] ?? 0),
         ];
 
-        $this->sendRaw($user->getTelegramChatId(), implode("\n", $lines));
+        $this->dispatch($user->getTelegramChatId(), implode("\n", $lines));
     }
 
-    /** Returns null on success, error string on failure. */
-    private function sendRaw(string $chatId, string $text): ?string
+    private function dispatch(string $chatId, string $text): void
     {
-        $token = $this->botToken();
-        if (!$token) {
-            return 'Token bot Telegram non configuré.';
-        }
-
         try {
-            $response = $this->httpClient->request('POST', self::API_BASE . $token . '/sendMessage', [
-                'json' => [
-                    'chat_id'    => $chatId,
-                    'text'       => $text,
-                    'parse_mode' => 'MarkdownV2',
-                ],
-            ]);
-            $body = $response->toArray(false);
-            if (!($body['ok'] ?? false)) {
-                $err = $body['description'] ?? 'Erreur inconnue';
-                $this->logger->warning('Telegram API error', ['chat_id' => $chatId, 'error' => $err]);
-                return $err;
-            }
-            return null;
+            $this->bus->dispatch(new SendTelegramMessage($chatId, $text));
         } catch (\Throwable $e) {
-            $this->logger->warning('Telegram send failed', ['chat_id' => $chatId, 'error' => $e->getMessage()]);
-            return $e->getMessage();
+            $this->logger->error('Telegram dispatch failed', ['error' => $e->getMessage()]);
         }
     }
 
