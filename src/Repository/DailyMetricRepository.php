@@ -418,6 +418,141 @@ class DailyMetricRepository extends ServiceEntityRepository
         return $result;
     }
 
+    /**
+     * Returns aggregated stats for a video in a date window.
+     * Used for A/B before/after comparisons.
+     */
+    public function getStatsForVideoWindow(Video $video, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        $row = $this->createQueryBuilder('dm')
+            ->select('SUM(dm.views) as views, AVG(dm.ctr) as avg_ctr, SUM(dm.watchTimeMinutes) as watch_time, SUM(dm.impressions) as impressions')
+            ->where('dm.video = :video')
+            ->andWhere('dm.date >= :from')
+            ->andWhere('dm.date <= :to')
+            ->setParameter('video', $video)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return [
+            'views'      => (int)($row['views'] ?? 0),
+            'avg_ctr'    => $row['avg_ctr'] !== null ? round((float)$row['avg_ctr'], 2) : null,
+            'watch_time' => (int)($row['watch_time'] ?? 0),
+            'impressions'=> (int)($row['impressions'] ?? 0),
+        ];
+    }
+
+    /**
+     * Returns per-video stats for priority scoring:
+     * total impressions (all time), avg_ctr, avg_retention, last snapshot date, total views.
+     * Result: [videoId => [...]]
+     */
+    public function getPriorityStatsForUser(User $user): array
+    {
+        $rows = $this->createQueryBuilder('dm')
+            ->select('IDENTITY(dm.video) as video_id, AVG(dm.ctr) as avg_ctr, AVG(dm.avgRetentionPercent) as avg_retention, SUM(dm.impressions) as total_impressions, SUM(dm.views) as total_views, MAX(dm.date) as last_date')
+            ->join('dm.video', 'v')
+            ->where('v.user = :user')
+            ->setParameter('user', $user)
+            ->groupBy('dm.video')
+            ->getQuery()
+            ->getArrayResult();
+
+        $index = [];
+        foreach ($rows as $row) {
+            $index[(int)$row['video_id']] = [
+                'avg_ctr'           => $row['avg_ctr'] !== null ? (float)$row['avg_ctr'] : null,
+                'avg_retention'     => $row['avg_retention'] !== null ? (float)$row['avg_retention'] : null,
+                'total_impressions' => (int)$row['total_impressions'],
+                'total_views'       => (int)$row['total_views'],
+                'last_date'         => $row['last_date'],
+            ];
+        }
+        return $index;
+    }
+
+    /**
+     * Returns relaunch candidates: old videos (>90 days) that are gaining traction.
+     * For each, returns avg daily views (all time) and recent 7-day views.
+     * Result: array of ['video_id', 'all_time_avg', 'last7_views', 'avg_watch_time', 'avg_ctr']
+     */
+    public function getRelaunchCandidateStats(User $user): array
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $sql  = 'SELECT
+                    v.id AS video_id,
+                    COALESCE(SUM(dm.views) / NULLIF(DATEDIFF(CURDATE(), DATE(v.published_at)), 0), 0) AS all_time_daily_avg,
+                    COALESCE(SUM(CASE WHEN dm.date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN dm.views ELSE 0 END), 0) AS last7_views,
+                    COALESCE(AVG(dm.watch_time_minutes / NULLIF(dm.views, 0)), 0) AS avg_watch_min_per_view,
+                    COALESCE(AVG(dm.ctr), 0) AS avg_ctr,
+                    COALESCE(SUM(dm.impressions) / NULLIF(DATEDIFF(CURDATE(), DATE(v.published_at)), 0), 0) AS impressions_daily_avg
+                 FROM videos v
+                 LEFT JOIN daily_metrics dm ON dm.video_id = v.id
+                 WHERE v.user_id = :userId
+                   AND v.published_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                 GROUP BY v.id
+                 HAVING (last7_views > all_time_daily_avg * 7 * 1.8)
+                    OR (avg_watch_min_per_view > 5 AND impressions_daily_avg < 300 AND all_time_daily_avg > 5)
+                 ORDER BY (last7_views / NULLIF(all_time_daily_avg * 7, 0)) DESC
+                 LIMIT 20';
+
+        $rows = $conn->fetchAllAssociative($sql, ['userId' => $user->getId()]);
+        $em   = $this->getEntityManager();
+        $result = [];
+        foreach ($rows as $row) {
+            $video = $em->find(\App\Entity\Video::class, (int)$row['video_id']);
+            if (!$video) continue;
+            $result[] = [
+                'video'                => $video,
+                'all_time_daily_avg'   => round((float)$row['all_time_daily_avg'], 1),
+                'last7_views'          => (int)$row['last7_views'],
+                'avg_watch_min_per_view' => round((float)$row['avg_watch_min_per_view'], 1),
+                'avg_ctr'              => round((float)$row['avg_ctr'], 2),
+                'impressions_daily_avg'=> round((float)$row['impressions_daily_avg'], 1),
+                'revival_ratio'        => $row['all_time_daily_avg'] > 0
+                    ? round((float)$row['last7_views'] / ((float)$row['all_time_daily_avg'] * 7), 2)
+                    : 0,
+                'is_hidden_gem'        => (float)$row['avg_watch_min_per_view'] > 5 && (float)$row['impressions_daily_avg'] < 300,
+                'is_revival'           => (float)$row['last7_views'] > (float)$row['all_time_daily_avg'] * 7 * 1.8,
+            ];
+        }
+        return $result;
+    }
+
+    /**
+     * Returns per-video contribution to channel totals over last N days.
+     * Result: [videoId => ['views' => int, 'watch_time' => int, 'pct_views' => float]]
+     */
+    public function getVideoContributionsForUser(User $user, int $days = 30): array
+    {
+        $since = new \DateTimeImmutable("-{$days} days");
+        $rows  = $this->createQueryBuilder('dm')
+            ->select('IDENTITY(dm.video) as video_id, SUM(dm.views) as views, SUM(dm.watchTimeMinutes) as watch_time')
+            ->join('dm.video', 'v')
+            ->where('v.user = :user')
+            ->andWhere('dm.date >= :since')
+            ->setParameter('user', $user)
+            ->setParameter('since', $since)
+            ->groupBy('dm.video')
+            ->orderBy('views', 'DESC')
+            ->getQuery()
+            ->getArrayResult();
+
+        $totalViews     = array_sum(array_column($rows, 'views'));
+        $totalWatchTime = array_sum(array_column($rows, 'watch_time'));
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int)$row['video_id']] = [
+                'views'      => (int)$row['views'],
+                'watch_time' => (int)$row['watch_time'],
+                'pct_views'  => $totalViews > 0 ? round((int)$row['views'] / $totalViews * 100, 1) : 0,
+                'pct_watch'  => $totalWatchTime > 0 ? round((int)$row['watch_time'] / $totalWatchTime * 100, 1) : 0,
+            ];
+        }
+        return $result;
+    }
+
     /** Deletes daily metrics older than $before. Returns number of deleted rows. */
     public function deleteOlderThan(\DateTimeImmutable $before): int
     {

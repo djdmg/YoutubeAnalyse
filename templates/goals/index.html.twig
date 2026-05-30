@@ -107,6 +107,45 @@
         {% endif %}
     </div>
     {% endif %}
+
+    {# ── Pace & contributions ──────────────────────────────────────────── #}
+    {% if goal_details is defined and goal_details[goal.id] is defined %}
+    {% set gd = goal_details[goal.id] %}
+    {% if gd.pace_daily is not null and gd.days_left > 0 %}
+    <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
+            <span style="font-size:.72em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Rythme nécessaire</span>
+            <span style="font-size:.72em;padding:.15rem .45rem;border-radius:4px;font-weight:600;background:{{ gd.on_track ? '#22c55e18' : '#ef444418' }};color:{{ gd.on_track ? '#22c55e' : '#ef4444' }}">
+                <i class="fas fa-{{ gd.on_track ? 'check' : 'exclamation-triangle' }}"></i>
+                {{ gd.on_track ? 'Dans les temps' : 'Retard' }}
+            </span>
+        </div>
+        <div style="display:flex;gap:1rem">
+            <div>
+                <div style="font-size:1.05rem;font-weight:700;color:var(--text-primary);line-height:1">{{ gd.pace_daily|number_format(0, ',', ' ') }}</div>
+                <div style="font-size:.68em;color:var(--text-muted)">/ jour</div>
+            </div>
+            <div>
+                <div style="font-size:1.05rem;font-weight:700;color:var(--text-primary);line-height:1">{{ gd.pace_weekly|number_format(0, ',', ' ') }}</div>
+                <div style="font-size:.68em;color:var(--text-muted)">/ semaine</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% if gd.top_contributors is not empty %}
+    <div style="margin-top:.65rem;padding-top:.65rem;border-top:1px solid var(--border)">
+        <div style="font-size:.7em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:.4rem">Top contributrices (30j)</div>
+        {% for contrib in gd.top_contributors %}
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem">
+            <div style="flex:1;min-width:0;font-size:.75em;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                {{ contrib.video.title|slice(0,40) }}{% if contrib.video.title|length > 40 %}…{% endif %}
+            </div>
+            <div style="font-size:.75em;font-weight:600;color:{{ color }};flex-shrink:0">{{ contrib.pct }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
 </div>
 {% endfor %}
 </div>

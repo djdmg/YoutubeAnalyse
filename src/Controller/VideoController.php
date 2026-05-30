@@ -320,6 +320,78 @@ PROMPT;
         ]);
     }
 
+    public static function computeSeoScore(mixed $video, array $stats, array $searchTerms): array
+    {
+        $title = $video->getTitle();
+        $desc  = $video->getDescription() ?? '';
+        $ctr   = (float)($stats['avg_ctr'] ?? 0);
+
+        // Title score (0-30): length sweet spot 40-65 chars, has numbers/power words
+        $titleLen = mb_strlen($title);
+        $titlePts = match(true) {
+            $titleLen >= 40 && $titleLen <= 65 => 30,
+            $titleLen >= 30 && $titleLen < 40  => 22,
+            $titleLen > 65 && $titleLen <= 80  => 20,
+            $titleLen >= 20 && $titleLen < 30  => 12,
+            default                             => 5,
+        };
+        // Bonus for numbers in title (e.g. "10 tips", "2024")
+        if (preg_match('/\d+/', $title)) $titlePts = min(30, $titlePts + 4);
+
+        // Description score (0-25)
+        $descLen = mb_strlen($desc);
+        $descPts = match(true) {
+            $descLen >= 500 => 25,
+            $descLen >= 200 => 18,
+            $descLen >= 100 => 12,
+            $descLen >= 30  => 6,
+            default         => 0,
+        };
+        // Bonus for timestamps
+        if (preg_match('/\d+:\d+/', $desc)) $descPts = min(25, $descPts + 3);
+
+        // Search terms score (0-25): measures SEO discoverability
+        $termCount = count($searchTerms);
+        $termPts   = match(true) {
+            $termCount >= 10 => 25,
+            $termCount >= 5  => 18,
+            $termCount >= 3  => 12,
+            $termCount >= 1  => 6,
+            default          => 0,
+        };
+
+        // CTR score (0-20): CTR is the ultimate SEO quality signal
+        $ctrPts = match(true) {
+            $ctr >= 7.0 => 20,
+            $ctr >= 5.0 => 16,
+            $ctr >= 3.5 => 12,
+            $ctr >= 2.0 => 7,
+            $ctr >  0   => 3,
+            default      => 0,
+        };
+
+        $total = $titlePts + $descPts + $termPts + $ctrPts;
+        $grade = match(true) {
+            $total >= 85 => 'A',
+            $total >= 70 => 'B',
+            $total >= 50 => 'C',
+            $total >= 30 => 'D',
+            default      => 'F',
+        };
+
+        return [
+            'total'     => $total,
+            'grade'     => $grade,
+            'title_pts' => $titlePts,
+            'desc_pts'  => $descPts,
+            'term_pts'  => $termPts,
+            'ctr_pts'   => $ctrPts,
+            'title_len' => $titleLen,
+            'desc_len'  => $descLen,
+            'term_count'=> $termCount,
+        ];
+    }
+
     private static function computeHealthScore(array $stats): int
     {
         $d = self::computeHealthDetail($stats);
@@ -743,6 +815,10 @@ PROMPT;
             $retentionData['values'][] = round($rp->getRetentionPercent(), 1);
         }
 
+        $listStats = $this->metricRepo->getListStatsForUser($user);
+        $videoStats = $listStats[$video->getId()] ?? ['avg_ctr' => null];
+        $seoScore  = self::computeSeoScore($video, $videoStats, $searchTerms);
+
         return $this->render('analytics/video_detail.html.twig', [
             'video'                => $video,
             'metrics'              => $metrics,
@@ -764,6 +840,7 @@ PROMPT;
             'traffic_total'        => $trafficTotal,
             'estimated_revenue'    => $estimatedRevenue,
             'estimated_rpm'        => $user->getEstimatedRpm(),
+            'seo_score'            => $seoScore,
             'thumbnail_model_id'   => $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001',
             'thumbnail_model_name' => $this->resolveThumbnailModelName(),
         ]);
@@ -851,11 +928,71 @@ PROMPT;
             AiReportType::Prediction,
         ]) && $r->getVideo() !== null));
 
+        // ── Smart alerts: computed algorithmically ────────────────────────────
+        $smartAlerts = $this->buildSmartAlerts($user);
+
         return $this->render('analytics/alerts.html.twig', [
-            'urgent'  => $urgent,
-            'conseil' => $conseil,
-            'total'   => count($urgent) + count($conseil),
+            'urgent'       => $urgent,
+            'conseil'      => $conseil,
+            'smart_alerts' => $smartAlerts,
+            'total'        => count($urgent) + count($conseil) + count($smartAlerts),
         ]);
+    }
+
+    private function buildSmartAlerts(User $user): array
+    {
+        $alerts    = [];
+        $videos    = $this->videoRepo->findForUser($user);
+        $listStats = $this->metricRepo->getListStatsForUser($user);
+        $trendData = $this->metricRepo->getTrendDataForUser($user);
+
+        // Compute channel average CTR
+        $ctrs = array_filter(array_column($listStats, 'avg_ctr'), fn($v) => $v !== null);
+        $channelAvgCtr = !empty($ctrs) ? array_sum($ctrs) / count($ctrs) : 4.0;
+
+        foreach ($videos as $video) {
+            $vid   = $video->getId();
+            $stats = $listStats[$vid] ?? [];
+            $trend = $trendData[$vid] ?? null;
+
+            // Alert 1: video outperforms channel average by 40%+
+            $ctr = $stats['avg_ctr'] ?? null;
+            if ($ctr !== null && $channelAvgCtr > 0 && $ctr >= $channelAvgCtr * 1.4) {
+                $alerts[] = [
+                    'type'    => 'opportunity',
+                    'icon'    => 'fa-fire',
+                    'color'   => '#22c55e',
+                    'video'   => $video,
+                    'title'   => 'Vidéo surperformante — Publie un suivi !',
+                    'message' => sprintf(
+                        'CTR de %.1f%% (moy. chaîne %.1f%%) — Cette vidéo attire %d%% plus que la normale.',
+                        $ctr, $channelAvgCtr, round(($ctr / $channelAvgCtr - 1) * 100)
+                    ),
+                    'action'  => 'Créer une vidéo de suivi ou un Short dérivé sur ce sujet',
+                ];
+            }
+
+            // Alert 2: strong positive trend (>50% growth in 3 days)
+            if ($trend && $trend['pct'] >= 50 && $trend['recent'] >= 100) {
+                $alerts[] = [
+                    'type'    => 'trending',
+                    'icon'    => 'fa-chart-line',
+                    'color'   => '#3b82f6',
+                    'video'   => $video,
+                    'title'   => 'Vidéo en forte croissance',
+                    'message' => sprintf(
+                        '+%d%% de vues sur 3 jours (%d → %d). La vidéo prend de l\'élan.',
+                        $trend['pct'], $trend['prev'], $trend['recent']
+                    ),
+                    'action'  => 'Partager sur les réseaux sociaux pour amplifier la vague',
+                ];
+            }
+
+            // Alert 3: CTR drops after thumbnail changes are tracked on the A/B Testing page
+        }
+
+        // Limit to 10 most recent smart alerts
+        return array_slice($alerts, 0, 10);
     }
 
     #[Route('/ai-costs', name: 'analytics_ai_costs')]

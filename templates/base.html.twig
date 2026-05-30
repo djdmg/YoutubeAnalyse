@@ -51,26 +51,39 @@
             </div>
         </div>
 
+        {# ── Actions prioritaires ───────────────────────────────────────────── #}
+        <a href="{{ path('priority_actions') }}" class="{{ route == 'priority_actions' ? 'active' : '' }}" title="Actions prioritaires" style="position:relative">
+            <i class="fas fa-fire"></i> Priorités
+        </a>
+
         {# ── Analytics ──────────────────────────────────────────────────────── #}
-        {% set analyticsActive = route starts with 'analytics_' %}
+        {% set analyticsActive = route starts with 'analytics_' or route in ['ab_testing','relaunch_detection','editorial_planning'] %}
         <div class="nav-dropdown {{ analyticsActive ? 'active' : '' }}" data-dropdown="analytics">
             <button class="nav-dropdown-btn {{ analyticsActive ? 'active' : '' }}" type="button">
                 <i class="fas fa-chart-bar"></i> Analytics <i class="fas fa-chevron-down nav-chevron"></i>
             </button>
             <div class="nav-dropdown-menu">
-                <div class="nav-dropdown-label">Analytics</div>
+                <div class="nav-dropdown-label">Performances</div>
                 <a href="{{ path('analytics_videos') }}" class="{{ route starts with 'analytics_video' ? 'active' : '' }}">
                     <i class="fas fa-chart-bar"></i> Vidéos
                 </a>
                 <a href="{{ path('analytics_alerts') }}" class="{{ route == 'analytics_alerts' ? 'active' : '' }}">
-                    <i class="fas fa-tasks"></i> Actions
-                    {% if pending_approval_count is defined and pending_approval_count > 0 %}
-                    <span class="nav-badge" style="margin-left:auto">{{ pending_approval_count }}</span>
-                    {% endif %}
+                    <i class="fas fa-bell"></i> Alertes IA
                 </a>
                 <a href="{{ path('analytics_best_time') }}" class="{{ route == 'analytics_best_time' ? 'active' : '' }}">
                     <i class="fas fa-clock"></i> Meilleur moment
                 </a>
+                <div class="nav-dropdown-label" style="margin-top:.4rem">Optimisation</div>
+                <a href="{{ path('ab_testing') }}" class="{{ route == 'ab_testing' ? 'active' : '' }}">
+                    <i class="fas fa-flask"></i> A/B Testing
+                </a>
+                <a href="{{ path('relaunch_detection') }}" class="{{ route == 'relaunch_detection' ? 'active' : '' }}">
+                    <i class="fas fa-rocket"></i> Vidéos à relancer
+                </a>
+                <a href="{{ path('editorial_planning') }}" class="{{ route == 'editorial_planning' ? 'active' : '' }}">
+                    <i class="fas fa-calendar-alt"></i> Planning éditorial
+                </a>
+                <div class="nav-dropdown-label" style="margin-top:.4rem">Outils</div>
                 <a href="{{ path('analytics_ai_costs') }}" class="{{ route == 'analytics_ai_costs' ? 'active' : '' }}">
                     <i class="fas fa-robot"></i> Coûts IA
                 </a>

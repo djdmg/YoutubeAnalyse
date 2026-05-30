@@ -9,6 +9,7 @@ use App\Repository\ChannelStatsRepository;
 use App\Repository\DailyMetricRepository;
 use App\Repository\AppSettingRepository;
 use App\Repository\GoalRepository;
+use App\Repository\VideoRepository;
 use App\Service\GeminiService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -29,6 +30,7 @@ class GoalController extends AbstractController
         private readonly EntityManagerInterface  $em,
         private readonly ChannelStatsRepository  $channelStatsRepo,
         private readonly DailyMetricRepository   $dailyMetricRepo,
+        private readonly VideoRepository         $videoRepo,
         private readonly MessageBusInterface     $bus,
         private readonly CacheInterface          $cache,
         private readonly AppSettingRepository    $settingRepo,
@@ -45,9 +47,72 @@ class GoalController extends AbstractController
 
         $this->syncCurrentValues($user, array_merge($activeGoals, $doneGoals));
 
+        // Pace and video contributions for active goals
+        $contributions   = $this->metricRepo->getVideoContributionsForUser($user, 30);
+        $videos          = $this->videoRepo->findForUser($user);
+        $today           = new \DateTimeImmutable();
+
+        $goalDetails = [];
+        foreach ($activeGoals as $goal) {
+            $remaining = $goal->getTargetValue() - $goal->getCurrentValue();
+            $daysLeft  = null;
+            $paceDaily = null;
+            $paceWeekly = null;
+            $onTrack   = null;
+
+            if ($goal->getDeadline() && !$goal->isAchieved()) {
+                $daysLeft   = max(1, (int)$today->diff($goal->getDeadline())->days);
+                $paceDaily  = $remaining > 0 ? ceil($remaining / $daysLeft) : 0;
+                $paceWeekly = $paceDaily * 7;
+
+                // Estimate current pace from last 7 days
+                $stats7     = $this->dailyMetricRepo->getGlobalStatsForUser($user, 7);
+                $current7   = match($goal->getType()) {
+                    'views'      => (int)($stats7['total_views'] ?? 0),
+                    'watch_time' => (int)($stats7['total_watch_time'] ?? 0),
+                    default      => 0,
+                };
+                $currentDaily = $current7 / 7;
+                $onTrack = $paceDaily > 0 ? ($currentDaily >= $paceDaily) : true;
+            }
+
+            // Video contributions for views/watch_time goals
+            $topContributors = [];
+            if (in_array($goal->getType(), ['views', 'watch_time'], true)) {
+                $key  = $goal->getType() === 'views' ? 'views' : 'watch_time';
+                $pctKey = $goal->getType() === 'views' ? 'pct_views' : 'pct_watch';
+                arsort($contributions);
+                $count = 0;
+                foreach ($contributions as $videoId => $contrib) {
+                    if ($count >= 5) break;
+                    $video = null;
+                    foreach ($videos as $v) {
+                        if ($v->getId() === $videoId) { $video = $v; break; }
+                    }
+                    if (!$video) continue;
+                    $topContributors[] = [
+                        'video'  => $video,
+                        'value'  => $contrib[$key],
+                        'pct'    => $contrib[$pctKey],
+                    ];
+                    $count++;
+                }
+                usort($topContributors, fn($a, $b) => $b['value'] <=> $a['value']);
+            }
+
+            $goalDetails[$goal->getId()] = [
+                'days_left'       => $daysLeft,
+                'pace_daily'      => $paceDaily,
+                'pace_weekly'     => $paceWeekly,
+                'on_track'        => $onTrack,
+                'top_contributors'=> $topContributors,
+            ];
+        }
+
         return $this->render('goals/index.html.twig', [
             'active_goals'   => $activeGoals,
             'achieved_goals' => $doneGoals,
+            'goal_details'   => $goalDetails,
         ]);
     }
 

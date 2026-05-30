@@ -14,6 +14,9 @@ enum AiReportType: string
     case ThumbnailGeneration     = 'thumbnail_generation';
     case ThumbnailPrompt         = 'thumbnail_prompt';
     case GoalSuggestions         = 'goal_suggestions';
+    case EditorialPlanning       = 'editorial_planning';
+    case RelaunchSuggestion      = 'relaunch_suggestion';
+    case SmartAlert              = 'smart_alert';
 
     public function label(): string
     {
@@ -29,6 +32,9 @@ enum AiReportType: string
             self::ThumbnailGeneration    => 'Génération miniature',
             self::ThumbnailPrompt        => 'Génération prompt miniature',
             self::GoalSuggestions        => 'Suggestions objectifs',
+            self::EditorialPlanning      => 'Planning éditorial',
+            self::RelaunchSuggestion     => 'Suggestion relance',
+            self::SmartAlert             => 'Alerte intelligente',
         };
     }
 }

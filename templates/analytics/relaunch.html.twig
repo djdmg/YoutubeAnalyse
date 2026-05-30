@@ -1,0 +1,131 @@
+{% extends 'base.html.twig' %}
+{% block title %}Vidéos à relancer — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-rocket" style="color:#10b981"></i> Vidéos à relancer</h1>
+        <span class="last-sync">{{ candidates|length }} candidat{{ candidates|length != 1 ? 's' : '' }} détecté{{ candidates|length != 1 ? 's' : '' }}</span>
+    </div>
+</div>
+
+<div class="section-card" style="margin-bottom:1.25rem;padding:1rem 1.5rem;display:flex;gap:2rem;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:.6rem">
+        <span style="display:inline-flex;align-items:center;gap:.35rem;background:#f59e0b18;color:#f59e0b;border:1px solid #f59e0b30;border-radius:6px;padding:.25rem .6rem;font-size:.78rem;font-weight:600">
+            <i class="fas fa-fire"></i> Revivalisme
+        </span>
+        <span style="font-size:.8rem;color:var(--text-secondary)">Vues récentes > 1.8× la moyenne habituelle</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:.6rem">
+        <span style="display:inline-flex;align-items:center;gap:.35rem;background:#8b5cf618;color:#8b5cf6;border:1px solid #8b5cf630;border-radius:6px;padding:.25rem .6rem;font-size:.78rem;font-weight:600">
+            <i class="fas fa-gem"></i> Pépite cachée
+        </span>
+        <span style="font-size:.8rem;color:var(--text-secondary)">Bon watch time mais peu d'impressions</span>
+    </div>
+</div>
+
+{% if candidates is empty %}
+<div class="section-card">
+    <div class="empty-state" style="padding:48px 24px;text-align:center">
+        <i class="fas fa-search fa-3x" style="color:var(--text-muted);margin-bottom:16px"></i>
+        <h3>Aucune vidéo détectée</h3>
+        <p style="color:var(--text-secondary)">L'algorithme cherche des vidéos de plus de 90 jours avec un regain d'intérêt ou un fort potentiel inexploité. Revenez après quelques jours de données supplémentaires.</p>
+    </div>
+</div>
+{% else %}
+
+<div style="display:flex;flex-direction:column;gap:1rem">
+{% for row in candidates %}
+{% set video = row.video %}
+<div class="section-card relaunch-card">
+    <div class="relaunch-header">
+        {# Thumbnail #}
+        {% if video.thumbnailUrl %}
+        <a href="{{ path('analytics_video_detail', {youtubeId: video.youtubeId}) }}">
+            <img src="{{ video.thumbnailUrl }}" alt="{{ video.title }}" class="relaunch-thumb" loading="lazy">
+        </a>
+        {% else %}
+        <div class="relaunch-thumb relaunch-thumb-placeholder"><i class="fas fa-video"></i></div>
+        {% endif %}
+
+        <div class="relaunch-info">
+            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem">
+                {% if row.is_revival %}
+                <span class="relaunch-badge revival"><i class="fas fa-fire"></i> Revivalisme ×{{ row.revival_ratio }}</span>
+                {% endif %}
+                {% if row.is_hidden_gem %}
+                <span class="relaunch-badge gem"><i class="fas fa-gem"></i> Pépite cachée</span>
+                {% endif %}
+            </div>
+            <a href="{{ path('analytics_video_detail', {youtubeId: video.youtubeId}) }}" class="relaunch-title">
+                {{ video.title|length > 80 ? video.title|slice(0,80) ~ '…' : video.title }}
+            </a>
+            <div class="relaunch-meta">
+                {% if video.publishedAt %}
+                <span><i class="fas fa-calendar-alt"></i> {{ video.publishedAt|date('d/m/Y') }}</span>
+                {% endif %}
+                <span><i class="fas fa-chart-line"></i> Moy. {{ row.all_time_daily_avg }} vues/j</span>
+                <span><i class="fas fa-fire-alt"></i> {{ row.last7_views }} vues (7 derniers jours)</span>
+                {% if row.avg_watch_min_per_view > 0 %}
+                <span><i class="fas fa-clock"></i> {{ row.avg_watch_min_per_view }} min/vue</span>
+                {% endif %}
+                {% if row.avg_ctr > 0 %}
+                <span><i class="fas fa-mouse-pointer"></i> CTR {{ row.avg_ctr }}%</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Suggested actions #}
+    {% if row.suggested_actions is not empty %}
+    <div class="relaunch-actions">
+        <div class="relaunch-actions-title"><i class="fas fa-lightbulb"></i> Actions recommandées</div>
+        <div style="display:flex;flex-direction:column;gap:.4rem">
+            {% for act in row.suggested_actions %}
+            <div class="relaunch-action-item">
+                <i class="fas {{ act.icon }}" style="color:{{ act.color }};width:16px;text-align:center;flex-shrink:0"></i>
+                <span>{{ act.text }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Quick links #}
+    <div class="relaunch-footer">
+        <a href="{{ path('analytics_video_detail', {youtubeId: video.youtubeId}) }}" class="btn btn-outline btn-xs">
+            <i class="fas fa-chart-bar"></i> Analytics détaillées
+        </a>
+        <a href="{{ path('analytics_video_detail', {youtubeId: video.youtubeId}) }}#thumbnail" class="btn btn-outline btn-xs">
+            <i class="fas fa-image"></i> Générer miniature
+        </a>
+        <a href="https://studio.youtube.com/video/{{ video.youtubeId }}/edit" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
+            <i class="fab fa-youtube"></i> Modifier sur YouTube
+        </a>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+<style>
+.relaunch-card { transition:transform .15s; }
+.relaunch-card:hover { transform:translateY(-1px); }
+.relaunch-header { display:flex; align-items:flex-start; gap:1rem; }
+.relaunch-thumb { width:140px; height:79px; object-fit:cover; border-radius:6px; flex-shrink:0; }
+.relaunch-thumb-placeholder { width:140px; height:79px; border-radius:6px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; color:var(--text-muted); flex-shrink:0; }
+.relaunch-info { flex:1; min-width:0; }
+.relaunch-badge { display:inline-flex; align-items:center; gap:.3rem; font-size:.72rem; font-weight:600; padding:.2rem .55rem; border-radius:5px; }
+.relaunch-badge.revival { background:#f59e0b18; color:#f59e0b; border:1px solid #f59e0b30; }
+.relaunch-badge.gem     { background:#8b5cf618; color:#8b5cf6; border:1px solid #8b5cf630; }
+.relaunch-title { font-weight:600; font-size:.95rem; color:var(--text-primary); text-decoration:none; display:block; margin-bottom:.35rem; }
+.relaunch-title:hover { color:var(--blue); }
+.relaunch-meta { display:flex; gap:.75rem; flex-wrap:wrap; font-size:.78rem; color:var(--text-muted); }
+.relaunch-meta span { display:flex; align-items:center; gap:.3rem; }
+.relaunch-actions { margin-top:.875rem; padding-top:.875rem; border-top:1px solid var(--border); }
+.relaunch-actions-title { font-size:.78rem; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.5rem; }
+.relaunch-action-item { display:flex; align-items:center; gap:.6rem; font-size:.85rem; color:var(--text-primary); }
+.relaunch-footer { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.875rem; padding-top:.875rem; border-top:1px solid var(--border); }
+.btn-xs { padding:.25rem .6rem; font-size:.75rem; }
+</style>
+{% endblock %}
