@@ -35,6 +35,13 @@
 
     {{ form_start(form, {'attr': {'novalidate': 'novalidate', 'class': 'profile-form'}}) }}
 
+    {% if form.vars.errors|length > 0 %}
+    <div class="alert-banner alert-danger" style="margin-bottom:1rem">
+        <i class="fas fa-exclamation-circle"></i>
+        <div>{{ form_errors(form) }}</div>
+    </div>
+    {% endif %}
+
     {# ── Destination ───────────────────────────── #}
     <div class="form-section-title"><i class="fas fa-at"></i> Adresse de destination</div>
 
@@ -55,6 +62,9 @@
             {{ form_widget(form.estimatedRpm, {'attr': {'class': 'form-control', 'step': '0.01', 'min': '0', 'style': 'padding-right:2.5rem'}}) }}
             <span style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.85rem;pointer-events:none">€</span>
         </div>
+        {% if form.estimatedRpm.vars.errors|length > 0 %}
+            <span class="field-error">{{ form_errors(form.estimatedRpm) }}</span>
+        {% endif %}
         <span class="help-text">Revenu estimé pour 1 000 vues. Valeur par défaut : 2,00 €.</span>
     </div>
 

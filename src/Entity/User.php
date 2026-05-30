@@ -49,22 +49,6 @@ class User implements UserInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $notifEmail = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $smtpHost = null;
-
-    #[ORM\Column(nullable: true)]
-    private ?int $smtpPort = 587;
-
-    /** starttls, ssl, none */
-    #[ORM\Column(length: 10, nullable: true)]
-    private ?string $smtpEncryption = 'starttls';
-
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $smtpUser = null;
-
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $smtpPassword = null;
-
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $telegramChatId = null;
 
@@ -102,17 +86,6 @@ class User implements UserInterface
     public function setLastLoginAt(\DateTimeImmutable $lastLoginAt): static { $this->lastLoginAt = $lastLoginAt; return $this; }
     public function getNotifEmail(): ?string { return $this->notifEmail; }
     public function setNotifEmail(?string $v): static { $this->notifEmail = $v; return $this; }
-    public function getSmtpHost(): ?string { return $this->smtpHost; }
-    public function setSmtpHost(?string $v): static { $this->smtpHost = $v; return $this; }
-    public function getSmtpPort(): ?int { return $this->smtpPort; }
-    public function setSmtpPort(?int $v): static { $this->smtpPort = $v; return $this; }
-    public function getSmtpEncryption(): ?string { return $this->smtpEncryption; }
-    public function setSmtpEncryption(?string $v): static { $this->smtpEncryption = $v; return $this; }
-    public function getSmtpUser(): ?string { return $this->smtpUser; }
-    public function setSmtpUser(?string $v): static { $this->smtpUser = $v; return $this; }
-    public function getSmtpPassword(): ?string { return $this->smtpPassword; }
-    public function setSmtpPassword(?string $v): static { $this->smtpPassword = $v; return $this; }
-    public function hasSmtpConfigured(): bool { return $this->smtpHost && $this->smtpUser && $this->smtpPassword && $this->notifEmail; }
     public function getTelegramChatId(): ?string { return $this->telegramChatId; }
     public function setTelegramChatId(?string $v): static { $this->telegramChatId = $v; return $this; }
     public function hasTelegramConfigured(): bool { return $this->telegramChatId !== null && $this->telegramChatId !== ''; }

@@ -31,10 +31,10 @@ class ProfileEmailSettingsType extends AbstractType
             ->add('estimatedRpm', NumberType::class, [
                 'label'       => 'RPM estimé (€/1 000 vues)',
                 'required'    => false,
+                'html5'       => true,
                 'scale'       => 2,
-                'data'        => $options['data']->getEstimatedRpm() ?? 2.0,
                 'constraints' => [new Range(['min' => 0, 'max' => 1000])],
-                'attr'        => ['placeholder' => '2.00', 'step' => '0.10'],
+                'attr'        => ['placeholder' => '2.00', 'step' => '0.01', 'min' => '0'],
                 'help'        => 'Revenu estimé pour 1 000 vues. Valeur par défaut : 2,00 €.',
             ]);
     }
