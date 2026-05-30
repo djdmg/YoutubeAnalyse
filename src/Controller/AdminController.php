@@ -9,6 +9,7 @@ use App\Repository\UserRepository;
 use App\Enum\AiReportType;
 use App\Service\AiProviderFactory;
 use App\Service\AiProviderInterface;
+use App\Service\EmailNotificationService;
 use App\Service\GeminiService;
 use App\Service\TelegramNotificationService;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -30,6 +31,7 @@ class AdminController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly AppSettingRepository   $settingRepo,
         private readonly AiProviderFactory      $aiFactory,
+        private readonly EmailNotificationService $emailService,
         private readonly GeminiService          $gemini,
         private readonly LoggerInterface        $logger,
         private readonly MessengerLogRepository $messengerLogRepo,
@@ -175,6 +177,14 @@ class AdminController extends AbstractController
 
         return $this->render('admin/settings.html.twig', [
             'telegram_token'   => $this->settingRepo->get(TelegramNotificationService::SETTING_KEY),
+            'smtp_configured'  => $this->emailService->isConfigured(),
+            'smtp_host'        => $this->settingRepo->get(EmailNotificationService::SETTING_SMTP_HOST),
+            'smtp_port'        => $this->settingRepo->get(EmailNotificationService::SETTING_SMTP_PORT) ?? '587',
+            'smtp_encryption'  => $this->settingRepo->get(EmailNotificationService::SETTING_SMTP_ENCRYPTION) ?? 'starttls',
+            'smtp_user'        => $this->settingRepo->get(EmailNotificationService::SETTING_SMTP_USER),
+            'smtp_password'    => $this->settingRepo->get(EmailNotificationService::SETTING_SMTP_PASSWORD),
+            'smtp_from_email'  => $this->settingRepo->get(EmailNotificationService::SETTING_SMTP_FROM_EMAIL),
+            'smtp_from_name'   => $this->settingRepo->get(EmailNotificationService::SETTING_SMTP_FROM_NAME) ?? 'YouTube Analyse',
             'ai_provider'      => $provider,
             'gemini_api_key'   => $this->settingRepo->get(GeminiService::SETTING_API_KEY),
             'thumbnail_model'        => $this->settingRepo->get(GeminiService::SETTING_THUMBNAIL_MODEL) ?? 'imagen-3.0-generate-001',
@@ -227,6 +237,18 @@ class AdminController extends AbstractController
         if ($section === 'telegram') {
             $token = trim((string) $request->request->get('telegram_token', ''));
             $this->settingRepo->set(TelegramNotificationService::SETTING_KEY, $token ?: null);
+        } elseif ($section === 'smtp') {
+            $this->settingRepo->set(EmailNotificationService::SETTING_SMTP_HOST, trim((string) $request->request->get('smtp_host', '')) ?: null);
+            $this->settingRepo->set(EmailNotificationService::SETTING_SMTP_PORT, trim((string) $request->request->get('smtp_port', '')) ?: null);
+            $this->settingRepo->set(EmailNotificationService::SETTING_SMTP_ENCRYPTION, trim((string) $request->request->get('smtp_encryption', '')) ?: 'starttls');
+            $this->settingRepo->set(EmailNotificationService::SETTING_SMTP_USER, trim((string) $request->request->get('smtp_user', '')) ?: null);
+            $this->settingRepo->set(EmailNotificationService::SETTING_SMTP_FROM_EMAIL, trim((string) $request->request->get('smtp_from_email', '')) ?: null);
+            $this->settingRepo->set(EmailNotificationService::SETTING_SMTP_FROM_NAME, trim((string) $request->request->get('smtp_from_name', '')) ?: 'YouTube Analyse');
+
+            $smtpPassword = (string) $request->request->get('smtp_password', '');
+            if ($smtpPassword !== '') {
+                $this->settingRepo->set(EmailNotificationService::SETTING_SMTP_PASSWORD, $smtpPassword);
+            }
         } elseif ($section === 'models') {
             $provider = $this->settingRepo->get(AiProviderFactory::SETTING_PROVIDER) ?? AiProviderFactory::PROVIDER_CLAUDE;
             foreach (AiReportType::cases() as $type) {

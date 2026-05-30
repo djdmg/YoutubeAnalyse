@@ -29,26 +29,20 @@ class ProfileController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        $form = $this->createForm(ProfileEmailSettingsType::class, $user, [
-            'has_password' => (bool) $user->getSmtpPassword(),
-        ]);
+        $form = $this->createForm(ProfileEmailSettingsType::class, $user);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // Only update password if a new value was entered
-            $newPassword = $form->get('smtpPassword')->getData();
-            if ($newPassword !== null && $newPassword !== '') {
-                $user->setSmtpPassword($newPassword);
-            }
-
             $this->em->flush();
-            $this->addFlash('success', 'Paramètres email sauvegardés.');
+            $this->addFlash('success', 'Paramètres de notification sauvegardés.');
             return $this->redirectToRoute('profile_index');
         }
 
         return $this->render('profile/index.html.twig', [
             'form' => $form->createView(),
             'user' => $user,
+            'email_configured' => $this->emailService->isConfiguredForUser($user),
+            'smtp_global_configured' => $this->emailService->isConfigured(),
         ]);
     }
 
@@ -58,8 +52,8 @@ class ProfileController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        if (!$user->hasSmtpConfigured()) {
-            return $this->testResponse($request, false, 'Configurez d\'abord vos paramètres SMTP.');
+        if (!$this->emailService->isConfiguredForUser($user)) {
+            return $this->testResponse($request, false, 'Renseignez votre email et configurez le SMTP global côté admin.');
         }
 
         $error = $this->emailService->sendTestEmail($user);

@@ -22,7 +22,7 @@
 <div class="section-card" style="max-width:680px">
     <div class="section-header">
         <h3><i class="fas fa-envelope"></i> Notifications par email</h3>
-        {% if user.hasSmtpConfigured() %}
+        {% if email_configured %}
             <span class="badge badge-green" style="background:rgba(34,197,94,.15);color:#86efac;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">
                 <i class="fas fa-circle" style="font-size:8px;vertical-align:middle;margin-right:4px"></i> Actif
             </span>
@@ -44,40 +44,6 @@
         {% if form.notifEmail.vars.errors|length > 0 %}
             <span class="field-error">{{ form_errors(form.notifEmail) }}</span>
         {% endif %}
-    </div>
-
-    {# ── Serveur SMTP ──────────────────────────── #}
-    <div class="form-section-title"><i class="fas fa-server"></i> Serveur SMTP</div>
-
-    <div class="form-grid-2" style="margin-bottom:16px">
-        <div class="form-field">
-            {{ form_label(form.smtpHost) }}
-            {{ form_widget(form.smtpHost, {'attr': {'class': 'form-control', 'placeholder': 'mail.exemple.com'}}) }}
-        </div>
-        <div class="form-field">
-            {{ form_label(form.smtpPort) }}
-            {{ form_widget(form.smtpPort, {'attr': {'class': 'form-control'}}) }}
-        </div>
-    </div>
-
-    <div class="form-field" style="margin-bottom:20px">
-        {{ form_label(form.smtpEncryption) }}
-        {{ form_widget(form.smtpEncryption, {'attr': {'class': 'form-control'}}) }}
-    </div>
-
-    {# ── Authentification ──────────────────────── #}
-    <div class="form-section-title"><i class="fas fa-key"></i> Authentification</div>
-
-    <div class="form-grid-2" style="margin-bottom:24px">
-        <div class="form-field">
-            {{ form_label(form.smtpUser) }}
-            {{ form_widget(form.smtpUser, {'attr': {'class': 'form-control', 'placeholder': 'user@exemple.com'}}) }}
-        </div>
-        <div class="form-field">
-            {{ form_label(form.smtpPassword) }}
-            {{ form_widget(form.smtpPassword, {'attr': {'class': 'form-control', 'autocomplete': 'new-password', 'placeholder': user.smtpPassword ? '••••••••' : 'Mot de passe'}}) }}
-            <span class="help-text">Laisser vide pour conserver le mot de passe actuel.</span>
-        </div>
     </div>
 
     {# ── Monétisation ─────────────────────────── #}
@@ -115,7 +81,7 @@
 
     {# Test email — form séparé pour éviter conflit avec le form de settings #}
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
-        {% if user.hasSmtpConfigured() %}
+        {% if email_configured %}
         <button class="btn btn-outline js-test-notif"
             data-url="{{ path('profile_test_email') }}"
             data-label="Test email">
@@ -134,7 +100,7 @@
 
     {# Statuts #}
     <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
-        {% if user.hasSmtpConfigured() %}
+        {% if email_configured %}
         <div class="smtp-status active">
             <i class="fas fa-check-circle"></i>
             Email actif — <strong>{{ user.notifEmail }}</strong>
@@ -142,7 +108,11 @@
         {% else %}
         <div class="smtp-status inactive">
             <i class="fas fa-info-circle"></i>
-            Remplissez les champs SMTP pour activer les emails.
+            {% if smtp_global_configured %}
+                Renseignez votre adresse email pour activer les emails.
+            {% else %}
+                SMTP global non configuré. Un administrateur doit le renseigner dans les paramètres application.
+            {% endif %}
         </div>
         {% endif %}
 

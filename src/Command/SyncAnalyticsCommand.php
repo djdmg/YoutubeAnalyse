@@ -77,7 +77,7 @@ class SyncAnalyticsCommand extends Command
                 $emailError = $this->emailService->sendSyncSummary($user, $result, $channel, $this->quotaGuard->getUsed());
                 if ($emailError) {
                     $io->writeln('  <fg=yellow>Email non envoyé : ' . $emailError . '</>');
-                } elseif ($user->hasSmtpConfigured()) {
+                } elseif ($this->emailService->isConfiguredForUser($user)) {
                     $io->writeln('  ✉ Résumé envoyé à ' . $user->getNotifEmail());
                 }
 

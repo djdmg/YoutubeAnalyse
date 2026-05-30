@@ -54,7 +54,7 @@ class WeeklyReportCommand extends Command
 
             $io->writeln(sprintf('  %s vues · %d vidéos actives', number_format($views, 0, ',', ' '), count($topVideos)));
 
-            if ($user->hasSmtpConfigured()) {
+            if ($this->emailService->isConfiguredForUser($user)) {
                 $error = $this->emailService->sendWeeklyReport($user, $stats, $topVideos, $weekStart, $weekEnd);
                 if ($error) {
                     $io->error('Email non envoyé : ' . $error);
@@ -62,7 +62,7 @@ class WeeklyReportCommand extends Command
                     $io->writeln('  ✉ Email envoyé à ' . $user->getNotifEmail());
                 }
             } else {
-                $io->writeln('  SMTP non configuré — email ignoré.');
+                $io->writeln('  Email non configuré — email ignoré.');
             }
 
             $this->telegramService->sendWeeklyReport($user, $stats, $topVideos, $weekStart, $weekEnd);
