@@ -166,6 +166,22 @@ class AiReportRepository extends ServiceEntityRepository
         $this->cache->delete('ai_last_month_by_model_' . $user->getId() . '_' . $lastMonth);
     }
 
+    public function findLatestForUserByType(User $user, AiReportType $type): ?AiReport
+    {
+        return $this->createQueryBuilder('r')
+            ->leftJoin('r.video', 'v')
+            ->where('(v.user = :user OR r.video IS NULL)')
+            ->andWhere('r.type = :type')
+            ->andWhere('r.status = :done')
+            ->setParameter('user', $user)
+            ->setParameter('type', $type)
+            ->setParameter('done', AiReportStatus::Done)
+            ->orderBy('r.generatedAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     public function deleteOlderThan(\DateTimeImmutable $before): int
     {
         return (int) $this->createQueryBuilder('r')

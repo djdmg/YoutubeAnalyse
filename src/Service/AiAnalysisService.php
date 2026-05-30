@@ -111,6 +111,7 @@ class AiAnalysisService
             AiReportType::SeoOptimization        => $this->runSeoOptimization($user, $skipped),
             AiReportType::ThumbnailAnalysis      => $this->runThumbnailAnalysis($user, $skipped),
             AiReportType::DescriptionOptimization => $this->runDescriptionOptimization($user, $skipped),
+            default => 0, // EditorialPlanning, RelaunchSuggestion, SmartAlert handled via dedicated handlers
         };
         if ($count > 0) {
             $this->aiReportRepo->invalidateMonthlyStats($user);

@@ -1,0 +1,151 @@
+{% extends 'base.html.twig' %}
+{% block title %}Planning éditorial — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-calendar-alt" style="color:#3b82f6"></i> Planning éditorial</h1>
+        <span class="last-sync">
+            {% if latest_report %}
+            Généré le {{ latest_report.generatedAt|date('d/m/Y à H:i') }}
+            {% else %}
+            Aucune génération encore
+            {% endif %}
+        </span>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary btn-sm" id="btnGeneratePlan" type="button">
+            <i class="fas fa-robot"></i> Générer 10 idées IA
+        </button>
+    </div>
+</div>
+
+<div id="editorialResult">
+{% if ideas is empty %}
+<div class="section-card" id="emptyState">
+    <div class="empty-state" style="padding:48px 24px;text-align:center">
+        <i class="fas fa-calendar-alt fa-3x" style="color:var(--text-muted);margin-bottom:16px"></i>
+        <h3>Aucune idée générée</h3>
+        <p style="color:var(--text-secondary)">Cliquez sur "Générer 10 idées IA" pour obtenir un planning éditorial personnalisé basé sur vos meilleures vidéos et vos requêtes de recherche.</p>
+    </div>
+</div>
+{% else %}
+<div id="ideasGrid">{{ _self.renderIdeas(ideas) }}</div>
+{% endif %}
+</div>
+
+{% macro renderIdeas(ideas) %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem">
+{% for i, idea in ideas %}
+{% set potColor = idea.potential == 'élevé' ? '#22c55e' : (idea.potential == 'moyen' ? '#f59e0b' : '#94a3b8') %}
+{% set rank = i + 1 %}
+<div class="editorial-card section-card" style="border-top:3px solid {{ potColor }}">
+    <div class="editorial-rank" style="color:{{ potColor }}">#{{ rank }}</div>
+    <div class="editorial-format-badge">
+        {% set fmtIcon = {tutoriel:'fa-graduation-cap', liste:'fa-list-ol', vlog:'fa-camera', comparaison:'fa-balance-scale', réaction:'fa-surprise', analyse:'fa-search', short:'fa-bolt'}[idea.format] ?? 'fa-film' %}
+        <i class="fas {{ fmtIcon }}"></i> {{ idea.format|capitalize }}
+    </div>
+    <h3 class="editorial-title">{{ idea.title }}</h3>
+    <p class="editorial-hook"><i class="fas fa-quote-left" style="opacity:.4;font-size:.8em"></i> {{ idea.hook }}</p>
+    <div class="editorial-reason">
+        <i class="fas fa-lightbulb" style="color:#f59e0b;margin-right:.4rem"></i>{{ idea.reason }}
+    </div>
+    {% if idea.keywords is defined and idea.keywords %}
+    <div class="editorial-keywords">
+        {% for kw in idea.keywords %}
+        <span class="editorial-kw"># {{ kw }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="editorial-potential" style="background:{{ potColor }}18;color:{{ potColor }};border:1px solid {{ potColor }}30">
+        Potentiel {{ idea.potential }}
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endmacro %}
+
+<div id="loadingOverlay" style="display:none;text-align:center;padding:60px 24px">
+    <div class="spinner" style="width:48px;height:48px;border-width:4px;margin:0 auto 16px"></div>
+    <p style="color:var(--text-secondary)">L'IA analyse vos données et génère 10 idées de vidéos…</p>
+    <p style="color:var(--text-muted);font-size:.85rem;margin-top:.5rem">Cela peut prendre 15–30 secondes</p>
+</div>
+
+<style>
+.editorial-card { position:relative; display:flex; flex-direction:column; gap:.6rem; }
+.editorial-rank { font-size:1.8rem; font-weight:800; line-height:1; }
+.editorial-format-badge { display:inline-flex; align-items:center; gap:.35rem; font-size:.75rem; font-weight:600; background:var(--bg-tertiary); color:var(--text-secondary); padding:.25rem .6rem; border-radius:5px; }
+.editorial-title { font-size:1rem; font-weight:700; color:var(--text-primary); margin:0; line-height:1.4; }
+.editorial-hook { font-size:.85rem; color:var(--text-secondary); font-style:italic; margin:0; }
+.editorial-reason { font-size:.82rem; color:var(--text-secondary); padding:.5rem .75rem; background:var(--bg-tertiary); border-radius:6px; line-height:1.5; }
+.editorial-keywords { display:flex; gap:.4rem; flex-wrap:wrap; }
+.editorial-kw { font-size:.72rem; background:var(--bg-tertiary); color:var(--text-muted); padding:.15rem .45rem; border-radius:4px; font-weight:500; }
+.editorial-potential { display:inline-flex; align-items:center; padding:.25rem .65rem; border-radius:6px; font-size:.78rem; font-weight:600; margin-top:auto; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var btn = document.getElementById('btnGeneratePlan');
+    var result = document.getElementById('editorialResult');
+    var loading = document.getElementById('loadingOverlay');
+
+    btn.addEventListener('click', function() {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération…';
+        result.style.display = 'none';
+        loading.style.display = 'block';
+
+        fetch('{{ path("editorial_generate") }}', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.jobId) {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                showToast('Erreur: impossible de lancer la génération.', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-robot"></i> Générer 10 idées IA';
+                return;
+            }
+            var attempts = 0;
+            var poll = setInterval(function() {
+                attempts++;
+                fetch('{{ path("editorial_status", {jobId: "JOB_ID"}) }}'.replace('JOB_ID', data.jobId))
+                .then(r => r.json())
+                .then(status => {
+                    if (status.status === 'pending' && attempts < 60) return;
+                    clearInterval(poll);
+                    loading.style.display = 'none';
+                    result.style.display = 'block';
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-robot"></i> Générer 10 idées IA';
+                    if (status.status === 'done' && status.ideas) {
+                        window.location.reload();
+                    } else {
+                        showToast(status.message || 'Erreur lors de la génération.', 'error');
+                    }
+                })
+                .catch(() => {
+                    if (attempts >= 60) {
+                        clearInterval(poll);
+                        loading.style.display = 'none';
+                        result.style.display = 'block';
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-robot"></i> Générer 10 idées IA';
+                    }
+                });
+            }, 3000);
+        })
+        .catch(() => {
+            loading.style.display = 'none';
+            result.style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-robot"></i> Générer 10 idées IA';
+            showToast('Erreur réseau.', 'error');
+        });
+    });
+});
+</script>
+{% endblock %}

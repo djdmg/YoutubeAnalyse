@@ -1,0 +1,173 @@
+{% extends 'base.html.twig' %}
+{% block title %}A/B Testing — YouTube Analyse{% endblock %}
+
+{% block body %}
+<div class="dashboard-header">
+    <div>
+        <h1><i class="fas fa-flask" style="color:#8b5cf6"></i> A/B Testing miniatures & titres</h1>
+        <span class="last-sync">{{ results|length }} test{{ results|length != 1 ? 's' : '' }} enregistré{{ results|length != 1 ? 's' : '' }}</span>
+    </div>
+</div>
+
+{% if results is empty %}
+<div class="section-card">
+    <div class="empty-state" style="padding:48px 24px;text-align:center">
+        <i class="fas fa-flask fa-3x" style="color:var(--text-muted);margin-bottom:16px"></i>
+        <h3>Aucun test enregistré</h3>
+        <p style="color:var(--text-secondary)">Changez une miniature ou un titre via YouTube Studio — l'app détectera automatiquement le changement lors de la prochaine synchronisation et comparera les performances avant/après.</p>
+        <a href="{{ path('analytics_videos') }}" class="btn btn-primary" style="margin-top:12px">
+            <i class="fas fa-list"></i> Voir les vidéos
+        </a>
+    </div>
+</div>
+{% else %}
+
+<div style="display:flex;flex-direction:column;gap:1.25rem">
+{% for result in results %}
+{% set ctr = result.ctr_delta %}
+{% set views = result.views_delta %}
+{% set isWin = ctr is not null and ctr > 5 %}
+{% set isLoss = ctr is not null and ctr < -5 %}
+
+<div class="section-card ab-card" style="border-left:3px solid {{ isWin ? '#22c55e' : (isLoss ? '#ef4444' : '#94a3b8') }}">
+    <div class="ab-header">
+        <div style="display:flex;align-items:center;gap:.75rem;min-width:0">
+            <div class="ab-type-badge {{ result.type == 'thumbnail' ? 'ab-type-thumb' : 'ab-type-title' }}">
+                <i class="fas {{ result.type == 'thumbnail' ? 'fa-image' : 'fa-heading' }}"></i>
+                {{ result.type == 'thumbnail' ? 'Miniature' : 'Titre' }}
+            </div>
+            <div style="min-width:0">
+                <a href="{{ path('analytics_video_detail', {youtubeId: result.video.youtubeId}) }}" class="ab-video-title">
+                    {{ result.video.title|length > 65 ? result.video.title|slice(0,65) ~ '…' : result.video.title }}
+                </a>
+                <div style="font-size:.78rem;color:var(--text-muted);margin-top:.2rem">
+                    Changement le {{ result.changed_at|date('d/m/Y') }}
+                </div>
+            </div>
+        </div>
+        {% if isWin %}
+        <span class="ab-verdict ab-win"><i class="fas fa-arrow-up"></i> +{{ ctr|abs }}% CTR</span>
+        {% elseif isLoss %}
+        <span class="ab-verdict ab-loss"><i class="fas fa-arrow-down"></i> {{ ctr|abs }}% CTR</span>
+        {% else %}
+        <span class="ab-verdict ab-neutral"><i class="fas fa-minus"></i> Neutre</span>
+        {% endif %}
+    </div>
+
+    {# Before/after labels for title changes #}
+    {% if result.type == 'title' %}
+    <div class="ab-title-compare">
+        <div class="ab-title-item ab-before">
+            <span class="ab-badge-label">Avant</span>
+            <span class="ab-title-text">{{ result.old_label }}</span>
+        </div>
+        <i class="fas fa-arrow-right" style="color:var(--text-muted);flex-shrink:0"></i>
+        <div class="ab-title-item ab-after">
+            <span class="ab-badge-label">Après</span>
+            <span class="ab-title-text">{{ result.new_label }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Metrics grid #}
+    <div class="ab-metrics">
+        {# CTR #}
+        <div class="ab-metric-col">
+            <div class="ab-metric-label">CTR moyen</div>
+            <div class="ab-metric-row">
+                <div class="ab-metric-val ab-before-val">{{ result.before.avg_ctr is not null ? result.before.avg_ctr ~ '%' : '—' }}</div>
+                <i class="fas fa-arrow-right ab-arrow"></i>
+                <div class="ab-metric-val ab-after-val {{ ctr is not null and ctr > 0 ? 'ab-up' : (ctr is not null and ctr < 0 ? 'ab-down' : '') }}">
+                    {{ result.after.avg_ctr is not null ? result.after.avg_ctr ~ '%' : '—' }}
+                    {% if ctr is not null %}
+                    <span class="ab-delta">{{ ctr > 0 ? '+' : '' }}{{ ctr }}%</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Views/day #}
+        {% set vd_before = result.before.views > 0 ? (result.before.views / 7)|round : 0 %}
+        {% set vd_after  = result.after.views > 0 ? (result.after.views / 7)|round : 0 %}
+        <div class="ab-metric-col">
+            <div class="ab-metric-label">Vues / jour</div>
+            <div class="ab-metric-row">
+                <div class="ab-metric-val ab-before-val">{{ vd_before }}</div>
+                <i class="fas fa-arrow-right ab-arrow"></i>
+                <div class="ab-metric-val ab-after-val {{ views is not null and views > 0 ? 'ab-up' : (views is not null and views < 0 ? 'ab-down' : '') }}">
+                    {{ vd_after }}
+                    {% if views is not null %}
+                    <span class="ab-delta">{{ views > 0 ? '+' : '' }}{{ views }}%</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Watch time/day #}
+        {% set wd_before = result.before.watch_time > 0 ? (result.before.watch_time / 7)|round : 0 %}
+        {% set wd_after  = result.after.watch_time > 0 ? (result.after.watch_time / 7)|round : 0 %}
+        <div class="ab-metric-col">
+            <div class="ab-metric-label">Watch time / jour (min)</div>
+            <div class="ab-metric-row">
+                <div class="ab-metric-val ab-before-val">{{ wd_before }}</div>
+                <i class="fas fa-arrow-right ab-arrow"></i>
+                <div class="ab-metric-val ab-after-val {{ result.watch_delta is not null and result.watch_delta > 0 ? 'ab-up' : (result.watch_delta is not null and result.watch_delta < 0 ? 'ab-down' : '') }}">
+                    {{ wd_after }}
+                    {% if result.watch_delta is not null %}
+                    <span class="ab-delta">{{ result.watch_delta > 0 ? '+' : '' }}{{ result.watch_delta }}%</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Impressions total #}
+        <div class="ab-metric-col">
+            <div class="ab-metric-label">Impressions (7j)</div>
+            <div class="ab-metric-row">
+                <div class="ab-metric-val ab-before-val">{{ result.before.impressions|number_format(0, ',', ' ') }}</div>
+                <i class="fas fa-arrow-right ab-arrow"></i>
+                <div class="ab-metric-val ab-after-val">{{ result.after.impressions|number_format(0, ',', ' ') }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ab-note">
+        <i class="fas fa-info-circle"></i>
+        Comparaison sur 7 jours avant et 7 jours après le changement. Les données récentes peuvent être incomplètes.
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+<style>
+.ab-card { transition:transform .15s; }
+.ab-card:hover { transform:translateY(-1px); }
+.ab-header { display:flex; align-items:center; gap:1rem; justify-content:space-between; }
+.ab-type-badge { display:inline-flex; align-items:center; gap:.4rem; font-size:.78rem; font-weight:600; padding:.3rem .7rem; border-radius:6px; flex-shrink:0; }
+.ab-type-thumb { background:#8b5cf618; color:#8b5cf6; }
+.ab-type-title { background:#3b82f618; color:#3b82f6; }
+.ab-video-title { font-weight:600; color:var(--text-primary); text-decoration:none; font-size:.9rem; }
+.ab-video-title:hover { color:var(--blue); }
+.ab-verdict { font-size:.85rem; font-weight:700; padding:.3rem .75rem; border-radius:6px; white-space:nowrap; flex-shrink:0; }
+.ab-win    { background:#22c55e18; color:#22c55e; border:1px solid #22c55e30; }
+.ab-loss   { background:#ef444418; color:#ef4444; border:1px solid #ef444430; }
+.ab-neutral{ background:rgba(148,163,184,.12); color:#94a3b8; border:1px solid rgba(148,163,184,.2); }
+.ab-title-compare { display:flex; align-items:center; gap:.75rem; margin-top:.875rem; padding:.75rem; background:var(--bg-tertiary); border-radius:8px; }
+.ab-title-item { flex:1; min-width:0; }
+.ab-badge-label { font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); display:block; margin-bottom:.2rem; }
+.ab-title-text { font-size:.85rem; color:var(--text-primary); }
+.ab-before .ab-title-text { color:var(--text-muted); text-decoration:line-through; }
+.ab-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border); }
+@media(max-width:700px) { .ab-metrics { grid-template-columns:repeat(2,1fr); } }
+.ab-metric-label { font-size:.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.35rem; }
+.ab-metric-row { display:flex; align-items:center; gap:.5rem; }
+.ab-metric-val { font-size:1rem; font-weight:600; color:var(--text-primary); }
+.ab-before-val { color:var(--text-muted); font-weight:500; }
+.ab-arrow { font-size:.65em; color:var(--text-muted); }
+.ab-delta { font-size:.7rem; font-weight:600; margin-left:.25rem; }
+.ab-up   { color:#22c55e; } .ab-up .ab-delta { background:#22c55e18; padding:.1rem .3rem; border-radius:4px; }
+.ab-down { color:#ef4444; } .ab-down .ab-delta { background:#ef444418; padding:.1rem .3rem; border-radius:4px; }
+.ab-note { font-size:.75rem; color:var(--text-muted); margin-top:.75rem; display:flex; align-items:center; gap:.4rem; }
+</style>
+{% endblock %}

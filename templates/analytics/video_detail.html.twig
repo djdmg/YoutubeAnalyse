@@ -475,6 +475,72 @@ switchTab(_activeTab);
     </div>
     {% endif %}
 
+    {# ── Score SEO ─────────────────────────────────────────────────────────── #}
+    {% if seo_score is defined %}
+    {% set grade = seo_score.grade %}
+    {% set gradeColor = grade == 'A' ? '#22c55e' : (grade == 'B' ? '#3b82f6' : (grade == 'C' ? '#f59e0b' : (grade == 'D' ? '#f97316' : '#ef4444'))) %}
+    <div class="section-card" style="border-left:3px solid {{ gradeColor }};margin-bottom:20px" id="seo-score">
+        <div class="section-header">
+            <h3><i class="fas fa-star" style="color:{{ gradeColor }}"></i> Score SEO</h3>
+            <div style="display:flex;align-items:center;gap:.75rem">
+                <div style="font-size:1.6rem;font-weight:800;color:{{ gradeColor }};line-height:1">{{ seo_score.total }}<span style="font-size:.9rem;opacity:.6">/100</span></div>
+                <div style="width:36px;height:36px;border-radius:50%;background:{{ gradeColor }}18;border:2px solid {{ gradeColor }}40;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;color:{{ gradeColor }}">{{ grade }}</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-top:.5rem">
+            {# Title score #}
+            <div class="seo-factor">
+                <div class="seo-factor-label">Titre</div>
+                <div class="seo-factor-bar-wrap">
+                    <div class="seo-factor-bar" style="width:{{ (seo_score.title_pts / 30 * 100)|round }}%;background:{{ gradeColor }}"></div>
+                </div>
+                <div class="seo-factor-val">{{ seo_score.title_pts }}/30</div>
+                <div class="seo-factor-hint">{{ seo_score.title_len }} car.</div>
+            </div>
+            {# Description score #}
+            <div class="seo-factor">
+                <div class="seo-factor-label">Description</div>
+                <div class="seo-factor-bar-wrap">
+                    <div class="seo-factor-bar" style="width:{{ (seo_score.desc_pts / 25 * 100)|round }}%;background:{{ gradeColor }}"></div>
+                </div>
+                <div class="seo-factor-val">{{ seo_score.desc_pts }}/25</div>
+                <div class="seo-factor-hint">{{ seo_score.desc_len }} car.</div>
+            </div>
+            {# Search terms score #}
+            <div class="seo-factor">
+                <div class="seo-factor-label">Requêtes</div>
+                <div class="seo-factor-bar-wrap">
+                    <div class="seo-factor-bar" style="width:{{ (seo_score.term_pts / 25 * 100)|round }}%;background:{{ gradeColor }}"></div>
+                </div>
+                <div class="seo-factor-val">{{ seo_score.term_pts }}/25</div>
+                <div class="seo-factor-hint">{{ seo_score.term_count }} requête{{ seo_score.term_count != 1 ? 's' : '' }}</div>
+            </div>
+            {# CTR score #}
+            <div class="seo-factor">
+                <div class="seo-factor-label">CTR</div>
+                <div class="seo-factor-bar-wrap">
+                    <div class="seo-factor-bar" style="width:{{ (seo_score.ctr_pts / 20 * 100)|round }}%;background:{{ gradeColor }}"></div>
+                </div>
+                <div class="seo-factor-val">{{ seo_score.ctr_pts }}/20</div>
+                <div class="seo-factor-hint">signal qualité</div>
+            </div>
+        </div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
+            <i class="fas fa-info-circle"></i>
+            Score calculé sur : longueur du titre (idéal 40–65 car.), richesse de la description, nombre de requêtes de recherche actives, et CTR moyen.
+        </div>
+    </div>
+    <style>
+    .seo-factor { display:flex; flex-direction:column; gap:.3rem; }
+    .seo-factor-label { font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+    .seo-factor-bar-wrap { height:6px; background:var(--bg-tertiary); border-radius:3px; overflow:hidden; }
+    .seo-factor-bar { height:100%; border-radius:3px; transition:width .5s; }
+    .seo-factor-val { font-size:.85rem; font-weight:700; color:var(--text-primary); }
+    .seo-factor-hint { font-size:.72rem; color:var(--text-muted); }
+    @media(max-width:600px) { .seo-factor { grid-column: span 2; } }
+    </style>
+    {% endif %}
+
     {# SEO Report #}
     {% if seo_report and seo_report.payload %}
     {% set p = seo_report.payload %}

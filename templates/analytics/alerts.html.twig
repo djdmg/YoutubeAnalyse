@@ -1,19 +1,25 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Actions — YouTube Analyse{% endblock %}
+{% block title %}Alertes intelligentes — YouTube Analyse{% endblock %}
 
 {% block body %}
 <div class="dashboard-header">
     <div>
-        <h1><i class="fas fa-tasks" style="color:var(--blue)"></i> Actions</h1>
+        <h1><i class="fas fa-bell" style="color:var(--blue)"></i> Alertes intelligentes</h1>
         <span class="last-sync">
             {{ urgent|length }} urgent{{ urgent|length > 1 ? 's' : '' }} ·
             {{ conseil|length }} conseil{{ conseil|length > 1 ? 's' : '' }}
+            {% if smart_alerts is defined and smart_alerts|length > 0 %} · {{ smart_alerts|length }} opportunité{{ smart_alerts|length > 1 ? 's' : '' }}{% endif %}
         </span>
+    </div>
+    <div class="header-actions">
+        <a href="{{ path('priority_actions') }}" class="btn btn-outline btn-sm">
+            <i class="fas fa-fire"></i> Actions prioritaires
+        </a>
     </div>
 </div>
 
-{% set total = urgent|length + conseil|length %}
+{% set total = urgent|length + conseil|length + (smart_alerts is defined ? smart_alerts|length : 0) %}
 
 {% if total == 0 %}
 <div class="section-card">
@@ -27,6 +33,9 @@
 
 <div class="action-filters" id="actionFilters">
     <button class="action-filter-btn" data-filter="all">Tout <strong>{{ total }}</strong></button>
+    {% if smart_alerts is defined and smart_alerts|length > 0 %}
+    <button class="action-filter-btn smart" data-filter="smart">⚡ Opportunités <strong>{{ smart_alerts|length }}</strong></button>
+    {% endif %}
     {% if urgent|length > 0 %}
     <button class="action-filter-btn urgent" data-filter="urgent">🔴 Urgent <strong>{{ urgent|length }}</strong></button>
     {% endif %}
@@ -36,6 +45,40 @@
 </div>
 
 <div class="actions-list" id="actionsList">
+
+    {# ── Smart alerts (algorithmic) ──────────────────────────────────────── #}
+    {% if smart_alerts is defined %}
+    {% for alert in smart_alerts %}
+    <div class="action-card urgency-smart" data-urgency="smart" data-id="smart-{{ loop.index }}">
+        <div class="action-card-header">
+            <div class="action-urgency-icon smart" style="background:{{ alert.color }}18;color:{{ alert.color }}">
+                <i class="fas {{ alert.icon }}"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+                <div class="action-card-title">{{ alert.title }}</div>
+                {% if alert.video is defined %}
+                <div class="action-card-video" title="{{ alert.video.title }}">
+                    <i class="fas fa-video" style="font-size:10px;margin-right:3px"></i>{{ alert.video.title|length > 60 ? alert.video.title|slice(0,60) ~ '…' : alert.video.title }}
+                </div>
+                {% endif %}
+            </div>
+            <span class="action-card-date" style="background:{{ alert.color }}18;color:{{ alert.color }};padding:.2rem .5rem;border-radius:4px;font-size:.72rem;font-weight:600">Opportunité</span>
+        </div>
+        <div class="action-card-body">
+            <p style="margin:0 0 6px">{{ alert.message }}</p>
+            <p style="margin:0"><i class="fas fa-arrow-right" style="color:{{ alert.color }};font-size:11px;margin-right:4px"></i>{{ alert.action }}</p>
+        </div>
+        <div class="action-card-footer">
+            {% if alert.video is defined %}
+            <a href="{{ path('analytics_video_detail', {youtubeId: alert.video.youtubeId}) }}" class="btn btn-outline btn-sm">
+                <i class="fas fa-chart-line"></i> Voir la vidéo
+            </a>
+            {% endif %}
+            <button class="btn-dismiss" onclick="dismissAction(this, 'smart-{{ loop.index }}')"><i class="fas fa-check"></i> Fait</button>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
 
     {% for report in urgent %}
     {% set p = report.payload %}
@@ -117,6 +160,13 @@
 
 </div>
 {% endif %}
+
+<style>
+.action-filter-btn.smart { color:#22c55e; }
+.action-filter-btn.smart.active { background:rgba(34,197,94,.12); color:#22c55e; border-color:rgba(34,197,94,.3); }
+.urgency-smart { border-left-color: #22c55e; }
+.action-urgency-icon.smart { border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; }
+</style>
 
 <script>
 (function() {
