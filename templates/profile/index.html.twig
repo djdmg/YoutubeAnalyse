@@ -131,42 +131,40 @@
 </div>
 
 <script>
-function ajaxPost(url, body, onSuccess, onError) {
-    const params = new URLSearchParams();
-    Object.keys(body).forEach(function(k) { params.append(k, body[k]); });
-    fetch(url, {
-        method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-    })
-    .then(function(r) { return r.ok ? r.json() : r.json().then(function(d) { throw new Error(d.message || 'Erreur ' + r.status); }); })
-    .then(onSuccess)
-    .catch(function(e) { onError(e.message || 'Erreur réseau'); });
-}
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.js-test-notif').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi…';
 
-$(function() {
-    $('.js-test-notif').on('click', function() {
-        const $btn = $(this);
-        const orig = $btn.html();
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Envoi…');
-
-        const body = {};
-        const extraField = $btn.data('extra-field');
-        if (extraField) {
-            const $input = $('[name*="telegramChatId"], [name="' + extraField + '"]').first();
-            if ($input.length) body[extraField] = $input.val();
-        }
-
-        ajaxPost($btn.data('url'), body,
-            function(data) {
-                $btn.prop('disabled', false).html(orig);
-                showToast(data.message, 'success');
-            },
-            function(msg) {
-                $btn.prop('disabled', false).html(orig);
-                showToast(msg, 'error');
+            var body = {};
+            var extraField = btn.dataset.extraField;
+            if (extraField) {
+                var input = document.querySelector('[name*="telegramChatId"], [name="' + extraField + '"]');
+                if (input) body[extraField] = input.value;
             }
-        );
+
+            var params = new URLSearchParams();
+            Object.keys(body).forEach(function(k) { params.append(k, body[k]); });
+
+            fetch(btn.dataset.url, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString(),
+            })
+            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+            .then(function(res) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                showToast(res.data.message || (res.ok ? 'OK' : 'Erreur'), res.ok ? 'success' : 'error');
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                showToast('Erreur réseau', 'error');
+            });
+        });
     });
 });
 </script>

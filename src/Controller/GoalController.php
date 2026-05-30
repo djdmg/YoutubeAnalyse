@@ -48,7 +48,7 @@ class GoalController extends AbstractController
         $this->syncCurrentValues($user, array_merge($activeGoals, $doneGoals));
 
         // Pace and video contributions for active goals
-        $contributions   = $this->metricRepo->getVideoContributionsForUser($user, 30);
+        $contributions   = $this->dailyMetricRepo->getVideoContributionsForUser($user, 30);
         $videos          = $this->videoRepo->findForUser($user);
         $today           = new \DateTimeImmutable();
 
