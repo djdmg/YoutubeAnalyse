@@ -55,7 +55,7 @@ class YouTubeSyncService
         $analytics = new YouTubeAnalytics($client);
         $today     = new \DateTimeImmutable();
 
-        $videosCount      = $this->syncVideos($youtube, $analytics, $channelId, $user, $today);
+        $videoSyncCounts  = $this->syncVideos($youtube, $analytics, $channelId, $user, $today);
         $commentsCount    = $this->syncComments($youtube, $channelId, $user);
         $searchTermsCount = $this->syncSearchTerms($analytics, $channelId, $user, $today);
 
@@ -69,7 +69,8 @@ class YouTubeSyncService
         }
 
         return [
-            'videos_synced'           => $videosCount,
+            'videos_synced'           => $videoSyncCounts['videos'],
+            'daily_metrics_synced'    => $videoSyncCounts['daily_metrics'],
             'comments_synced'         => $commentsCount,
             'search_terms_synced'     => $searchTermsCount,
             'channel_id'              => $channelId,
@@ -79,13 +80,15 @@ class YouTubeSyncService
         ];
     }
 
-    private function syncVideos(YouTube $youtube, YouTubeAnalytics $analytics, string $channelId, User $user, \DateTimeImmutable $today): int
+    /** @return array{videos: int, daily_metrics: int} */
+    private function syncVideos(YouTube $youtube, YouTubeAnalytics $analytics, string $channelId, User $user, \DateTimeImmutable $today): array
     {
         $this->quotaGuard->assertQuota(100);
         $videoIds = $this->getAllVideoIds($youtube, $channelId);
-        if (empty($videoIds)) return 0;
+        if (empty($videoIds)) return ['videos' => 0, 'daily_metrics' => 0];
 
-        $count = 0;
+        $count        = 0;
+        $metricsCount = 0;
         foreach (array_chunk($videoIds, 50) as $chunk) {
             $this->quotaGuard->assertQuota(1);
             $response = $youtube->videos->listVideos('id,snippet,statistics,contentDetails', ['id' => implode(',', $chunk)]);
@@ -117,15 +120,19 @@ class YouTubeSyncService
                 $this->em->persist($video);
                 $this->em->flush();
 
-                $this->syncDailyMetric($analytics, $channelId, $video, $today);
+                $metricsCount += $this->syncDailyMetric($analytics, $channelId, $video, $today);
                 $count++;
             }
         }
 
-        return $count;
+        if ($metricsCount > 0) {
+            $this->dailyMetricRepo->invalidateListStats($user);
+        }
+
+        return ['videos' => $count, 'daily_metrics' => $metricsCount];
     }
 
-    private function syncDailyMetric(YouTubeAnalytics $analytics, string $channelId, Video $video, \DateTimeImmutable $today): void
+    private function syncDailyMetric(YouTubeAnalytics $analytics, string $channelId, Video $video, \DateTimeImmutable $today): int
     {
         // First sync: full history from publication date. Subsequent syncs: from last known date
         // (catches the 2-day Analytics API delay and any missed days)
@@ -139,6 +146,7 @@ class YouTubeSyncService
         $endDate = $today->modify('-1 day')->format('Y-m-d'); // Analytics has ~1-2 day delay
 
         try {
+            $writtenRows = 0;
             $response = $analytics->reports->query([
                 'ids'        => "channel=={$channelId}",
                 'startDate'  => $startDate,
@@ -160,6 +168,7 @@ class YouTubeSyncService
                     ->setSubscribersGained((int)($row[4] ?? 0));
 
                 $this->em->persist($existing);
+                $writtenRows++;
             }
 
             // Traffic sources for today only
@@ -190,6 +199,7 @@ class YouTubeSyncService
         }
 
         $this->em->flush();
+        return $writtenRows ?? 0;
     }
 
     private function syncComments(YouTube $youtube, string $channelId, User $user): int

@@ -65,6 +65,15 @@ class AiAnalysisService
         ], true)) {
             return $legacyModel;
         }
+        if (
+            $legacyModel
+            && (
+                ($provider === AiProviderFactory::PROVIDER_CLAUDE && str_starts_with($legacyModel, 'claude-'))
+                || ($provider === AiProviderFactory::PROVIDER_GEMINI && str_starts_with($legacyModel, 'gemini-'))
+            )
+        ) {
+            return $legacyModel;
+        }
 
         return $default;
     }

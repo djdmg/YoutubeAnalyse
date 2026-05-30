@@ -421,11 +421,25 @@ class DailyMetricRepository extends ServiceEntityRepository
     /** Deletes daily metrics older than $before. Returns number of deleted rows. */
     public function deleteOlderThan(\DateTimeImmutable $before): int
     {
-        return (int) $this->createQueryBuilder('dm')
+        $userIds = $this->createQueryBuilder('dm')
+            ->select('DISTINCT IDENTITY(v.user) as user_id')
+            ->join('dm.video', 'v')
+            ->where('dm.date < :before')
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        $deleted = (int) $this->createQueryBuilder('dm')
             ->delete()
             ->where('dm.date < :before')
             ->setParameter('before', $before)
             ->getQuery()
             ->execute();
+
+        foreach ($userIds as $userId) {
+            $this->cache->delete('daily_list_stats_' . (int) $userId);
+        }
+
+        return $deleted;
     }
 }
