@@ -5,7 +5,6 @@ namespace App\MessageHandler;
 use App\Enum\AiReportType;
 use App\Message\RunAiAnalysisMessage;
 use App\Repository\UserRepository;
-use App\Repository\VideoRepository;
 use App\Service\AiAnalysisService;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -16,7 +15,6 @@ class RunAiAnalysisHandler
 {
     public function __construct(
         private readonly UserRepository    $userRepo,
-        private readonly VideoRepository   $videoRepo,
         private readonly AiAnalysisService $aiService,
         private readonly CacheInterface    $cache,
     ) {}
@@ -36,24 +34,10 @@ class RunAiAnalysisHandler
         }
 
         try {
-            if ($message->youtubeId) {
-                // Single-video analysis
-                $video = $this->videoRepo->findByYoutubeId($message->youtubeId);
-                if (!$video || $video->getUser() !== $user) {
-                    $this->storeResult($cacheKey, ['status' => 'error', 'message' => 'Vidéo introuvable.']);
-                    return;
-                }
-                $type   = $message->type ? AiReportType::from($message->type) : null;
-                $result = $type
-                    ? $this->aiService->analyzeType($user, $type)
-                    : $this->aiService->analyzeAll($user);
-            } else {
-                // All videos
-                $type   = $message->type ? AiReportType::from($message->type) : null;
-                $result = $type
-                    ? $this->aiService->analyzeType($user, $type)
-                    : $this->aiService->analyzeAll($user);
-            }
+            $type   = $message->type ? AiReportType::from($message->type) : null;
+            $result = $type
+                ? $this->aiService->analyzeType($user, $type)
+                : $this->aiService->analyzeAll($user);
 
             $total = array_sum($result['counts'] ?? []);
             $this->storeResult($cacheKey, [
@@ -62,8 +46,10 @@ class RunAiAnalysisHandler
                 'counts'  => $result['counts'] ?? [],
             ]);
         } catch (\Throwable $e) {
+            // Do NOT re-throw: re-throwing causes Messenger to retry the message
+            // indefinitely (up to max_retries, then into the failed queue which
+            // can be consumed again). Store the error and exit cleanly instead.
             $this->storeResult($cacheKey, ['status' => 'error', 'message' => $e->getMessage()]);
-            throw $e;
         }
     }
 
