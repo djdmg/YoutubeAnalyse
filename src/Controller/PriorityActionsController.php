@@ -118,12 +118,9 @@ class PriorityActionsController extends AbstractController
             // ── Negative Comment Sentiment ───────────────────────────────────
             $commentReport = $this->aiReportRepo->findRecentDone($video, AiReportType::CommentAnalysis, 168);
             if ($commentReport) {
-                $content = strtolower($commentReport->getContent() ?? '');
-                $negativeSignals = ['négatif', 'critique', 'negative', 'frustrat', 'mauvais', 'décevant', 'déçu', 'mauvaise'];
-                $hasNegative = false;
-                foreach ($negativeSignals as $signal) {
-                    if (str_contains($content, $signal)) { $hasNegative = true; break; }
-                }
+                $payload = $commentReport->getPayload() ?? [];
+                $sentimentGlobal = strtolower($payload['sentiment_global'] ?? '');
+                $hasNegative = $sentimentGlobal === 'négatif' || ($payload['score_sentiment'] ?? 1) < 0.3;
                 if ($hasNegative) {
                     $score  += 20;
                     $items[] = [

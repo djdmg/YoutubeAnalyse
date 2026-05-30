@@ -23,8 +23,15 @@ class RelaunchController extends AbstractController
     public function __invoke(): Response
     {
         /** @var User $user */
-        $user        = $this->getUser();
-        $candidates  = $this->metricRepo->getRelaunchCandidateStats($user);
+        $user       = $this->getUser();
+        $sqlError   = null;
+
+        try {
+            $candidates = $this->metricRepo->getRelaunchCandidateStats($user);
+        } catch (\Throwable $e) {
+            $candidates = [];
+            $sqlError   = $e->getMessage();
+        }
 
         foreach ($candidates as &$row) {
             $video = $row['video'];
@@ -52,6 +59,7 @@ class RelaunchController extends AbstractController
 
         return $this->render('analytics/relaunch.html.twig', [
             'candidates' => $candidates,
+            'sql_error'  => $sqlError,
         ]);
     }
 }

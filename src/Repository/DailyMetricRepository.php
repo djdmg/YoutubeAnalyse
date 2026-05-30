@@ -480,21 +480,24 @@ class DailyMetricRepository extends ServiceEntityRepository
     public function getRelaunchCandidateStats(User $user): array
     {
         $conn = $this->getEntityManager()->getConnection();
-        $sql  = 'SELECT
-                    v.id AS video_id,
-                    COALESCE(SUM(dm.views) / NULLIF(DATEDIFF(CURDATE(), DATE(v.published_at)), 0), 0) AS all_time_daily_avg,
-                    COALESCE(SUM(CASE WHEN dm.date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN dm.views ELSE 0 END), 0) AS last7_views,
-                    COALESCE(AVG(dm.watch_time_minutes / NULLIF(dm.views, 0)), 0) AS avg_watch_min_per_view,
-                    COALESCE(AVG(dm.ctr), 0) AS avg_ctr,
-                    COALESCE(SUM(dm.impressions) / NULLIF(DATEDIFF(CURDATE(), DATE(v.published_at)), 0), 0) AS impressions_daily_avg
-                 FROM videos v
-                 LEFT JOIN daily_metrics dm ON dm.video_id = v.id
-                 WHERE v.user_id = :userId
-                   AND v.published_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-                 GROUP BY v.id
-                 HAVING (last7_views > all_time_daily_avg * 7 * 1.8)
-                    OR (avg_watch_min_per_view > 5 AND impressions_daily_avg < 300 AND all_time_daily_avg > 5)
-                 ORDER BY (last7_views / NULLIF(all_time_daily_avg * 7, 0)) DESC
+        $sql  = 'SELECT sub.* FROM (
+                    SELECT
+                        v.id AS video_id,
+                        COALESCE(SUM(dm.views) / NULLIF(DATEDIFF(CURDATE(), DATE(v.published_at)), 0), 0) AS all_time_daily_avg,
+                        COALESCE(SUM(CASE WHEN dm.date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN dm.views ELSE 0 END), 0) AS last7_views,
+                        COALESCE(SUM(CASE WHEN dm.views > 0 THEN dm.watch_time_minutes / dm.views ELSE NULL END) / NULLIF(SUM(CASE WHEN dm.views > 0 THEN 1 ELSE 0 END), 0), 0) AS avg_watch_min_per_view,
+                        COALESCE(AVG(dm.ctr), 0) AS avg_ctr,
+                        COALESCE(SUM(dm.impressions) / NULLIF(DATEDIFF(CURDATE(), DATE(v.published_at)), 0), 0) AS impressions_daily_avg
+                    FROM videos v
+                    LEFT JOIN daily_metrics dm ON dm.video_id = v.id
+                    WHERE v.user_id = :userId
+                      AND v.published_at IS NOT NULL
+                      AND v.published_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                    GROUP BY v.id, v.published_at
+                 ) sub
+                 WHERE (sub.last7_views > sub.all_time_daily_avg * 7 * 1.8)
+                    OR (sub.avg_watch_min_per_view > 5 AND sub.impressions_daily_avg < 300 AND sub.all_time_daily_avg > 5)
+                 ORDER BY (sub.last7_views / NULLIF(sub.all_time_daily_avg * 7, 0)) DESC
                  LIMIT 20';
 
         $rows = $conn->fetchAllAssociative($sql, ['userId' => $user->getId()]);

@@ -24,7 +24,17 @@
     </div>
 </div>
 
-{% if candidates is empty %}
+{% if sql_error %}
+<div class="section-card" style="border-left:3px solid #ef4444">
+    <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.25rem 0">
+        <i class="fas fa-exclamation-triangle" style="color:#ef4444;margin-top:.15rem"></i>
+        <div>
+            <strong style="color:#ef4444">Erreur de requête SQL</strong>
+            <p style="font-size:.85rem;color:var(--text-secondary);margin:.25rem 0 0;font-family:monospace">{{ sql_error }}</p>
+        </div>
+    </div>
+</div>
+{% elseif candidates is empty %}
 <div class="section-card">
     <div class="empty-state" style="padding:48px 24px;text-align:center">
         <i class="fas fa-search fa-3x" style="color:var(--text-muted);margin-bottom:16px"></i>

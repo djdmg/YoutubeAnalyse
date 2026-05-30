@@ -121,8 +121,7 @@ PROMPT;
             $ideas = array_slice(array_values(array_filter($items, fn($i) => is_array($i) && isset($i['title']))), 0, 10);
 
             $report->setStatus(AiReportStatus::Done);
-            $report->setContent(json_encode($ideas, JSON_UNESCAPED_UNICODE));
-            $report->setPayload(['count' => count($ideas)]);
+            $report->setPayload(['ideas' => $ideas, 'count' => count($ideas)]);
             $this->em->persist($report);
             $this->em->flush();
 

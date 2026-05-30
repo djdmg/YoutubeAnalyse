@@ -36,9 +36,11 @@ class EditorialController extends AbstractController
         $latestReport = $this->aiReportRepo->findLatestForUserByType($user, AiReportType::EditorialPlanning);
         $ideas        = [];
 
-        if ($latestReport && $latestReport->getContent()) {
-            $decoded = json_decode($latestReport->getContent(), true);
-            if (is_array($decoded)) $ideas = $decoded;
+        if ($latestReport) {
+            $payload = $latestReport->getPayload();
+            if (is_array($payload['ideas'] ?? null)) {
+                $ideas = $payload['ideas'];
+            }
         }
 
         return $this->render('analytics/editorial.html.twig', [
