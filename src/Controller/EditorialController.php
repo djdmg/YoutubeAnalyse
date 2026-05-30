@@ -63,11 +63,19 @@ class EditorialController extends AbstractController
 
         $model = $this->settingRepo->get(GeminiService::SETTING_GOALS_MODEL) ?? 'balanced';
 
-        $this->bus->dispatch(new GenerateEditorialPlanMessage(
-            jobId:  $jobId,
-            userId: $user->getId(),
-            model:  $model,
-        ));
+        try {
+            $this->bus->dispatch(new GenerateEditorialPlanMessage(
+                jobId:  $jobId,
+                userId: $user->getId(),
+                model:  $model,
+            ));
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'messenger_messages') || str_contains($msg, "doesn't exist") || str_contains($msg, 'Base table')) {
+                $msg = 'Table Messenger manquante. Lancez : php bin/console doctrine:migrations:migrate';
+            }
+            return new JsonResponse(['error' => $msg], 500);
+        }
 
         return new JsonResponse(['jobId' => $jobId]);
     }

@@ -101,10 +101,10 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(r => r.json())
         .then(data => {
-            if (!data.jobId) {
+            if (!data.jobId || data.error) {
                 loading.style.display = 'none';
                 result.style.display = 'block';
-                showToast('Erreur: impossible de lancer la génération.', 'error');
+                showToast(data.error || 'Erreur: impossible de lancer la génération.', 'error');
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-robot"></i> Générer 10 idées IA';
                 return;
