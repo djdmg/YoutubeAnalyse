@@ -3,8 +3,10 @@
 namespace App\Service;
 
 use App\Entity\DemographicSnapshot;
+use App\Entity\DailyMetric;
 use App\Entity\ReportingJob;
 use App\Entity\User;
+use App\Entity\Video;
 use App\Repository\DailyMetricRepository;
 use App\Repository\DemographicSnapshotRepository;
 use App\Repository\ReportingJobRepository;
@@ -91,8 +93,16 @@ class YouTubeReportingService
 
     private function ensureJobs(YouTubeReporting $reporting, User $user): void
     {
+        $remoteJobsByType = $this->listRemoteJobsByType($reporting);
+
         foreach (self::REPORT_TYPES as $typeId) {
             if ($this->jobRepo->findForUserAndType($user, $typeId)) continue;
+
+            if (isset($remoteJobsByType[$typeId])) {
+                $this->persistReportingJob($user, $typeId, $remoteJobsByType[$typeId]->getId());
+                $this->logger->info('Reporting API job adopted', ['type' => $typeId, 'job_id' => $remoteJobsByType[$typeId]->getId()]);
+                continue;
+            }
 
             try {
                 $apiJob = new Job();
@@ -100,15 +110,22 @@ class YouTubeReportingService
                 $apiJob->setName('youtube_analyse_' . $typeId);
                 $created = $reporting->jobs->create($apiJob);
 
-                $entity = (new ReportingJob())
-                    ->setUser($user)
-                    ->setReportTypeId($typeId)
-                    ->setGoogleJobId($created->getId());
-
-                $this->em->persist($entity);
+                $this->persistReportingJob($user, $typeId, $created->getId());
                 $this->logger->info('Reporting API job created', ['type' => $typeId, 'job_id' => $created->getId()]);
 
             } catch (\Exception $e) {
+                if ($this->isAlreadyExistsError($e)) {
+                    $remoteJobsByType = $this->listRemoteJobsByType($reporting);
+                    if (isset($remoteJobsByType[$typeId])) {
+                        $this->persistReportingJob($user, $typeId, $remoteJobsByType[$typeId]->getId());
+                        $this->logger->info('Reporting API job adopted after create conflict', [
+                            'type'   => $typeId,
+                            'job_id' => $remoteJobsByType[$typeId]->getId(),
+                        ]);
+                        continue;
+                    }
+                }
+
                 $this->logger->warning('Failed to create reporting job', [
                     'type'  => $typeId,
                     'error' => $e->getMessage(),
@@ -119,6 +136,54 @@ class YouTubeReportingService
         $this->em->flush();
     }
 
+    private function isAlreadyExistsError(\Throwable $e): bool
+    {
+        return str_contains($e->getMessage(), 'alreadyExists')
+            || str_contains($e->getMessage(), 'ALREADY_EXISTS')
+            || str_contains($e->getMessage(), 'Requested entity already exists');
+    }
+
+    /** @return array<string, Job> */
+    private function listRemoteJobsByType(YouTubeReporting $reporting): array
+    {
+        $jobs = [];
+        $pageToken = null;
+
+        do {
+            try {
+                $params = ['pageSize' => 100];
+                if ($pageToken) {
+                    $params['pageToken'] = $pageToken;
+                }
+
+                $response = $reporting->jobs->listJobs($params);
+            } catch (\Exception $e) {
+                $this->logger->warning('Failed to list Reporting API jobs', ['error' => $e->getMessage()]);
+                return $jobs;
+            }
+
+            foreach ($response->getJobs() ?? [] as $job) {
+                if ($job->getReportTypeId() && $job->getId()) {
+                    $jobs[$job->getReportTypeId()] = $job;
+                }
+            }
+
+            $pageToken = $response->getNextPageToken();
+        } while ($pageToken);
+
+        return $jobs;
+    }
+
+    private function persistReportingJob(User $user, string $typeId, string $googleJobId): void
+    {
+        $entity = (new ReportingJob())
+            ->setUser($user)
+            ->setReportTypeId($typeId)
+            ->setGoogleJobId($googleJobId);
+
+        $this->em->persist($entity);
+    }
+
     /** Returns reports that have not been processed yet for this job. */
     private function fetchNewReports(YouTubeReporting $reporting, ReportingJob $job): array
     {
@@ -126,7 +191,7 @@ class YouTubeReportingService
             $params = [];
             if ($since = $job->getLastProcessedAt()) {
                 // startTimeAtOrAfter expects RFC3339
-                $params['startTimeAtOrAfter'] = $since->format(\DateTimeInterface::RFC3339);
+                $params['startTimeAtOrAfter'] = $since->modify('+1 second')->format(\DateTimeInterface::RFC3339);
             }
 
             $response = $reporting->jobs_reports->listJobsReports($job->getGoogleJobId(), $params);
@@ -181,13 +246,15 @@ class YouTubeReportingService
     private function processReachRows(array $rows, User $user): int
     {
         $count = 0;
+        $changed = false;
         foreach ($rows as $row) {
             $video = $this->videoRepo->findByYoutubeId($row['video_id'] ?? '');
             if (!$video || $video->getUser()->getId() !== $user->getId()) continue;
 
             $date   = \DateTimeImmutable::createFromFormat('Y-m-d', $row['date'] ?? '');
-            $metric = $date ? $this->dailyMetricRepo->findOneBy(['video' => $video, 'date' => $date->setTime(0, 0, 0)]) : null;
-            if (!$metric) continue;
+            if (!$date) continue;
+
+            $metric = $this->getOrCreateMetric($video, $date);
 
             $impressions = isset($row['video_thumbnail_impressions']) ? (int) $row['video_thumbnail_impressions'] : null;
             $ctr         = isset($row['video_thumbnail_impressions_ctr']) && $row['video_thumbnail_impressions_ctr'] !== ''
@@ -197,8 +264,15 @@ class YouTubeReportingService
             if ($impressions !== null) $metric->setImpressions($impressions);
             if ($ctr !== null)         $metric->setCtr($ctr);
 
+            $this->em->persist($metric);
+            $changed = true;
             $count++;
         }
+
+        if ($changed) {
+            $this->dailyMetricRepo->invalidateListStats($user);
+        }
+
         return $count;
     }
 
@@ -272,15 +346,33 @@ class YouTubeReportingService
             if (!$video || $video->getUser()->getId() !== $user->getId()) continue;
 
             $date   = \DateTimeImmutable::createFromFormat('Y-m-d', $dateStr);
-            $metric = $date ? $this->dailyMetricRepo->findOneBy(['video' => $video, 'date' => $date->setTime(0, 0, 0)]) : null;
-            if (!$metric) continue;
+            if (!$date) continue;
 
-            // Only backfill if no traffic data yet (Analytics API may have already filled recent days)
-            if ($metric->getTrafficSources() === null) {
-                $metric->setTrafficSources($sources);
-                $count++;
-            }
+            $metric = $this->getOrCreateMetric($video, $date, array_sum($sources));
+            $metric->setTrafficSources($sources);
+            $this->em->persist($metric);
+            $count++;
         }
+
+        if ($count > 0) {
+            $this->dailyMetricRepo->invalidateListStats($user);
+        }
+
         return $count;
+    }
+
+    private function getOrCreateMetric(Video $video, \DateTimeImmutable $date, int $views = 0): DailyMetric
+    {
+        $day = $date->setTime(0, 0, 0);
+        $metric = $this->dailyMetricRepo->findOneBy(['video' => $video, 'date' => $day]);
+
+        if ($metric) {
+            return $metric;
+        }
+
+        return (new DailyMetric())
+            ->setVideo($video)
+            ->setDate($day)
+            ->setViews($views);
     }
 }
