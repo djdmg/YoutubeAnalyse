@@ -93,6 +93,50 @@ class YouTubeReportingServiceTest extends TestCase
         $this->assertSame(1, $count);
     }
 
+    public function testTrafficReportBackfillsViewsOnExistingZeroMetric(): void
+    {
+        $user = new User();
+        $video = (new Video())
+            ->setUser($user)
+            ->setYoutubeId('video-1');
+        $metric = (new DailyMetric())
+            ->setVideo($video)
+            ->setDate(new \DateTimeImmutable('2026-05-28'))
+            ->setViews(0)
+            ->setImpressions(1200)
+            ->setCtr(4.2);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->once())
+            ->method('persist')
+            ->with($this->callback(function (DailyMetric $persisted) use ($metric): bool {
+                return $persisted === $metric
+                    && $persisted->getViews() === 15
+                    && $persisted->getImpressions() === 1200
+                    && $persisted->getCtr() === 4.2
+                    && $persisted->getTrafficSources() === [
+                        'YT_SEARCH' => 12,
+                        'EXT_URL' => 3,
+                    ];
+            }));
+
+        $dailyMetricRepo = $this->createMock(DailyMetricRepository::class);
+        $dailyMetricRepo->method('findOneBy')->willReturn($metric);
+        $dailyMetricRepo->expects($this->once())->method('invalidateListStats')->with($user);
+
+        $videoRepo = $this->createMock(VideoRepository::class);
+        $videoRepo->expects($this->once())->method('findByYoutubeId')->with('video-1')->willReturn($video);
+
+        $service = $this->makeService($em, $dailyMetricRepo, $videoRepo);
+
+        $count = $this->invokePrivate($service, 'processTrafficSourceRows', [[
+            ['date' => '2026-05-28', 'video_id' => 'video-1', 'traffic_source_type' => 'YT_SEARCH', 'views' => '12'],
+            ['date' => '2026-05-28', 'video_id' => 'video-1', 'traffic_source_type' => 'EXT_URL', 'views' => '3'],
+        ], $user]);
+
+        $this->assertSame(1, $count);
+    }
+
     private function makeService(
         EntityManagerInterface $em,
         DailyMetricRepository $dailyMetricRepo,
