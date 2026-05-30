@@ -58,9 +58,9 @@ class ProfileController extends AbstractController
 
         $error = $this->emailService->sendTestEmail($user);
         if ($error) {
-            return $this->testResponse($request, false, 'Échec de l\'envoi : ' . $error);
+            return $this->testResponse($request, false, 'Impossible de mettre l\'email en file : ' . $error);
         }
-        return $this->testResponse($request, true, 'Email de test envoyé à ' . $user->getNotifEmail());
+        return $this->testResponse($request, true, 'Email de test mis en file — vérifiez ' . $user->getNotifEmail() . ' dans quelques secondes.');
     }
 
     #[Route('/test-telegram', name: 'test_telegram', methods: ['POST'])]

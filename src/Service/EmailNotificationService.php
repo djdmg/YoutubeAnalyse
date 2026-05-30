@@ -5,28 +5,27 @@ namespace App\Service;
 use App\Entity\AiReport;
 use App\Entity\User;
 use App\Enum\AiReportType;
+use App\Message\SendEmailMessage;
 use App\Repository\AppSettingRepository;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Mailer\Mailer;
-use Symfony\Component\Mailer\Transport;
-use Symfony\Component\Mime\Address;
-use Symfony\Component\Mime\Email;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Twig\Environment;
 
 class EmailNotificationService
 {
-    public const SETTING_SMTP_HOST = 'smtp_host';
-    public const SETTING_SMTP_PORT = 'smtp_port';
+    public const SETTING_SMTP_HOST       = 'smtp_host';
+    public const SETTING_SMTP_PORT       = 'smtp_port';
     public const SETTING_SMTP_ENCRYPTION = 'smtp_encryption';
-    public const SETTING_SMTP_USER = 'smtp_user';
-    public const SETTING_SMTP_PASSWORD = 'smtp_password';
+    public const SETTING_SMTP_USER       = 'smtp_user';
+    public const SETTING_SMTP_PASSWORD   = 'smtp_password';
     public const SETTING_SMTP_FROM_EMAIL = 'smtp_from_email';
-    public const SETTING_SMTP_FROM_NAME = 'smtp_from_name';
+    public const SETTING_SMTP_FROM_NAME  = 'smtp_from_name';
 
     public function __construct(
-        private readonly Environment $twig,
-        private readonly LoggerInterface $logger,
+        private readonly Environment          $twig,
+        private readonly LoggerInterface      $logger,
         private readonly AppSettingRepository $settingRepo,
+        private readonly MessageBusInterface  $bus,
     ) {}
 
     public function isConfigured(): bool
@@ -44,11 +43,7 @@ class EmailNotificationService
         return $this->isConfigured() && (bool) $user->getNotifEmail();
     }
 
-    /**
-     * Sends a digest email with all new AI recommendations.
-     *
-     * @param AiReport[] $reports
-     */
+    /** @param AiReport[] $reports */
     public function sendAiRecommendations(User $user, array $reports): ?string
     {
         if (empty($reports) || !$this->isConfiguredForUser($user)) return null;
@@ -59,13 +54,11 @@ class EmailNotificationService
             'date'    => new \DateTimeImmutable(),
         ]);
 
-        $email = (new Email())
-            ->from(new Address($this->fromEmail(), $this->fromName()))
-            ->to($user->getNotifEmail())
-            ->subject(sprintf('🎬 %d nouvelles recommandations IA — %s', count($reports), (new \DateTimeImmutable())->format('d/m/Y')))
-            ->html($html);
-
-        return $this->send($user, $email);
+        return $this->dispatch(
+            $user->getNotifEmail(),
+            sprintf('🎬 %d nouvelles recommandations IA — %s', count($reports), (new \DateTimeImmutable())->format('d/m/Y')),
+            $html,
+        );
     }
 
     public function sendSyncSummary(User $user, array $result, string $channel, int $quotaUsed): ?string
@@ -80,17 +73,15 @@ class EmailNotificationService
             'date'       => new \DateTimeImmutable(),
         ]);
 
-        $email = (new Email())
-            ->from(new Address($this->fromEmail(), $this->fromName()))
-            ->to($user->getNotifEmail())
-            ->subject(sprintf('🔄 Sync YouTube — %d vidéos, %d commentaires — %s',
+        return $this->dispatch(
+            $user->getNotifEmail(),
+            sprintf('🔄 Sync YouTube — %d vidéos, %d commentaires — %s',
                 $result['videos_synced'],
                 $result['comments_synced'],
                 (new \DateTimeImmutable())->format('d/m/Y H:i')
-            ))
-            ->html($html);
-
-        return $this->send($user, $email);
+            ),
+            $html,
+        );
     }
 
     public function sendWeeklyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $weekStart, \DateTimeImmutable $weekEnd): ?string
@@ -98,23 +89,21 @@ class EmailNotificationService
         if (!$this->isConfiguredForUser($user)) return null;
 
         $html = $this->twig->render('email/weekly_report.html.twig', [
-            'user'        => $user,
-            'stats'       => $stats,
-            'top_videos'  => $topVideos,
-            'week_start'  => $weekStart,
-            'week_end'    => $weekEnd,
+            'user'       => $user,
+            'stats'      => $stats,
+            'top_videos' => $topVideos,
+            'week_start' => $weekStart,
+            'week_end'   => $weekEnd,
         ]);
 
-        $email = (new Email())
-            ->from(new Address($this->fromEmail(), $this->fromName()))
-            ->to($user->getNotifEmail())
-            ->subject(sprintf('📅 Bilan semaine du %s — %s vues',
+        return $this->dispatch(
+            $user->getNotifEmail(),
+            sprintf('📅 Bilan semaine du %s — %s vues',
                 $weekStart->format('d/m'),
                 number_format((int) ($stats['views'] ?? 0), 0, ',', ' ')
-            ))
-            ->html($html);
-
-        return $this->send($user, $email);
+            ),
+            $html,
+        );
     }
 
     public function sendDailyReport(User $user, array $stats, array $topVideos, \DateTimeImmutable $date, bool $isDelayed = false): ?string
@@ -133,33 +122,23 @@ class EmailNotificationService
             ? sprintf('📊 Rapport du %s (retard sync) — %s vues', $date->format('d/m/Y'), number_format((int) ($stats['views'] ?? 0), 0, ',', ' '))
             : sprintf('📊 Rapport du %s — %s vues', $date->format('d/m/Y'), number_format((int) ($stats['views'] ?? 0), 0, ',', ' '));
 
-        $email = (new Email())
-            ->from(new Address($this->fromEmail(), $this->fromName()))
-            ->to($user->getNotifEmail())
-            ->subject($subject)
-            ->html($html);
-
-        return $this->send($user, $email);
+        return $this->dispatch($user->getNotifEmail(), $subject, $html);
     }
 
     public function sendTestEmail(User $user): ?string
     {
-        $fakeReports = $this->buildFakeReports();
-
         $html = $this->twig->render('email/ai_recommendations.html.twig', [
             'user'    => $user,
-            'reports' => $fakeReports,
+            'reports' => $this->buildFakeReports(),
             'date'    => new \DateTimeImmutable(),
             'is_test' => true,
         ]);
 
-        $email = (new Email())
-            ->from(new Address($this->fromEmail(), $this->fromName()))
-            ->to($user->getNotifEmail())
-            ->subject('🧪 [TEST] Recommandations IA — YouTube Analyse')
-            ->html($html);
-
-        return $this->send($user, $email);
+        return $this->dispatch(
+            $user->getNotifEmail(),
+            '🧪 [TEST] Recommandations IA — YouTube Analyse',
+            $html,
+        );
     }
 
     private function buildFakeReports(): array
@@ -221,7 +200,7 @@ class EmailNotificationService
                 'type'  => ['value' => 'upload_schedule', 'label' => 'Calendrier de publication'],
                 'video' => null,
                 'payload' => [
-                    'meilleur_jour'  => 'vendredi',
+                    'meilleur_jour'   => 'vendredi',
                     'meilleure_heure' => '18h00',
                     'analyse'        => 'Vos vidéos publiées le vendredi entre 17h et 19h génèrent en moyenne 40% de vues supplémentaires sur les 48 premières heures. L\'audience est active en fin de semaine et le dimanche.',
                     'jours_a_eviter' => ['lundi', 'mardi'],
@@ -231,40 +210,30 @@ class EmailNotificationService
         ];
     }
 
-    private function send(User $user, Email $email): ?string
+    private function dispatch(string $to, string $subject, string $htmlBody): ?string
     {
         try {
-            $transport = Transport::fromDsn($this->buildDsn());
-            $mailer    = new Mailer($transport);
-            $mailer->send($email);
-            $this->logger->info('Email sent', ['to' => $user->getNotifEmail()]);
+            $this->bus->dispatch(new SendEmailMessage(
+                to:        $to,
+                fromEmail: $this->fromEmail() ?? '',
+                fromName:  $this->fromName(),
+                subject:   $subject,
+                htmlBody:  $htmlBody,
+            ));
             return null;
         } catch (\Throwable $e) {
-            $this->logger->error('Email send failed', ['error' => $e->getMessage()]);
+            $this->logger->error('Email dispatch failed', ['error' => $e->getMessage()]);
             return $e->getMessage();
         }
     }
 
-    private function buildDsn(): string
-    {
-        $encryption = $this->settingRepo->get(self::SETTING_SMTP_ENCRYPTION) ?: 'starttls';
-        $scheme     = $encryption === 'ssl' ? 'smtps' : 'smtp';
-        $userEnc    = rawurlencode($this->settingRepo->get(self::SETTING_SMTP_USER) ?? '');
-        $passEnc    = rawurlencode($this->settingRepo->get(self::SETTING_SMTP_PASSWORD) ?? '');
-        $host       = $this->settingRepo->get(self::SETTING_SMTP_HOST);
-        $port       = (int) ($this->settingRepo->get(self::SETTING_SMTP_PORT) ?: ($encryption === 'ssl' ? 465 : 587));
-        $query      = $encryption === 'none' ? '?auto_tls=false' : '';
-
-        return sprintf('%s://%s:%s@%s:%d%s', $scheme, $userEnc, $passEnc, $host, $port, $query);
-    }
-
-    private function fromEmail(): ?string
+    public function fromEmail(): ?string
     {
         return $this->settingRepo->get(self::SETTING_SMTP_FROM_EMAIL)
             ?: $this->settingRepo->get(self::SETTING_SMTP_USER);
     }
 
-    private function fromName(): string
+    public function fromName(): string
     {
         return $this->settingRepo->get(self::SETTING_SMTP_FROM_NAME) ?: 'YouTube Analyse';
     }

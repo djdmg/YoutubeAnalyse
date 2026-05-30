@@ -24,6 +24,8 @@ framework:
             App\Message\SyncYouTubeMessage:              async
             App\Message\RunAiAnalysisMessage:            async
             App\Message\GenerateGoalSuggestionsMessage:  async
+            App\Message\GenerateEditorialPlanMessage:    async
+            App\Message\SendEmailMessage:                async
 
 when@test:
     framework:
