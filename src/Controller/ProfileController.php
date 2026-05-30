@@ -27,8 +27,10 @@ class ProfileController extends AbstractController
     #[Route('', name: 'index')]
     public function index(Request $request): Response
     {
-        /** @var User $user */
-        $user = $this->getUser();
+        /** @var User $sessionUser */
+        $sessionUser = $this->getUser();
+        // Reload from DB to get the latest persisted values (session object may be stale)
+        $user = $this->em->find(User::class, $sessionUser->getId());
         $form = $this->createForm(ProfileEmailSettingsType::class, $user);
         $form->handleRequest($request);
 

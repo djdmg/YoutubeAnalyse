@@ -42,11 +42,6 @@ class DailyReportCommand extends Command
             $user = $token->getUser();
             $io->section(sprintf('%s (%s)', $user->getDisplayName(), $token->getChannelTitle() ?? $token->getChannelId()));
 
-            if (!$this->emailService->isConfiguredForUser($user)) {
-                $io->writeln('  Email non configuré — email ignoré.');
-                continue;
-            }
-
             // Prefer yesterday's data; fall back to most recent available date (YouTube Analytics 1-2 day lag)
             $yesterday = new \DateTimeImmutable('yesterday midnight');
             $stats = $this->metricRepo->getTotalsForDate($user, $yesterday);
@@ -72,15 +67,19 @@ class DailyReportCommand extends Command
                 count($topVideos),
             ));
 
-            $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
-            if ($error) {
-                $io->error('Email non envoyé : ' . $error);
+            if ($this->emailService->isConfiguredForUser($user)) {
+                $error = $this->emailService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
+                if ($error) {
+                    $io->error('Email non envoyé : ' . $error);
+                } else {
+                    $io->writeln('  ✉ Email envoyé à ' . $user->getNotifEmail());
+                }
             } else {
-                $io->writeln('  ✉ Email envoyé à ' . $user->getNotifEmail());
+                $io->writeln('  Email non configuré — ignoré.');
             }
 
-            $this->telegramService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
             if ($user->hasTelegramConfigured()) {
+                $this->telegramService->sendDailyReport($user, $stats, $topVideos, $date, $isDelayed);
                 $io->writeln('  ✈ Telegram envoyé (chat ' . $user->getTelegramChatId() . ')');
             }
         }
