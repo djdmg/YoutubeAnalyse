@@ -65,31 +65,31 @@ class GenerateEditorialPlanHandler
             $searchTermsSummary = implode(', ', array_unique(array_slice($allSearchTerms, 0, 20)));
 
             $prompt = <<<PROMPT
-Tu es un stratège de contenu YouTube expert. Analyse les données de cette chaîne et génère 10 idées de vidéos classées par potentiel.
+You are an expert YouTube content strategist. Analyse this channel's data and generate 10 video ideas ranked by potential.
 
-=== DONNÉES DE LA CHAÎNE ===
-Vues 30 derniers jours : {$stats30['total_views']}
-Watch time 30j (minutes) : {$stats30['total_watch_time']}
-CTR moyen 30j : {$stats30['avg_ctr']}%
+=== CHANNEL DATA ===
+Views last 30 days: {$stats30['total_views']}
+Watch time 30d (minutes): {$stats30['total_watch_time']}
+Avg CTR 30d: {$stats30['avg_ctr']}%
 
-=== TOP VIDÉOS (par vues totales) ===
+=== TOP VIDEOS (by total views) ===
 {$videoSummary}
 
-=== TERMES DE RECHERCHE QUI AMÈNENT DU TRAFIC ===
+=== SEARCH TERMS DRIVING TRAFFIC ===
 {$searchTermsSummary}
 
-=== CONSIGNES ===
-Génère exactement 10 idées de vidéos sous forme de tableau JSON. Pour chaque idée :
-- "title" : titre accrocheur (max 70 chars), optimisé SEO, doit donner envie de cliquer
-- "hook" : première phrase d'accroche (15 mots max)
-- "format" : "tutoriel" | "liste" | "vlog" | "comparaison" | "réaction" | "analyse" | "short"
-- "potential" : "élevé" | "moyen" | "test"
-- "reason" : pourquoi cette vidéo performera (1 phrase, basée sur les données)
-- "keywords" : 3 mots-clés SEO principaux
+=== INSTRUCTIONS ===
+Generate exactly 10 video ideas as a JSON array. For each idea:
+- "title": catchy SEO-optimised title (max 70 chars), must make people want to click
+- "hook": opening hook sentence (max 15 words)
+- "format": "tutorial" | "list" | "vlog" | "comparison" | "reaction" | "analysis" | "short"
+- "potential": "high" | "medium" | "test"
+- "reason": why this video will perform well (1 sentence, data-driven)
+- "keywords": 3 main SEO keywords
 
-Classe les idées du plus grand potentiel au plus faible. Réponds UNIQUEMENT avec le JSON, sans prose, sans markdown:
+Rank ideas from highest to lowest potential. Reply ONLY with the JSON array, no prose, no markdown:
 [
-  {"title":"...","hook":"...","format":"...","potential":"élevé","reason":"...","keywords":["...","...","..."]}
+  {"title":"...","hook":"...","format":"...","potential":"high","reason":"...","keywords":["...","...","..."]}
 ]
 PROMPT;
 

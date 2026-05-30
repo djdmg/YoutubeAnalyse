@@ -37,12 +37,12 @@
 {% macro renderIdeas(ideas) %}
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem">
 {% for i, idea in ideas %}
-{% set potColor = idea.potential == 'élevé' ? '#22c55e' : (idea.potential == 'moyen' ? '#f59e0b' : '#94a3b8') %}
+{% set potColor = idea.potential in ['high', 'élevé'] ? '#22c55e' : (idea.potential in ['medium', 'moyen'] ? '#f59e0b' : '#94a3b8') %}
 {% set rank = i + 1 %}
 <div class="editorial-card section-card" style="border-top:3px solid {{ potColor }}">
     <div class="editorial-rank" style="color:{{ potColor }}">#{{ rank }}</div>
     <div class="editorial-format-badge">
-        {% set fmtIcon = {tutoriel:'fa-graduation-cap', liste:'fa-list-ol', vlog:'fa-camera', comparaison:'fa-balance-scale', réaction:'fa-surprise', analyse:'fa-search', short:'fa-bolt'}[idea.format] ?? 'fa-film' %}
+        {% set fmtIcon = {tutorial:'fa-graduation-cap', tutoriel:'fa-graduation-cap', list:'fa-list-ol', liste:'fa-list-ol', vlog:'fa-camera', comparison:'fa-balance-scale', comparaison:'fa-balance-scale', reaction:'fa-surprise', réaction:'fa-surprise', analysis:'fa-search', analyse:'fa-search', short:'fa-bolt'}[idea.format] ?? 'fa-film' %}
         <i class="fas {{ fmtIcon }}"></i> {{ idea.format|capitalize }}
     </div>
     <h3 class="editorial-title">{{ idea.title }}</h3>
