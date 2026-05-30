@@ -348,7 +348,11 @@ class YouTubeReportingService
             $date   = \DateTimeImmutable::createFromFormat('Y-m-d', $dateStr);
             if (!$date) continue;
 
-            $metric = $this->getOrCreateMetric($video, $date, array_sum($sources));
+            $views = array_sum($sources);
+            $metric = $this->getOrCreateMetric($video, $date, $views);
+            if ($metric->getViews() === 0 && $views > 0) {
+                $metric->setViews($views);
+            }
             $metric->setTrafficSources($sources);
             $this->em->persist($metric);
             $count++;
