@@ -3,10 +3,12 @@
 namespace App\Service;
 
 use App\Entity\Comment;
+use App\Entity\ChannelStats;
 use App\Entity\DailyMetric;
 use App\Entity\RetentionPoint;
 use App\Entity\User;
 use App\Entity\Video;
+use App\Entity\VideoStats;
 use App\Entity\VideoMetaSnapshot;
 use App\Entity\VideoSearchTerm;
 use App\Repository\CommentRepository;
@@ -20,6 +22,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Google\Service\YouTube;
 use Google\Service\YouTubeAnalytics;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Cache\CacheInterface;
 
 class YouTubeSyncService
 {
@@ -35,6 +38,7 @@ class YouTubeSyncService
         private readonly VideoMetaSnapshotRepository $snapshotRepo,
         private readonly VideoSearchTermRepository $searchTermRepo,
         private readonly LoggerInterface $logger,
+        private readonly CacheInterface $cache,
         private readonly ?YouTubeReportingService $reportingService = null,
     ) {}
 
@@ -55,6 +59,7 @@ class YouTubeSyncService
         $analytics = new YouTubeAnalytics($client);
         $today     = new \DateTimeImmutable();
 
+        $channelStats     = $this->syncChannelStatsSnapshot($youtube, $channelId, $user, $today);
         $videoSyncCounts  = $this->syncVideos($youtube, $analytics, $channelId, $user, $today);
         $commentsCount    = $this->syncComments($youtube, $channelId, $user);
         $searchTermsCount = $this->syncSearchTerms($analytics, $channelId, $user, $today);
@@ -74,10 +79,44 @@ class YouTubeSyncService
             'comments_synced'         => $commentsCount,
             'search_terms_synced'     => $searchTermsCount,
             'channel_id'              => $channelId,
+            'channel'                 => $channelStats->getChannelTitle(),
+            'subscribers'             => $channelStats->getSubscriberCount(),
+            'views'                   => $channelStats->getViewCount(),
             'impressions_ctr_updated' => $reportingCounts['impressions_ctr'],
             'demographics_updated'    => $reportingCounts['demographics'],
             'traffic_sources_updated' => $reportingCounts['traffic_sources'],
         ];
+    }
+
+    private function syncChannelStatsSnapshot(YouTube $youtube, string $channelId, User $user, \DateTimeImmutable $syncTime): ChannelStats
+    {
+        $this->quotaGuard->assertQuota(1);
+        $response = $youtube->channels->listChannels('snippet,statistics', ['id' => $channelId]);
+        $this->quotaGuard->consume(1);
+
+        $channel = $response->getItems()[0] ?? null;
+        if (!$channel) {
+            throw new \RuntimeException('Chaîne YouTube introuvable pour ce token.');
+        }
+
+        $stats = $channel->getStatistics();
+        $snapshot = (new ChannelStats())
+            ->setUser($user)
+            ->setChannelId($channel->getId())
+            ->setChannelTitle($channel->getSnippet()->getTitle())
+            ->setViewCount((int) $stats->getViewCount())
+            ->setSubscriberCount((int) $stats->getSubscriberCount())
+            ->setVideoCount((int) $stats->getVideoCount())
+            ->setRecordedAt($syncTime);
+
+        $this->em->persist($snapshot);
+        $this->em->flush();
+
+        foreach ([30, 90] as $days) {
+            $this->cache->delete('yt_daily_analytics_' . $user->getId() . '_' . $days);
+        }
+
+        return $snapshot;
     }
 
     /** @return array{videos: int, daily_metrics: int} */
@@ -118,6 +157,7 @@ class YouTubeSyncService
                     ->setDurationSeconds($this->isoDurationToSeconds($details->getDuration()));
 
                 $this->em->persist($video);
+                $this->persistVideoStatsSnapshot($item, $channelId, $user, $today);
                 $this->em->flush();
 
                 $metricsCount += $this->syncDailyMetric($analytics, $channelId, $video, $today);
@@ -130,6 +170,29 @@ class YouTubeSyncService
         }
 
         return ['videos' => $count, 'daily_metrics' => $metricsCount];
+    }
+
+    private function persistVideoStatsSnapshot(mixed $item, string $channelId, User $user, \DateTimeImmutable $syncTime): void
+    {
+        $snippet = $item->getSnippet();
+        $stats   = $item->getStatistics();
+        $details = $item->getContentDetails();
+
+        $snapshot = (new VideoStats())
+            ->setUser($user)
+            ->setVideoId($item->getId())
+            ->setChannelId($channelId)
+            ->setTitle($this->sanitizeText($snippet->getTitle()) ?? '')
+            ->setDescription($this->sanitizeText(mb_substr($snippet->getDescription() ?? '', 0, 1000)))
+            ->setThumbnailUrl($snippet->getThumbnails()?->getMedium()?->getUrl())
+            ->setPublishedAt(new \DateTimeImmutable($snippet->getPublishedAt()))
+            ->setViewCount((int) $stats->getViewCount())
+            ->setLikeCount((int) $stats->getLikeCount())
+            ->setCommentCount((int) $stats->getCommentCount())
+            ->setDuration($details->getDuration())
+            ->setRecordedAt($syncTime);
+
+        $this->em->persist($snapshot);
     }
 
     private function syncDailyMetric(YouTubeAnalytics $analytics, string $channelId, Video $video, \DateTimeImmutable $today): int

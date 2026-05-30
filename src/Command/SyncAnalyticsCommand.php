@@ -55,8 +55,9 @@ class SyncAnalyticsCommand extends Command
                 $result = $this->syncService->syncForUser($user);
 
                 $io->success(sprintf(
-                    'Sync OK : %d vidéos, %d nouveaux commentaires',
+                    'Sync OK : %d vidéos, %d métriques quotidiennes, %d nouveaux commentaires',
                     $result['videos_synced'],
+                    $result['daily_metrics_synced'] ?? 0,
                     $result['comments_synced'],
                 ));
 
