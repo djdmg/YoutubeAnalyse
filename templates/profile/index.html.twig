@@ -131,6 +131,19 @@
 </div>
 
 <script>
+function ajaxPost(url, body, onSuccess, onError) {
+    const params = new URLSearchParams();
+    Object.keys(body).forEach(function(k) { params.append(k, body[k]); });
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+    })
+    .then(function(r) { return r.ok ? r.json() : r.json().then(function(d) { throw new Error(d.message || 'Erreur ' + r.status); }); })
+    .then(onSuccess)
+    .catch(function(e) { onError(e.message || 'Erreur réseau'); });
+}
+
 $(function() {
     $('.js-test-notif').on('click', function() {
         const $btn = $(this);
@@ -140,7 +153,6 @@ $(function() {
         const body = {};
         const extraField = $btn.data('extra-field');
         if (extraField) {
-            // Match both "profile_email_settings[telegramChatId]" and plain "telegram_chat_id"
             const $input = $('[name*="telegramChatId"], [name="' + extraField + '"]').first();
             if ($input.length) body[extraField] = $input.val();
         }

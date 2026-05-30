@@ -33,6 +33,7 @@ class ProfileController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $this->em->persist($user);
             $this->em->flush();
             $this->addFlash('success', 'Paramètres de notification sauvegardés.');
             return $this->redirectToRoute('profile_index');
